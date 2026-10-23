@@ -17,7 +17,7 @@ import { db } from '@/lib/server/db';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('sam@blynt-practice.co.uk');
+  const [email, setEmail] = useState('reviewer@test.local');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
@@ -143,9 +143,9 @@ export default function LoginPage() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { name: 'Sam Rivera', role: 'Reviewer', email: 'sam@blynt-practice.co.uk' },
-                { name: 'Anika Kapoor', role: 'Preparer', email: 'anika@blynt-practice.co.uk' },
-                { name: 'Priya Lal', role: 'Partner', email: 'priya@blynt-practice.co.uk' },
+                { name: 'Test Reviewer', role: 'Reviewer', email: 'reviewer@test.local' },
+                { name: 'Test Preparer', role: 'Preparer', email: 'preparer@test.local' },
+                { name: 'Test Partner', role: 'Partner', email: 'partner@test.local' },
               ].map((p) => (
                 <button
                   key={p.email}

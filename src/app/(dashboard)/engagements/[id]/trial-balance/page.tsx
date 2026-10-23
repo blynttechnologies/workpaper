@@ -158,8 +158,8 @@ export default function TrialBalancePage() {
       ref: `AJE-${String(db.adjustments.length + 1).padStart(3, '0')}`,
       narrative: adjNarrative || 'Audit journal adjustment',
       status: 'proposed' as const,
-      proposed_by: 'usr_anika', // Anika is preparer
-      proposed_by_name: 'Anika Kapoor',
+      proposed_by: 'usr_test_preparer', // Anika is preparer
+      proposed_by_name: 'Test Preparer',
       approved_by: null,
       created_at: new Date().toISOString(),
       lines: [
@@ -190,7 +190,7 @@ export default function TrialBalancePage() {
 
     db.logAudit(
       'firm_blynt_uk',
-      { id: 'usr_anika', name: 'Anika Kapoor', role: 'preparer' },
+      { id: 'usr_test_preparer', name: 'Test Preparer', role: 'preparer' },
       'PROPOSE_ADJUSTMENT',
       'adjustments',
       newAdj.id,
@@ -207,7 +207,7 @@ export default function TrialBalancePage() {
 
     // Ground Rule: Preparer cannot approve their own adjustment (403, audited)
     // Here simulate attempt by current user:
-    const currentUser = { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' as const };
+    const currentUser = { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' as const };
 
     if (adj.proposed_by === currentUser.id) {
       setApprovalError('403 Forbidden: You proposed this adjustment and cannot approve it. A different reviewer is required.');

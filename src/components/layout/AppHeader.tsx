@@ -33,7 +33,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
   const [botPrompt, setBotPrompt] = useState('');
   const [botResponse, setBotResponse] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState(db.users[0]); // Sarah Owen SO Audit manager
+  const [currentUser, setCurrentUser] = useState(db.users[0]); // Test Reviewer SO Audit manager
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Close menus on outside click
@@ -82,7 +82,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
     if (seg.startsWith('eng_')) {
       const eng = db.engagements.find((e) => e.id === seg);
       const client = eng ? db.clients.find((c) => c.id === eng.client_id) : null;
-      return client ? client.name : 'Acme Corp Ltd';
+      return client ? client.name : 'Test Company Ltd';
     }
     if (seg.startsWith('wp_')) return seg.toUpperCase().replace('WP_', '');
     return seg;
@@ -189,7 +189,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
 
           {/* Notifications with count 4 */}
           <Link
-            href="/engagements/eng_acme_fy26/review"
+            href="/engagements/eng_harlow_fy26/review"
             aria-label="4 notifications and open review notes"
             className="relative p-2 rounded-full text-[#5B6478] hover:text-[#102654] hover:bg-[#F6F7FB] transition-colors"
           >

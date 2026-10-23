@@ -7,9 +7,9 @@ import crypto from 'crypto';
 
 describe('Blynt Workpapers - Ground Rules & Acceptance Criteria', () => {
   const firmId = 'firm_blynt_uk';
-  const preparer = { id: 'usr_anika', name: 'Anika Kapoor', role: 'preparer' as const };
-  const reviewer = { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' as const };
-  const partner = { id: 'usr_priya', name: 'Priya Lal', role: 'partner' as const };
+  const preparer = { id: 'usr_test_preparer', name: 'Test Preparer', role: 'preparer' as const };
+  const reviewer = { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' as const };
+  const partner = { id: 'usr_test_partner', name: 'Test Partner', role: 'partner' as const };
 
   beforeEach(() => {
     // Re-seed DB fresh
@@ -251,7 +251,7 @@ describe('Blynt Workpapers - Ground Rules & Acceptance Criteria', () => {
     // Check sign-off is marked stale
     const sig = db.signoffs.find((s) => s.id === 'sig_f10_rev');
     expect(sig?.stale_at).not.toBeNull();
-    expect(sig?.stale_reason).toContain('Modified by Anika Kapoor');
+    expect(sig?.stale_reason).toContain('Modified by Test Preparer');
   });
 
   // 11. Preparer cannot approve their own adjustment (403, audited)

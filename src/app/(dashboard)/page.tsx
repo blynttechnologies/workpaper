@@ -39,54 +39,54 @@ export default function PracticeHomePage() {
   const nextActions = [
     {
       id: 'act_1',
-      title: 'Map 6 accounts on Acme Corp Ltd',
+      title: 'Map 6 accounts on Test Company Ltd',
       meta: 'Year end 31 Mar 2026 • FRS 102 1A • Unmapped: £42,180.50',
       tag: '! Needs you',
       tagColor: 'text-[#A23A27] bg-[#FFF1EE] border border-[#FF7D6B]/40',
       actionLabel: 'Review mappings',
-      href: '/engagements/eng_acme_fy26/mapping',
+      href: '/engagements/eng_harlow_fy26/mapping',
     },
     {
       id: 'act_2',
       title: 'Reply to 3 review notes on B-10 Bank reconciliation',
-      meta: 'Acme Corp Ltd • Raised by David Miller (Partner) • 2 days ago',
+      meta: 'Test Company Ltd • Raised by Test Partner (Partner) • 2 days ago',
       tag: '◐ In review',
       tagColor: 'text-[#6B4700] bg-[#FFF4DB] border border-[#C58B00]/30',
       actionLabel: 'Open notes',
-      href: '/engagements/eng_acme_fy26/review',
+      href: '/engagements/eng_harlow_fy26/review',
     },
     {
       id: 'act_3',
-      title: 'Sign off Northwind LLP as audit manager',
-      meta: 'Northwind LLP • Year end 28 Feb 2026 • All 8 papers prepared',
+      title: 'Sign off Test Company Ltd as audit manager',
+      meta: 'Test Company Ltd • Year end 28 Feb 2026 • All 8 papers prepared',
       tag: '✓ Ready',
       tagColor: 'text-[#0B6B52] bg-[#E6F4EF] border border-[#0B6B52]/30',
       actionLabel: 'Sign off',
-      href: '/engagements/eng_northwind_fy26/sign-off',
+      href: '/engagements/eng_harlow_fy26/sign-off',
     },
     {
       id: 'act_4',
       title: 'Chase client for March savings account statement',
-      meta: 'Acme Corp Ltd • Requested 4 days ago from finance@acmecorp.co.uk',
+      meta: 'Test Company Ltd • Requested 4 days ago from finance@test.local',
       tag: '◷ Waiting on client',
       tagColor: 'text-[#5B6478] bg-[#F4F5F7] border border-[#D5DBE7]',
       actionLabel: 'Send reminder',
-      href: '/engagements/eng_acme_fy26/workpapers/wp_b10',
+      href: '/engagements/eng_harlow_fy26/workpapers/wp_b10',
     },
   ];
 
   // Engagements list with 5-stage chain visual (Page 1 spec)
   const engagements = [
     {
-      id: 'eng_acme_fy26',
-      client: 'Acme Corp Ltd',
+      id: 'eng_harlow_fy26',
+      client: 'Test Company Ltd',
       companyNo: '09876543',
       framework: 'Small company (FRS 102 1A)',
       yearEnd: '31 Mar 2026',
       progress: 62,
       team: [
-        { initials: 'SO', name: 'Sarah Owen', bg: 'bg-[#102654] text-white' },
-        { initials: 'DM', name: 'David Miller', bg: 'bg-[#FF7D6B] text-[#0B1B3D]' },
+        { initials: 'SO', name: 'Test Reviewer', bg: 'bg-[#102654] text-white' },
+        { initials: 'DM', name: 'Test Partner', bg: 'bg-[#FF7D6B] text-[#0B1B3D]' },
       ],
       stages: [
         { label: 'Import', status: 'done', symbol: '✓' },
@@ -95,84 +95,7 @@ export default function PracticeHomePage() {
         { label: 'Review', status: 'todo', symbol: '○' },
         { label: 'Sign', status: 'todo', symbol: '○' },
       ],
-      targetHref: '/engagements/eng_acme_fy26/trial-balance',
-    },
-    {
-      id: 'eng_northwind_fy26',
-      client: 'Northwind LLP',
-      companyNo: 'OC345678',
-      framework: 'LLP (FRS 102 + LLP SORP)',
-      yearEnd: '28 Feb 2026',
-      progress: 90,
-      team: [
-        { initials: 'SO', name: 'Sarah Owen', bg: 'bg-[#102654] text-white' },
-        { initials: 'EM', name: 'Elena Murphy', bg: 'bg-[#0B6B52] text-white' },
-      ],
-      stages: [
-        { label: 'Import', status: 'done', symbol: '✓' },
-        { label: 'Map', status: 'done', symbol: '✓' },
-        { label: 'Prepare', status: 'done', symbol: '✓' },
-        { label: 'Review', status: 'in_progress', symbol: '◑' },
-        { label: 'Sign', status: 'todo', symbol: '○' },
-      ],
-      targetHref: '/engagements/eng_northwind_fy26/sign-off',
-    },
-    {
-      id: 'eng_demo_fy26',
-      client: 'Demo Consulting Ltd',
-      companyNo: '12345678',
-      framework: 'Micro-entity (FRS 105)',
-      yearEnd: '30 Apr 2026',
-      progress: 35,
-      team: [
-        { initials: 'AK', name: 'Anika Kapoor', bg: 'bg-[#102654] text-white' },
-      ],
-      stages: [
-        { label: 'Import', status: 'done', symbol: '✓' },
-        { label: 'Map', status: 'in_progress', symbol: '◑' },
-        { label: 'Prepare', status: 'todo', symbol: '○' },
-        { label: 'Review', status: 'todo', symbol: '○' },
-        { label: 'Sign', status: 'todo', symbol: '○' },
-      ],
-      targetHref: '/engagements/eng_demo_fy26/mapping',
-    },
-    {
-      id: 'eng_riverside_fy26',
-      client: 'Riverside Community Trust',
-      companyNo: 'CE012345',
-      framework: 'Charity (Charities SORP)',
-      yearEnd: '31 May 2026',
-      progress: 5,
-      team: [
-        { initials: 'SO', name: 'Sarah Owen', bg: 'bg-[#102654] text-white' },
-      ],
-      stages: [
-        { label: 'Import', status: 'in_progress', symbol: '◑' },
-        { label: 'Map', status: 'todo', symbol: '○' },
-        { label: 'Prepare', status: 'todo', symbol: '○' },
-        { label: 'Review', status: 'todo', symbol: '○' },
-        { label: 'Sign', status: 'todo', symbol: '○' },
-      ],
-      targetHref: '/engagements/eng_riverside_fy26/import',
-    },
-    {
-      id: 'eng_apex_fy26',
-      client: 'Apex Manufacturing Ltd',
-      companyNo: '04561234',
-      framework: 'Medium/large (FRS 102)',
-      yearEnd: '31 Dec 2026',
-      progress: 28,
-      team: [
-        { initials: 'SR', name: 'Sam Rivera', bg: 'bg-[#102654] text-white' },
-      ],
-      stages: [
-        { label: 'Import', status: 'done', symbol: '✓' },
-        { label: 'Map', status: 'done', symbol: '✓' },
-        { label: 'Prepare', status: 'in_progress', symbol: '◑' },
-        { label: 'Review', status: 'todo', symbol: '○' },
-        { label: 'Sign', status: 'todo', symbol: '○' },
-      ],
-      targetHref: '/clients',
+      targetHref: '/engagements/eng_harlow_fy26/trial-balance',
     },
   ];
 
@@ -180,23 +103,9 @@ export default function PracticeHomePage() {
   const upcomingDeadlines = [
     {
       date: '31 May 2026',
-      client: 'Acme Corp Ltd',
+      client: 'Test Company Ltd',
       label: 'Statutory accounts (Companies House)',
       remaining: '38 days',
-      urgent: false,
-    },
-    {
-      date: '30 Jun 2026',
-      client: 'Northwind LLP',
-      label: 'Partnership tax return',
-      remaining: '68 days',
-      urgent: false,
-    },
-    {
-      date: '31 Jul 2026',
-      client: 'Demo Consulting Ltd',
-      label: 'Corporation tax (CT600)',
-      remaining: '99 days',
       urgent: false,
     },
   ];
@@ -204,26 +113,26 @@ export default function PracticeHomePage() {
   // Recent activity feed (Page 1 spec)
   const recentActivities = [
     {
-      actor: 'Sarah Owen',
-      action: 'signed off B-10 on Acme Corp Ltd',
+      actor: 'Test Reviewer',
+      action: 'signed off B-10 on Test Company Ltd',
       time: '18m ago',
       color: 'bg-[#102654]',
     },
     {
-      actor: 'David Miller',
+      actor: 'Test Partner',
       action: 'added a review note on F-10',
       time: '1h ago',
       color: 'bg-[#FF7D6B]',
     },
     {
       actor: 'Import complete',
-      action: 'Northwind LLP trial balance imported (142 lines)',
+      action: 'Test Company Ltd trial balance imported (142 lines)',
       time: '3h ago',
       color: 'bg-[#0B6B52]',
     },
     {
       actor: 'Mapping confirmed',
-      action: '14 accounts mapped on Acme Corp Ltd',
+      action: '14 accounts mapped on Test Company Ltd',
       time: '5h ago',
       color: 'bg-[#1D4E89]',
     },
@@ -233,7 +142,7 @@ export default function PracticeHomePage() {
     e.preventDefault();
     if (!botPrompt.trim()) return;
     setBotAnswer(
-      `✦ suggestion: Across your 12 active engagements, 2 have unmapped accounts exceeding £10,000 materiality: Acme Corp Ltd (£42,180.50 across 6 accounts) and Demo Consulting Ltd (£14,500.00 across 2 accounts). All suggested mappings are drafted and awaiting manager confirmation.`
+      `✦ suggestion: Across your 12 active engagements, 1 has unmapped accounts exceeding £10,000 materiality: Test Company Ltd (£42,180.50 across 6 accounts). All suggested mappings are drafted and awaiting manager confirmation.`
     );
   };
 
@@ -252,7 +161,7 @@ export default function PracticeHomePage() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/engagements/eng_acme_fy26/import"
+            href="/engagements/eng_harlow_fy26/import"
             className="min-h-[44px] px-4 py-2 border border-[#D5DBE7] hover:border-[#102654] bg-white text-[#102654] text-xs font-semibold rounded-[10px] flex items-center gap-2 transition-colors shadow-2xs"
           >
             <Upload className="w-4 h-4 text-[#5B6478]" />
@@ -293,7 +202,7 @@ export default function PracticeHomePage() {
 
         {/* Card 2: 7 review notes for you */}
         <Link
-          href="/engagements/eng_acme_fy26/review"
+          href="/engagements/eng_harlow_fy26/review"
           className="blynt-card p-5 hover:border-[#FF7D6B]/50 hover:shadow-sm transition-all group"
         >
           <div className="flex items-center justify-between text-[#5B6478] text-xs font-semibold mb-2">
@@ -311,7 +220,7 @@ export default function PracticeHomePage() {
 
         {/* Card 3: 18 accounts to map */}
         <Link
-          href="/engagements/eng_acme_fy26/mapping"
+          href="/engagements/eng_harlow_fy26/mapping"
           className="blynt-card p-5 hover:border-[#102654]/40 hover:shadow-sm transition-all group"
         >
           <div className="flex items-center justify-between text-[#5B6478] text-xs font-semibold mb-2">
@@ -329,7 +238,7 @@ export default function PracticeHomePage() {
 
         {/* Card 4: 2 ready for sign-off */}
         <Link
-          href="/engagements/eng_northwind_fy26/sign-off"
+          href="/engagements/eng_harlow_fy26/sign-off"
           className="blynt-card p-5 hover:border-[#0B6B52]/40 hover:shadow-sm transition-all group"
         >
           <div className="flex items-center justify-between text-[#5B6478] text-xs font-semibold mb-2">

@@ -37,7 +37,7 @@ interface ParsedRow {
 export default function ImportDataPage() {
   const params = useParams();
   const router = useRouter();
-  const engagementId = (params?.id as string) || 'eng_acme_fy26';
+  const engagementId = (params?.id as string) || 'eng_harlow_fy26';
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -303,7 +303,7 @@ export default function ImportDataPage() {
             <div>
               <div className="text-xs font-bold text-[#102654] flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5 text-[#0B6B52]" />
-                Acme Corp Ltd (Balanced)
+                Test Company Ltd (Balanced)
               </div>
               <p className="text-[11px] text-[#5B6478] mt-1">
                 27 rows • Balanced at £14,349,000.00 • Difference £0.00.

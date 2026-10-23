@@ -3,7 +3,7 @@ import { services, ServiceError } from './services';
 import { UserRole } from '../types/models';
 
 export function getActorFromRequest(req: Request) {
-  // Check header or default to Sam Rivera (Reviewer / Manager)
+  // Check header or default to Test Reviewer (Reviewer / Manager)
   const roleHeader = req.headers.get('x-user-role') as UserRole | null;
   const userIdHeader = req.headers.get('x-user-id');
 

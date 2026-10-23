@@ -283,7 +283,7 @@ export default function SignOffAndLockPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-semibold text-[#102654]">
-                Anika Kapoor
+                Test Preparer
               </span>
             </div>
             <div className="text-xs text-[#5B6478] mt-0.5">
@@ -309,7 +309,7 @@ export default function SignOffAndLockPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-semibold text-[#102654]">
-                Sam Rivera
+                Test Reviewer
               </span>
             </div>
             <div className="text-xs text-[#5B6478] mt-0.5">
@@ -341,7 +341,7 @@ export default function SignOffAndLockPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-semibold text-[#102654]">
-                Priya Lal
+                Test Partner
               </span>
             </div>
             <div className="text-xs text-[#5B6478] mt-0.5">

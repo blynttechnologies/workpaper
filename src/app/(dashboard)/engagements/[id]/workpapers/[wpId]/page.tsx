@@ -81,7 +81,7 @@ export default function CoreWorkpaperPage() {
     label: 'Computer equipment additions',
     value: '£2,400.00',
     source: 'Invoice INV-DELL-9811 (Page 1)',
-    acceptedBy: 'Anika Kapoor (Preparer)',
+    acceptedBy: 'Test Preparer (Preparer)',
   });
 
   // Roll forward state
@@ -193,13 +193,13 @@ export default function CoreWorkpaperPage() {
       proc.done_by = null;
     } else {
       proc.done_at = new Date().toISOString();
-      proc.done_by = 'usr_anika';
+      proc.done_by = 'usr_test_preparer';
     }
     setWpData({ ...wpData });
 
     db.logAudit(
       'firm_blynt_uk',
-      { id: 'usr_anika', name: 'Anika Kapoor', role: 'preparer' },
+      { id: 'usr_test_preparer', name: 'Test Preparer', role: 'preparer' },
       'TOGGLE_PROCEDURE',
       'procedures',
       procId,
@@ -209,7 +209,7 @@ export default function CoreWorkpaperPage() {
   };
 
   const handleRollForwardUndo = () => {
-    services.undoRollForward('firm_blynt_uk', { id: 'usr_anika', name: 'Anika Kapoor', role: 'preparer' }, wpId);
+    services.undoRollForward('firm_blynt_uk', { id: 'usr_test_preparer', name: 'Test Preparer', role: 'preparer' }, wpId);
     setRollForwardUndone(true);
     setShowRollForwardBanner(false);
     setWpData(services.getWorkpaper(wpId));
@@ -221,7 +221,7 @@ export default function CoreWorkpaperPage() {
 
     const newCom = services.addComment(
       'firm_blynt_uk',
-      { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' },
+      { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' },
       wpId,
       {
         type: commentType,
@@ -239,7 +239,7 @@ export default function CoreWorkpaperPage() {
   const handleResolveComment = (commentId: string) => {
     services.resolveComment(
       'firm_blynt_uk',
-      { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' },
+      { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' },
       commentId
     );
     setWpData(services.getWorkpaper(wpId));
@@ -309,9 +309,9 @@ export default function CoreWorkpaperPage() {
                   Template: {template?.name || 'Fixed assets register'} ▾
                 </button>
                 <span>•</span>
-                <span>Preparer: <strong>Anika Kapoor</strong></span>
+                <span>Preparer: <strong>Test Preparer</strong></span>
                 <span>•</span>
-                <span>Reviewer: <strong>Sam Rivera</strong></span>
+                <span>Reviewer: <strong>Test Reviewer</strong></span>
                 <span>•</span>
                 <span className="text-[#0B6B52] font-semibold">
                   ✓ Saved {savedAgoSeconds}s ago
@@ -569,7 +569,7 @@ export default function CoreWorkpaperPage() {
                           label: 'Computer equipment additions',
                           value: '£2,400.00',
                           source: 'Invoice INV-DELL-9811',
-                          acceptedBy: 'Anika Kapoor',
+                          acceptedBy: 'Test Preparer',
                         });
                         if (commentMode) {
                           setShowCommentComposer(true);
@@ -622,7 +622,7 @@ export default function CoreWorkpaperPage() {
                           label: 'Fixtures & fittings cost',
                           value: '£4,500.00',
                           source: 'TB 1500',
-                          acceptedBy: 'Anika Kapoor',
+                          acceptedBy: 'Test Preparer',
                         });
                       }}
                     >
@@ -1037,7 +1037,7 @@ export default function CoreWorkpaperPage() {
                 {/* Preparer Stage */}
                 <div className="p-3 bg-[#F6F7FB] rounded-[10px] border border-[#E3E7EF]">
                   <div className="text-[10px] font-bold uppercase text-[#5B6478]">1. Preparer</div>
-                  <div className="font-bold text-[#102654] mt-1">Anika Kapoor</div>
+                  <div className="font-bold text-[#102654] mt-1">Test Preparer</div>
                   <div className="text-[10px] text-[#0B6B52] font-semibold mt-0.5">
                     {workpaper.status === 'prepared' || workpaper.status === 'signed_off'
                       ? '✓ Prepared'
@@ -1048,7 +1048,7 @@ export default function CoreWorkpaperPage() {
                 {/* Reviewer Stage */}
                 <div className="p-3 bg-[#F6F7FB] rounded-[10px] border border-[#E3E7EF]">
                   <div className="text-[10px] font-bold uppercase text-[#5B6478]">2. Reviewer</div>
-                  <div className="font-bold text-[#102654] mt-1">Sam Rivera</div>
+                  <div className="font-bold text-[#102654] mt-1">Test Reviewer</div>
                   <div className="text-[10px] text-[#5B6478] mt-0.5">
                     {signoffs.some((s) => s.role === 'reviewer' && !s.stale_at)
                       ? '✓ Reviewed'
@@ -1059,7 +1059,7 @@ export default function CoreWorkpaperPage() {
                 {/* Partner Stage */}
                 <div className="p-3 bg-[#F6F7FB] rounded-[10px] border border-[#E3E7EF]">
                   <div className="text-[10px] font-bold uppercase text-[#5B6478]">3. Partner</div>
-                  <div className="font-bold text-[#102654] mt-1">Priya Lal</div>
+                  <div className="font-bold text-[#102654] mt-1">Test Partner</div>
                   <div className="text-[10px] text-[#5B6478] mt-0.5">Awaiting partner lock</div>
                 </div>
               </div>
@@ -1230,11 +1230,11 @@ export default function CoreWorkpaperPage() {
                 <div className="font-bold text-[#102654]">Audit log &amp; revisions</div>
                 <div className="p-2.5 bg-[#F6F7FB] border border-[#E3E7EF] rounded-[8px]">
                   <div className="font-bold text-[#102654]">Roll forward executed</div>
-                  <div className="text-[10px] text-[#5B6478]">Anika Kapoor • 23 Oct 2026, 09:00</div>
+                  <div className="text-[10px] text-[#5B6478]">Test Preparer • 23 Oct 2026, 09:00</div>
                 </div>
                 <div className="p-2.5 bg-[#F6F7FB] border border-[#E3E7EF] rounded-[8px]">
                   <div className="font-bold text-[#102654]">Vouched additions invoice</div>
-                  <div className="text-[10px] text-[#5B6478]">Anika Kapoor • 23 Oct 2026, 10:15</div>
+                  <div className="text-[10px] text-[#5B6478]">Test Preparer • 23 Oct 2026, 10:15</div>
                 </div>
               </div>
             )}
@@ -1382,7 +1382,7 @@ export default function CoreWorkpaperPage() {
                 onClick={() => {
                   services.changeTemplate(
                     'firm_blynt_uk',
-                    { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' },
+                    { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' },
                     wpId,
                     selectedTargetTemplate
                   );

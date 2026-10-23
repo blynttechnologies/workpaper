@@ -176,7 +176,7 @@ export default function NewEngagementWizard() {
   const [includeAllOptionalPapers, setIncludeAllOptionalPapers] = useState(true);
 
   // Step 4: Team
-  const [selectedTeam, setSelectedTeam] = useState(['usr_anika', 'usr_sam', 'usr_priya']);
+  const [selectedTeam, setSelectedTeam] = useState(['usr_test_preparer', 'usr_test_reviewer', 'usr_test_partner']);
 
   // Step 5: Data Source
   const [dataSource, setDataSource] = useState<DataSource>('csv');
@@ -210,7 +210,7 @@ export default function NewEngagementWizard() {
     db.engagements.push(newEngagement);
     db.logAudit(
       'firm_blynt_uk',
-      { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' },
+      { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' },
       'CREATE_ENGAGEMENT',
       'engagements',
       newEngId,

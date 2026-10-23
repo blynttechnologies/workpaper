@@ -29,7 +29,7 @@ interface AppSidebarProps {
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
-  currentEngagementId = 'eng_acme_fy26',
+  currentEngagementId = 'eng_harlow_fy26',
   onMobileClose,
 }) => {
   const pathname = usePathname();

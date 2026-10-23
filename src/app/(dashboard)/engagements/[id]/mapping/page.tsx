@@ -101,7 +101,7 @@ export default function AccountMappingPage() {
           ? {
               ...m,
               status: 'confirmed' as const,
-              confirmed_by: 'usr_sam',
+              confirmed_by: 'usr_test_reviewer',
               confirmed_at: new Date().toISOString(),
             }
           : m
@@ -113,14 +113,14 @@ export default function AccountMappingPage() {
       const item = db.account_mappings.find((m) => m.id === id);
       if (item) {
         item.status = 'confirmed';
-        item.confirmed_by = 'usr_sam';
+        item.confirmed_by = 'usr_test_reviewer';
         item.confirmed_at = new Date().toISOString();
       }
     });
 
     db.logAudit(
       'firm_blynt_uk',
-      { id: 'usr_sam', name: 'Sam Rivera', role: 'reviewer' },
+      { id: 'usr_test_reviewer', name: 'Test Reviewer', role: 'reviewer' },
       'CONFIRM_MAPPINGS_BATCH',
       'account_mappings',
       selectedIds.join(','),
@@ -140,7 +140,7 @@ export default function AccountMappingPage() {
               ...m,
               blynt_code: blyntCode,
               status: 'confirmed' as const,
-              confirmed_by: 'usr_sam',
+              confirmed_by: 'usr_test_reviewer',
               confirmed_at: new Date().toISOString(),
               method: 'manual' as const,
             }
@@ -152,7 +152,7 @@ export default function AccountMappingPage() {
     if (item) {
       item.blynt_code = blyntCode;
       item.status = 'confirmed';
-      item.confirmed_by = 'usr_sam';
+      item.confirmed_by = 'usr_test_reviewer';
       item.confirmed_at = new Date().toISOString();
       item.method = 'manual';
     }

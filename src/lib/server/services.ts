@@ -14,8 +14,8 @@ export class ServiceError extends Error {
 }
 
 export const services = {
-  // Current session simulation (matching redesign board: Sarah Owen SO Audit manager)
-  getCurrentUser(userId = 'usr_sarah') {
+  // Current session simulation (matching redesign board: Test Reviewer SO Audit manager)
+  getCurrentUser(userId = 'usr_test_reviewer') {
     const user = db.users.find((u) => u.id === userId) || db.users[0];
     const membership = db.memberships.find((m) => m.user_id === user.id) || {
       user_id: user.id,

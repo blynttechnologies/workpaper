@@ -119,65 +119,19 @@ class Database {
       { id: firmId, name: 'Blynt Practice & Co LLP', created_at: '2026-01-01T00:00:00Z' },
     ];
 
-    // Users with roles (matching redesign boards: Sarah Owen SO Audit Manager, David Miller DM Partner)
+    // Test users (one per role)
     this.users = [
-      {
-        id: 'usr_sarah',
-        email: 'sarah.owen@blynt-practice.co.uk',
-        name: 'Sarah Owen',
-        initials: 'SO',
-        title: 'Audit manager',
-        mfa_enabled: true,
-      },
-      {
-        id: 'usr_david',
-        email: 'david.miller@blynt-practice.co.uk',
-        name: 'David Miller',
-        initials: 'DM',
-        title: 'Engagement partner',
-        mfa_enabled: true,
-      },
-      {
-        id: 'usr_anika',
-        email: 'anika@blynt-practice.co.uk',
-        name: 'Anika Kapoor',
-        initials: 'AK',
-        title: 'Senior Associate (Preparer)',
-        mfa_enabled: true,
-      },
-      {
-        id: 'usr_sam',
-        email: 'sam@blynt-practice.co.uk',
-        name: 'Sam Rivera',
-        initials: 'SR',
-        title: 'Audit Manager (Reviewer)',
-        mfa_enabled: true,
-      },
-      {
-        id: 'usr_priya',
-        email: 'priya@blynt-practice.co.uk',
-        name: 'Priya Lal',
-        initials: 'PL',
-        title: 'Engagement Partner',
-        mfa_enabled: true,
-      },
-      {
-        id: 'usr_dave',
-        email: 'dave@blynt-practice.co.uk',
-        name: 'Dave Clark',
-        initials: 'DC',
-        title: 'Managing Partner (Admin)',
-        mfa_enabled: true,
-      },
+      { id: 'usr_test_preparer', email: 'preparer@test.local', name: 'Test Preparer', initials: 'PR', title: 'Preparer', mfa_enabled: false },
+      { id: 'usr_test_reviewer', email: 'reviewer@test.local', name: 'Test Reviewer', initials: 'RV', title: 'Reviewer', mfa_enabled: false },
+      { id: 'usr_test_partner', email: 'partner@test.local', name: 'Test Partner', initials: 'PT', title: 'Partner', mfa_enabled: false },
+      { id: 'usr_test_admin', email: 'admin@test.local', name: 'Test Admin', initials: 'AD', title: 'Admin', mfa_enabled: false },
     ];
 
     this.memberships = [
-      { user_id: 'usr_sarah', firm_id: firmId, role: 'reviewer' },
-      { user_id: 'usr_david', firm_id: firmId, role: 'partner' },
-      { user_id: 'usr_anika', firm_id: firmId, role: 'preparer' },
-      { user_id: 'usr_sam', firm_id: firmId, role: 'reviewer' },
-      { user_id: 'usr_priya', firm_id: firmId, role: 'partner' },
-      { user_id: 'usr_dave', firm_id: firmId, role: 'admin' },
+      { user_id: 'usr_test_preparer', firm_id: firmId, role: 'preparer' },
+      { user_id: 'usr_test_reviewer', firm_id: firmId, role: 'reviewer' },
+      { user_id: 'usr_test_partner', firm_id: firmId, role: 'partner' },
+      { user_id: 'usr_test_admin', firm_id: firmId, role: 'admin' },
     ];
 
     // Standard Blynt Chart of Accounts
@@ -219,78 +173,18 @@ class Database {
       { code: '6950', name: 'Loss / (Profit) on Disposal of Assets', type: 'Overhead', normal_balance: 'Debit', lead_letter: 'F', is_control: false, is_system: true },
     ];
 
-    // Clients matching redesign boards
+    // Single test company
     const clientId = 'cli_harlow';
     this.clients = [
       {
-        id: 'cli_acme',
-        firm_id: firmId,
-        name: 'Acme Corp Ltd',
-        company_no: '09876543',
-        company_type: 'Small company (FRS 102 1A)',
-        year_end: '2026-03-31',
-        data_source: 'xero',
-        reconnect_needed: false,
-      },
-      {
-        id: 'cli_northwind',
-        firm_id: firmId,
-        name: 'Northwind LLP',
-        company_no: 'OC345678',
-        company_type: 'LLP (FRS 102 + LLP SORP)',
-        year_end: '2026-02-28',
-        data_source: 'quickbooks',
-        reconnect_needed: false,
-      },
-      {
-        id: 'cli_demo',
-        firm_id: firmId,
-        name: 'Demo Consulting Ltd',
-        company_no: '12345678',
-        company_type: 'Micro-entity (FRS 105)',
-        year_end: '2026-04-30',
-        data_source: 'csv',
-        reconnect_needed: false,
-      },
-      {
-        id: 'cli_riverside',
-        firm_id: firmId,
-        name: 'Riverside Community Trust',
-        company_no: 'CE012345',
-        company_type: 'Charity (SORP)',
-        year_end: '2026-05-31',
-        data_source: 'freeagent',
-        reconnect_needed: false,
-      },
-      {
         id: clientId,
         firm_id: firmId,
-        name: 'Harlow & Finch Ltd',
-        company_no: '09876543',
+        name: 'Test Company Ltd',
+        company_no: '00000000',
         company_type: 'Small company (FRS 102 1A)',
         year_end: '2026-09-30',
         data_source: 'csv',
         reconnect_needed: false,
-      },
-      {
-        id: 'cli_apex',
-        firm_id: firmId,
-        name: 'Apex Manufacturing Ltd',
-        company_no: '04561234',
-        company_type: 'Medium/large (FRS 102)',
-        year_end: '2026-12-31',
-        data_source: 'sage',
-        reconnect_needed: false,
-      },
-      {
-        id: 'cli_bluecrest',
-        firm_id: firmId,
-        name: 'Bluecrest Holdings PLC',
-        company_no: '11223344',
-        company_type: 'IFRS company/group',
-        year_end: '2026-09-30',
-        data_source: 'quickbooks',
-        reconnect_needed: true,
       },
     ];
 
@@ -306,7 +200,7 @@ class Database {
       template_pack_id: 'pack_small_co',
       status: 'locked',
       locked_at: '2025-11-15T14:30:00Z',
-      locked_by: 'usr_priya',
+      locked_by: 'usr_test_partner',
       prior_engagement_id: null,
     });
 
@@ -323,63 +217,6 @@ class Database {
       status: 'fieldwork',
       locked_at: null,
       prior_engagement_id: priorEngId,
-    });
-
-    // Acme Corp Ltd engagement (matches redesign boards)
-    const acmeEngId = 'eng_acme_fy26';
-    this.engagements.push({
-      id: acmeEngId,
-      client_id: 'cli_acme',
-      firm_id: firmId,
-      period_start: '2025-04-01',
-      period_end: '2026-03-31',
-      framework: 'FRS 102 1A',
-      template_pack_id: 'pack_small_co',
-      status: 'fieldwork',
-      locked_at: null,
-      prior_engagement_id: null,
-    });
-
-    // Northwind LLP engagement
-    this.engagements.push({
-      id: 'eng_northwind_fy26',
-      client_id: 'cli_northwind',
-      firm_id: firmId,
-      period_start: '2025-03-01',
-      period_end: '2026-02-28',
-      framework: 'FRS 102 + LLP SORP',
-      template_pack_id: 'pack_llp',
-      status: 'review',
-      locked_at: null,
-      prior_engagement_id: null,
-    });
-
-    // Demo Consulting Ltd engagement
-    this.engagements.push({
-      id: 'eng_demo_fy26',
-      client_id: 'cli_demo',
-      firm_id: firmId,
-      period_start: '2025-05-01',
-      period_end: '2026-04-30',
-      framework: 'FRS 105',
-      template_pack_id: 'pack_micro',
-      status: 'fieldwork',
-      locked_at: null,
-      prior_engagement_id: null,
-    });
-
-    // Riverside Community Trust engagement
-    this.engagements.push({
-      id: 'eng_riverside_fy26',
-      client_id: 'cli_riverside',
-      firm_id: firmId,
-      period_start: '2025-06-01',
-      period_end: '2026-05-31',
-      framework: 'Charities SORP (FRS 102)',
-      template_pack_id: 'pack_charity',
-      status: 'planning',
-      locked_at: null,
-      prior_engagement_id: null,
     });
 
     // Templates: F-10 Fixed Assets & B-10 Bank Rec
@@ -631,7 +468,7 @@ class Database {
         id: 'proc_f10_1',
         workpaper_id: f10Id,
         text: 'Agree closing cost and accumulated depreciation to trial balance accounts 1500 and 1700.',
-        done_by: 'usr_anika',
+        done_by: 'usr_test_preparer',
         done_at: '2026-10-23T11:00:00Z',
         not_applicable_reason: null,
       },
@@ -639,7 +476,7 @@ class Database {
         id: 'proc_f10_2',
         workpaper_id: f10Id,
         text: 'Vouch capital additions over £1,000 threshold to supplier invoices.',
-        done_by: 'usr_anika',
+        done_by: 'usr_test_preparer',
         done_at: '2026-10-23T11:15:00Z',
         not_applicable_reason: null,
       },
@@ -655,7 +492,7 @@ class Database {
         id: 'proc_f10_4',
         workpaper_id: f10Id,
         text: 'Perform proof in total calculation of depreciation charge against policy.',
-        done_by: 'usr_anika',
+        done_by: 'usr_test_preparer',
         done_at: '2026-10-23T11:30:00Z',
         not_applicable_reason: null,
       }
@@ -691,7 +528,7 @@ class Database {
         id: 'proc_b10_1',
         workpaper_id: b10Id,
         text: 'Agree general ledger balance to trial balance line 1010 without variance.',
-        done_by: 'usr_anika',
+        done_by: 'usr_test_preparer',
         done_at: '2026-10-23T09:30:00Z',
         not_applicable_reason: null,
       },
@@ -699,7 +536,7 @@ class Database {
         id: 'proc_b10_2',
         workpaper_id: b10Id,
         text: 'Agree bank statement closing balance to bank confirmation certificate.',
-        done_by: 'usr_anika',
+        done_by: 'usr_test_preparer',
         done_at: '2026-10-23T09:35:00Z',
         not_applicable_reason: null,
       },
@@ -707,7 +544,7 @@ class Database {
         id: 'proc_b10_3',
         workpaper_id: b10Id,
         text: 'Inspect subsequent clearance of outstanding cheques on October statements.',
-        done_by: 'usr_anika',
+        done_by: 'usr_test_preparer',
         done_at: '2026-10-23T09:40:00Z',
         not_applicable_reason: null,
       }
@@ -718,8 +555,8 @@ class Database {
       id: 'sig_b10_prep',
       workpaper_id: b10Id,
       role: 'preparer',
-      user_id: 'usr_anika',
-      user_name: 'Anika Kapoor',
+      user_id: 'usr_test_preparer',
+      user_name: 'Test Preparer',
       signed_at: '2026-10-23T09:42:00Z',
       content_hash: 'hash_b10_v1_confirmed',
       stale_at: null,
@@ -738,8 +575,8 @@ class Database {
       sha256: dellSha,
       category: 'Invoice',
       is_permanent: false,
-      uploaded_by: 'usr_anika',
-      uploaded_by_name: 'Anika Kapoor',
+      uploaded_by: 'usr_test_preparer',
+      uploaded_by_name: 'Test Preparer',
       uploaded_at: '2026-10-23T10:15:00Z',
     });
 
@@ -751,8 +588,8 @@ class Database {
       anchor_json: { kind: 'row', table: 'disposals', row: 'disp_1' },
       anchor_summary: 'Disposals: Legacy Apple iMac Workstations',
       status: 'open',
-      created_by: 'usr_sam',
-      created_by_name: 'Sam Rivera',
+      created_by: 'usr_test_reviewer',
+      created_by_name: 'Test Reviewer',
       created_at: '2026-10-23T11:45:00Z',
       resolved_by: null,
       body: 'Please attach bank statement credit or sales receipt for the £250.00 disposal proceeds before sign-off.',
@@ -761,9 +598,9 @@ class Database {
           id: 'rep_1',
           comment_id: 'com_f10_disp',
           body: 'Client has requested the remittance advice from the equipment recycling vendor; waiting on document.',
-          mentions: ['usr_sam'],
-          created_by: 'usr_anika',
-          created_by_name: 'Anika Kapoor',
+          mentions: ['usr_test_reviewer'],
+          created_by: 'usr_test_preparer',
+          created_by_name: 'Test Preparer',
           created_at: '2026-10-23T12:00:00Z',
         },
       ],
@@ -776,8 +613,8 @@ class Database {
       ref: 'AJE-001',
       narrative: 'Accrue unrecorded audit fee invoice for September 2026',
       status: 'proposed',
-      proposed_by: 'usr_anika',
-      proposed_by_name: 'Anika Kapoor',
+      proposed_by: 'usr_test_preparer',
+      proposed_by_name: 'Test Preparer',
       approved_by: null,
       created_at: '2026-10-22T14:00:00Z',
       lines: [
@@ -803,7 +640,7 @@ class Database {
     // Initial Trial Balance Snapshot for Harlow FY26
     const snapId = 'snap_h26_01';
     const rawData = JSON.stringify({
-      company: 'Harlow & Finch Ltd',
+      company: 'Test Company Ltd',
       period: 'Year ended 30 Sep 2026',
       lines: 28,
     });
@@ -816,7 +653,7 @@ class Database {
       as_at: '2026-09-30',
       raw_json: rawData,
       sha256: snapHash,
-      created_by: 'usr_anika',
+      created_by: 'usr_test_preparer',
       created_at: '2026-10-01T08:00:00Z',
     });
 
@@ -891,60 +728,15 @@ class Database {
                 { blynt_code: '2100', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
               ]
             : undefined,
-        confirmed_by: line.status === 'confirmed' ? 'usr_sam' : null,
+        confirmed_by: line.status === 'confirmed' ? 'usr_test_reviewer' : null,
         confirmed_at: line.status === 'confirmed' ? '2026-10-02T10:00:00Z' : null,
         comment_count: 0,
       });
     });
-
-    // Seed for Acme Corp Ltd (eng_acme_fy26) matching redesign boards (6 unmapped, 12 suggested)
-    seedLines.forEach((line, idx) => {
-      const netBalance = line.debit_p - line.credit_p;
-      this.account_mappings.push({
-        id: `map_acme_${idx + 1}`,
-        engagement_id: acmeEngId,
-        source_code: line.code,
-        source_name: line.name,
-        source_type: line.type,
-        balance_p: netBalance.toString(),
-        blynt_code: line.blynt_code,
-        status: line.status,
-        confidence: line.confidence,
-        method: line.status === 'confirmed' ? 'rule' : line.status === 'suggested' ? 'ai' : 'manual',
-        ai_alternatives:
-          line.status === 'needs_you'
-            ? [
-                { blynt_code: '6000', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
-                { blynt_code: '2100', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
-              ]
-            : undefined,
-        confirmed_by: line.status === 'confirmed' ? 'usr_sarah' : null,
-        confirmed_at: line.status === 'confirmed' ? '2026-10-02T10:00:00Z' : null,
-        comment_count: 0,
-      });
-    });
-
-    // Seed Acme Corp workpapers
-    const f10Ref = this.workpapers.find((w) => w.id === 'wp_f10');
-    if (f10Ref) {
-      this.workpapers.push({
-        ...f10Ref,
-        id: 'wp_acme_f10',
-        engagement_id: acmeEngId,
-      });
-    }
-    const b10Ref = this.workpapers.find((w) => w.id === 'wp_b10');
-    if (b10Ref) {
-      this.workpapers.push({
-        ...b10Ref,
-        id: 'wp_acme_b10',
-        engagement_id: acmeEngId,
-      });
-    }
 
     // View Preferences
     this.view_prefs.push({
-      user_id: 'usr_sam',
+      user_id: 'usr_test_reviewer',
       scope: 'user',
       key: 'general_view',
       value_json: {
@@ -961,7 +753,7 @@ class Database {
     // Initial audit log
     this.logAudit(
       firmId,
-      { id: 'usr_anika', name: 'Anika Kapoor', role: 'preparer' },
+      { id: 'usr_test_preparer', name: 'Test Preparer', role: 'preparer' },
       'CREATE_SNAPSHOT',
       'tb_snapshots',
       snapId,

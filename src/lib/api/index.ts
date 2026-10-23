@@ -63,8 +63,8 @@ export async function getWorkpapers(
       (w) =>
         w.preparer === CURRENT_USER.name ||
         w.reviewer === CURRENT_USER.name ||
-        w.preparer.includes('Sam Rivera') ||
-        (w.reviewer ? w.reviewer.includes('Sam Rivera') : false)
+        w.preparer.includes('Test Reviewer') ||
+        (w.reviewer ? w.reviewer.includes('Test Reviewer') : false)
     );
   } else if (filter === 'needs_review') {
     list = list.filter((w) => w.status === 'Prepared' || w.status === 'Needs attention');
@@ -182,7 +182,7 @@ export async function getWorkpaperById(
         pageNumber: 1,
         locationDescription: `Primary Schedule Tie-Out (${template.leadRef || 'General'})`,
         promptVersion: 'v3.5-uk-standard',
-        acceptedBy: 'Sam Rivera (Test - Audit Manager)',
+        acceptedBy: 'Test Reviewer (Test - Audit Manager)',
         acceptedAt: 'Today at 09:42',
         confidence: 0.99,
       },
