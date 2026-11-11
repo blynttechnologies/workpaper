@@ -287,7 +287,32 @@ class Database {
 
     const firmId = 'firm_blynt_uk';
     this.firms = [
-      { id: firmId, name: 'Blynt Practice & Co LLP', created_at: '2026-01-01T00:00:00Z' },
+      {
+        id: firmId,
+        name: 'Blynt Practice & Co LLP',
+        created_at: '2026-01-01T00:00:00Z',
+        profile: {
+          legal_name: 'Blynt Practice & Co LLP',
+          trading_name: 'Blynt Practice & Co',
+          structure: 'llp',
+          company_number: 'OC394812',
+          address_line: '128 City Road, London',
+          postcode: 'EC1V 2NX',
+          jurisdiction: 'england_wales',
+          regulator: 'ICAEW',
+          registration_number: 'C003847291',
+          vat_registered: true,
+          vat_number: 'GB 849 2048 11',
+          phone: '+44 20 7946 0192',
+        },
+        settings: {
+          defaults: {
+            tolerance_p: '100',
+            review_threshold_p: '50000',
+            signoff_levels: 3,
+          },
+        },
+      },
     ];
 
     // Development Admin & Professional auditors

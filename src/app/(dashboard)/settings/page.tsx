@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import {
+  Building2,
   Users,
   Sparkles,
   CheckCircle2,
@@ -9,14 +10,41 @@ import {
   X,
   Plus,
   Trash2,
+  Save,
+  Check,
+  ShieldCheck,
+  Briefcase,
+  MapPin,
+  FileCheck2,
 } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { StaffManager } from '@/components/settings/StaffManager';
 import { getCurrentUserId } from '@/lib/session';
 
 export default function PracticeSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'roles' | 'rules'>('roles');
+  const [activeTab, setActiveTab] = useState<'company' | 'roles' | 'rules'>('company');
   const [savedToast, setSavedToast] = useState<string | null>(null);
+
+  // Company Profile & Details (Basic company settings)
+  const [legalName, setLegalName] = useState('Blynt Practice & Co LLP');
+  const [tradingName, setTradingName] = useState('Blynt Practice & Co');
+  const [structure, setStructure] = useState<'llp' | 'ltd' | 'partnership' | 'sole'>('llp');
+  const [companyNumber, setCompanyNumber] = useState('OC394812');
+  const [addressLine, setAddressLine] = useState('128 City Road, London');
+  const [postcode, setPostcode] = useState('EC1V 2NX');
+  const [jurisdiction, setJurisdiction] = useState<'england_wales' | 'scotland' | 'northern_ireland'>('england_wales');
+  const [regulator, setRegulator] = useState<'ICAEW' | 'ACCA' | 'ICAS' | 'CAI' | 'AAT' | 'CIMA' | 'ATT' | 'CIOT'>('ICAEW');
+  const [registrationNumber, setRegistrationNumber] = useState('C003847291');
+  const [vatRegistered, setVatRegistered] = useState(true);
+  const [vatNumber, setVatNumber] = useState('GB 849 2048 11');
+  const [phone, setPhone] = useState('+44 20 7946 0192');
+  const [contactEmail, setContactEmail] = useState('admin@blynt.co.uk');
+
+  // Basic Operational Defaults
+  const [signOffLevels, setSignOffLevels] = useState<'3' | '2'>('3');
+  const [reconciliationTolerance, setReconciliationTolerance] = useState('1.00');
+  const [reviewThreshold, setReviewThreshold] = useState('500.00');
+  const [savingCompany, setSavingCompany] = useState(false);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -24,8 +52,112 @@ export default function PracticeSettingsPage() {
       const tab = params.get('tab');
       if (tab === 'rules' || tab === 'ai-rules') setActiveTab('rules');
       else if (tab === 'roles' || tab === 'users') setActiveTab('roles');
+      else if (tab === 'company' || tab === 'firm' || tab === 'practice') setActiveTab('company');
     }
+
+    // Load firm profile
+    fetch('/api/v1/firm/onboarding')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const p = d.profile;
+        if (p) {
+          if (p.legal_name) setLegalName(p.legal_name);
+          if (p.trading_name) setTradingName(p.trading_name);
+          if (p.structure) setStructure(p.structure);
+          if (p.company_number) setCompanyNumber(p.company_number);
+          if (p.address_line) setAddressLine(p.address_line);
+          if (p.postcode) setPostcode(p.postcode);
+          if (p.jurisdiction) setJurisdiction(p.jurisdiction);
+          if (p.regulator) setRegulator(p.regulator);
+          if (p.registration_number) setRegistrationNumber(p.registration_number);
+          if (typeof p.vat_registered === 'boolean') setVatRegistered(p.vat_registered);
+          if (p.vat_number) setVatNumber(p.vat_number);
+          if (p.phone) setPhone(p.phone);
+        } else if (d.firm_name) {
+          setLegalName(d.firm_name);
+        }
+      })
+      .catch(() => {});
+
+    // Load firm defaults
+    fetch('/api/v1/firm/settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.defaults) return;
+        setSignOffLevels(d.defaults.signoff_levels === 2 ? '2' : '3');
+        setReconciliationTolerance((Number(d.defaults.tolerance_p) / 100).toFixed(2));
+        setReviewThreshold((Number(d.defaults.review_threshold_p) / 100).toFixed(2));
+      })
+      .catch(() => {});
   }, []);
+
+  const triggerSaveNotification = (msg: string) => {
+    setSavedToast(msg);
+    setTimeout(() => setSavedToast(null), 3000);
+  };
+
+  const handleSaveCompanySettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!legalName.trim()) {
+      triggerSaveNotification('Please enter the legal company name.');
+      return;
+    }
+    setSavingCompany(true);
+    try {
+      // 1. Save company profile via onboarding step 0
+      const profRes = await fetch('/api/v1/firm/onboarding', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step: 0,
+          data: {
+            legal_name: legalName.trim(),
+            trading_name: tradingName.trim() || undefined,
+            structure,
+            company_number: (structure === 'llp' || structure === 'ltd') ? companyNumber.trim().toUpperCase() : undefined,
+            address_line: addressLine.trim(),
+            postcode: postcode.trim().toUpperCase(),
+            jurisdiction,
+            regulator,
+            registration_number: registrationNumber.trim() || undefined,
+            vat_registered: vatRegistered,
+            vat_number: vatRegistered ? vatNumber.trim().toUpperCase() : undefined,
+            phone: phone.trim() || undefined,
+          },
+        }),
+      });
+
+      if (!profRes.ok) {
+        const err = await profRes.json().catch(() => ({}));
+        triggerSaveNotification(err.error || 'Failed to save company profile.');
+        setSavingCompany(false);
+        return;
+      }
+
+      // 2. Save basic operational defaults
+      const defRes = await fetch('/api/v1/firm/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tolerance: reconciliationTolerance,
+          review_threshold: reviewThreshold,
+          signoff_levels: Number(signOffLevels),
+        }),
+      });
+
+      if (!defRes.ok) {
+        const err = await defRes.json().catch(() => ({}));
+        triggerSaveNotification(err.error || 'Company details saved, but defaults failed.');
+      } else {
+        triggerSaveNotification('Company settings saved successfully.');
+      }
+    } catch {
+      triggerSaveNotification('Network error while saving company settings.');
+    } finally {
+      setSavingCompany(false);
+    }
+  };
 
   // ADM-01 Users & Roles
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -127,7 +259,7 @@ export default function PracticeSettingsPage() {
         created_at: '2026-10-25T16:00:00Z',
         times_used: 6,
         active: true,
-        approved_by_manager: false, // Pending manager approval
+        approved_by_manager: false,
       },
     ];
   });
@@ -139,11 +271,6 @@ export default function PracticeSettingsPage() {
   const [newRuleScope, setNewRuleScope] = useState<'supplier' | 'client' | 'practice'>('practice');
   const [newRuleType, setNewRuleType] = useState<'mapping' | 'extraction' | 'proposal' | 'finding'>('mapping');
 
-  const triggerSaveNotification = (msg: string) => {
-    setSavedToast(msg);
-    setTimeout(() => setSavedToast(null), 3000);
-  };
-
   const closeInviteModal = () => {
     setShowInviteModal(false);
     setInviteName('');
@@ -153,7 +280,6 @@ export default function PracticeSettingsPage() {
     setInviteLink('');
   };
 
-  // ADM-01: the server records the invite and returns a one-time link for the new user
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteName.trim() || !inviteEmail.trim() || !inviteEmail.includes('@')) {
@@ -257,15 +383,27 @@ export default function PracticeSettingsPage() {
       <div className="bg-white border border-[#E3E7EF] rounded-[20px] p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-extrabold text-[#122654] tracking-tight">Practice Settings</h1>
+            <h1 className="text-2xl font-extrabold text-[#122654] tracking-tight">Practice &amp; Company Settings</h1>
             <span className="text-xs bg-[#EAF5FC] text-[#1D4E89] border border-[#1D4E89]/20 px-2.5 py-1 rounded-full font-mono font-bold">
-              Blynt Practice &amp; Co LLP
+              {legalName || 'Blynt Practice & Co LLP'}
             </span>
           </div>
           <p className="text-xs text-[#4A5878] mt-1.5 leading-relaxed">
-            Manage practice team members, roles, permissions, and firm-wide AI mapping and extraction rules.
+            Manage company profile, legal entity details, team roles, and firm-wide AI extraction and mapping rules.
           </p>
         </div>
+
+        {activeTab === 'company' && (
+          <button
+            type="button"
+            onClick={() => handleSaveCompanySettings()}
+            disabled={savingCompany}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            <Save className="w-4 h-4 text-[#FF7A66]" />
+            <span>{savingCompany ? 'Saving...' : 'Save Settings'}</span>
+          </button>
+        )}
       </div>
 
       {savedToast && (
@@ -280,8 +418,22 @@ export default function PracticeSettingsPage() {
         </div>
       )}
 
-      {/* Tabs Navigation: Users & Roles and AI Rules & Accuracy */}
+      {/* Tabs Navigation: Company Settings, Users & Roles, and AI Rules & Accuracy */}
       <div className="flex items-center gap-2 border-b border-[#E3E7EF] pb-1 overflow-x-auto">
+        <button
+          id="tab-company"
+          type="button"
+          onClick={() => setActiveTab('company')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
+            activeTab === 'company'
+              ? 'border-[#FF7A66] text-[#122654] bg-[#F5F8FD]/50 rounded-t-lg'
+              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
+          }`}
+        >
+          <Building2 className="w-4 h-4 text-[#1D4E89]" />
+          <span>Company Settings</span>
+        </button>
+
         <button
           id="tab-roles"
           type="button"
@@ -311,7 +463,402 @@ export default function PracticeSettingsPage() {
         </button>
       </div>
 
-      {/* TAB 1: Users & Roles (ADM-01) */}
+      {/* TAB 1: Company Settings (Basic settings the company uses) */}
+      {activeTab === 'company' && (
+        <form onSubmit={handleSaveCompanySettings} className="space-y-6 max-w-5xl">
+          {/* Card 1: Company Identity */}
+          <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-[#E3E7EF] pb-4">
+              <Briefcase className="w-5 h-5 text-[#1D4E89]" />
+              <div>
+                <h2 className="text-base font-bold text-[#122654]">Company &amp; Legal Identity</h2>
+                <p className="text-xs text-[#4A5878] mt-0.5">
+                  Official practice identity used on engagement letters, statutory accounts headers, and lead sheets.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Legal Practice / Company Name <span className="text-[#FF7A66]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={legalName}
+                  onChange={(e) => setLegalName(e.target.value)}
+                  placeholder="e.g. Blynt Practice & Co LLP"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                  required
+                />
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  Registered name as it appears on official filings.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Trading / Brand Name
+                </label>
+                <input
+                  type="text"
+                  value={tradingName}
+                  onChange={(e) => setTradingName(e.target.value)}
+                  placeholder="e.g. Blynt Practice & Co"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-medium text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                />
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  Optional trading name displayed to staff and clients.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Legal Entity Structure <span className="text-[#FF7A66]">*</span>
+                </label>
+                <select
+                  value={structure}
+                  onChange={(e) => setStructure(e.target.value as any)}
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                >
+                  <option value="llp">Limited Liability Partnership (LLP)</option>
+                  <option value="ltd">Limited Company (Ltd)</option>
+                  <option value="partnership">General Partnership</option>
+                  <option value="sole">Sole Practitioner</option>
+                </select>
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  LLPs and Limited Companies require Companies House registration.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Companies House Number {(structure === 'llp' || structure === 'ltd') && <span className="text-[#FF7A66]">*</span>}
+                </label>
+                <input
+                  type="text"
+                  value={companyNumber}
+                  onChange={(e) => setCompanyNumber(e.target.value)}
+                  disabled={structure === 'sole' || structure === 'partnership'}
+                  placeholder={structure === 'llp' ? 'e.g. OC394812' : 'e.g. 12345678'}
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-mono font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none disabled:opacity-50"
+                />
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  {structure === 'sole' || structure === 'partnership'
+                    ? 'Not applicable for sole practitioners and general partnerships.'
+                    : 'Registered company number on the UK Companies House register.'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Registered Office & Contact */}
+          <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-[#E3E7EF] pb-4">
+              <MapPin className="w-5 h-5 text-[#1D4E89]" />
+              <div>
+                <h2 className="text-base font-bold text-[#122654]">Registered Office &amp; Contact Details</h2>
+                <p className="text-xs text-[#4A5878] mt-0.5">
+                  Official registered office address for statutory disclosures and practice correspondence.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Registered Office Street Address <span className="text-[#FF7A66]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={addressLine}
+                  onChange={(e) => setAddressLine(e.target.value)}
+                  placeholder="e.g. 128 City Road, London"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-medium text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  UK Postcode <span className="text-[#FF7A66]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={postcode}
+                  onChange={(e) => setPostcode(e.target.value)}
+                  placeholder="e.g. EC1V 2NX"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-mono font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Country / Jurisdiction <span className="text-[#FF7A66]">*</span>
+                </label>
+                <select
+                  value={jurisdiction}
+                  onChange={(e) => setJurisdiction(e.target.value as any)}
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                >
+                  <option value="england_wales">England &amp; Wales</option>
+                  <option value="scotland">Scotland</option>
+                  <option value="northern_ireland">Northern Ireland</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Official Practice Phone
+                </label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. +44 20 7946 0192"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-medium text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Primary Practice Email
+                </label>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="e.g. admin@blynt.co.uk"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-medium text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Regulatory & Tax Details */}
+          <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-[#E3E7EF] pb-4">
+              <ShieldCheck className="w-5 h-5 text-[#1D4E89]" />
+              <div>
+                <h2 className="text-base font-bold text-[#122654]">Supervisory Body &amp; Tax Credentials</h2>
+                <p className="text-xs text-[#4A5878] mt-0.5">
+                  Professional accountancy regulator and UK VAT registration details.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Supervisory / Regulatory Body <span className="text-[#FF7A66]">*</span>
+                </label>
+                <select
+                  value={regulator}
+                  onChange={(e) => setRegulator(e.target.value as any)}
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                >
+                  <option value="ICAEW">ICAEW (Institute of Chartered Accountants in England &amp; Wales)</option>
+                  <option value="ACCA">ACCA (Association of Chartered Certified Accountants)</option>
+                  <option value="ICAS">ICAS (Institute of Chartered Accountants of Scotland)</option>
+                  <option value="CAI">CAI (Chartered Accountants Ireland)</option>
+                  <option value="AAT">AAT (Association of Accounting Technicians)</option>
+                  <option value="CIMA">CIMA (Chartered Institute of Management Accountants)</option>
+                  <option value="ATT">ATT (Association of Taxation Technicians)</option>
+                  <option value="CIOT">CIOT (Chartered Institute of Taxation)</option>
+                </select>
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  Designated Anti-Money Laundering (AML) supervisory body.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  Practice Certificate / Firm Number
+                </label>
+                <input
+                  type="text"
+                  value={registrationNumber}
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
+                  placeholder="e.g. C003847291"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-mono font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none"
+                />
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  Firm registration code with your professional institute.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  VAT Registration Status
+                </label>
+                <div className="flex items-center gap-3 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-bold text-[#122654] cursor-pointer">
+                    <input
+                      type="radio"
+                      name="vat_reg"
+                      checked={vatRegistered}
+                      onChange={() => setVatRegistered(true)}
+                    />
+                    <span>VAT Registered Firm</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-[#122654] cursor-pointer">
+                    <input
+                      type="radio"
+                      name="vat_reg"
+                      checked={!vatRegistered}
+                      onChange={() => setVatRegistered(false)}
+                    />
+                    <span>Not Registered</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-1.5">
+                  UK VAT Number {vatRegistered && <span className="text-[#FF7A66]">*</span>}
+                </label>
+                <input
+                  type="text"
+                  value={vatNumber}
+                  onChange={(e) => setVatNumber(e.target.value)}
+                  disabled={!vatRegistered}
+                  placeholder="e.g. GB 849 2048 11"
+                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl font-mono font-bold text-[#122654] focus:ring-2 focus:ring-[#1D4E89]/20 outline-none disabled:opacity-50"
+                />
+                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                  9-digit UK VAT registration number prefixed with GB.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Basic Operational Defaults */}
+          <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
+            <div className="flex items-center gap-2.5 border-b border-[#E3E7EF] pb-4">
+              <FileCheck2 className="w-5 h-5 text-[#1D4E89]" />
+              <div>
+                <h2 className="text-base font-bold text-[#122654]">Standard Operational Defaults</h2>
+                <p className="text-xs text-[#4A5878] mt-0.5">
+                  Baseline working paper parameters and sign-off hierarchy used by default on all client files.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-xs font-bold text-[#122654] mb-2">
+                  Default Sign-off Workflow Hierarchy
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <label
+                    className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                      signOffLevels === '3'
+                        ? 'border-[#122654] bg-[#F5F8FD] shadow-xs'
+                        : 'border-[#E3E7EF] hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="signOff"
+                      checked={signOffLevels === '3'}
+                      onChange={() => setSignOffLevels('3')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="font-bold text-[#122654]">3 Levels: Preparer &gt; Manager &gt; Partner</div>
+                      <div className="text-[11px] text-[#4A5878] mt-0.5">
+                        Standard UK segregation of duties with manager clearance required before partner sign-off.
+                      </div>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                      signOffLevels === '2'
+                        ? 'border-[#122654] bg-[#F5F8FD] shadow-xs'
+                        : 'border-[#E3E7EF] hover:border-gray-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="signOff"
+                      checked={signOffLevels === '2'}
+                      onChange={() => setSignOffLevels('2')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="font-bold text-[#122654]">2 Levels: Preparer &gt; Partner</div>
+                      <div className="text-[11px] text-[#4A5878] mt-0.5">
+                        Streamlined review workflow suitable for sole practitioners and fast-turnaround teams.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
+                  <label className="block text-xs font-bold text-[#122654] mb-1">
+                    Reconciliation Tolerance (£)
+                  </label>
+                  <input
+                    type="text"
+                    value={reconciliationTolerance}
+                    onChange={(e) => setReconciliationTolerance(e.target.value)}
+                    className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
+                  />
+                  <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                    Differences within tolerance are auto-reconciled.
+                  </span>
+                </div>
+
+                <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
+                  <label className="block text-xs font-bold text-[#122654] mb-1">
+                    Review Threshold (£)
+                  </label>
+                  <input
+                    type="text"
+                    value={reviewThreshold}
+                    onChange={(e) => setReviewThreshold(e.target.value)}
+                    className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
+                  />
+                  <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                    Movements above this are flagged for review.
+                  </span>
+                </div>
+
+                <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
+                  <label className="block text-xs font-bold text-[#122654] mb-1">
+                    Base Currency
+                  </label>
+                  <div className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-bold text-[#122654] flex items-center justify-between">
+                    <span>GBP (£)</span>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-mono font-bold">Standard</span>
+                  </div>
+                  <span className="text-[11px] text-[#7E8DA6] mt-1 block">
+                    UK Sterling currency standard.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex items-center justify-end pt-4 border-t border-[#E3E7EF]">
+              <button
+                type="submit"
+                disabled={savingCompany}
+                className="flex items-center gap-2 px-6 py-2.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4 text-[#FF7A66]" />
+                <span>{savingCompany ? 'Saving...' : 'Save Company Settings'}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* TAB 2: Users & Roles (ADM-01) */}
       {activeTab === 'roles' && (
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
@@ -335,7 +882,7 @@ export default function PracticeSettingsPage() {
         </div>
       )}
 
-      {/* TAB 2: Shared Rules Library & AI Accuracy (DAT-09, DAT-05, ADM-02) */}
+      {/* TAB 3: Shared Rules Library & AI Accuracy (DAT-09, DAT-05, ADM-02) */}
       {activeTab === 'rules' && (
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-8">
           {/* Header */}
