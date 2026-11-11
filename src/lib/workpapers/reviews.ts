@@ -11,6 +11,7 @@ import { reviewFixedAssets } from './fixed-assets';
 import { reviewDla } from './dla';
 import { reviewReserves } from './reserves';
 import { reviewInvestments } from './investments';
+import { reviewBs } from './bs-analysis';
 
 /** Papers with their own checks and totals, by reference. Each returns the conclusion draft. */
 export const PAPER_REVIEWS: Record<string, (ctx: PaperContext) => string> = {
@@ -26,4 +27,5 @@ export const PAPER_REVIEWS: Record<string, (ctx: PaperContext) => string> = {
   'D-20': reviewDla,
   'E-20': reviewReserves,
   'G-10': reviewInvestments,
+  'Z-40': reviewBs,
 };

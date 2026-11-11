@@ -12,6 +12,7 @@ import { FixedAssetsSchedule } from './fixed-assets';
 import { DlaSchedule } from './dla';
 import { ReservesSchedule } from './reserves';
 import { InvestmentsSchedule } from './investments';
+import { BsAnalysisSchedule } from './bs-analysis';
 
 /** Redesigned papers with a screen of their own, by reference. */
 export const PAPER_SCREENS: Record<string, (props: ScheduleProps) => React.ReactNode> = {
@@ -27,4 +28,5 @@ export const PAPER_SCREENS: Record<string, (props: ScheduleProps) => React.React
   'D-20': DlaSchedule,
   'E-20': ReservesSchedule,
   'G-10': InvestmentsSchedule,
+  'Z-40': BsAnalysisSchedule,
 };
