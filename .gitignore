@@ -32,3 +32,4 @@ build/
 .env*
 *.tsbuildinfo
 .workspace_state.json
+graphify-out/
