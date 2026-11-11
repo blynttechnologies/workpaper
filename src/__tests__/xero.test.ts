@@ -445,3 +445,29 @@ describe('Pulling the trial balance from Xero', () => {
     expect(firmSlice(db.exportState() as any, FIRM)).not.toHaveProperty('xero_connections');
   });
 });
+
+describe('Xero bank payments after the period end (creditors check)', () => {
+  it('keeps bill payments and spend money, and matches them to suppliers by name or invoice amount', async () => {
+    const { parseBankPayments } = await import('../lib/server/xero');
+    const { bankMatches } = await import('../lib/workpapers/creditors');
+    const payments = parseBankPayments('!abc', {
+      payments: [
+        { PaymentID: 'p1', PaymentType: 'ACCPAYPAYMENT', Status: 'AUTHORISED', DateString: '2026-10-05T00:00:00', Amount: 1200.5, IsReconciled: true, Invoice: { InvoiceID: 'i1', Contact: { Name: 'Booker Ltd' } } },
+        { PaymentID: 'p2', PaymentType: 'ACCRECPAYMENT', Status: 'AUTHORISED', DateString: '2026-10-06T00:00:00', Amount: 50 },
+        { PaymentID: 'p3', PaymentType: 'ACCPAYPAYMENT', Status: 'DELETED', DateString: '2026-10-07T00:00:00', Amount: 99 },
+      ],
+      bank: [
+        { BankTransactionID: 'b1', Type: 'SPEND', Status: 'AUTHORISED', DateString: '2026-10-02T00:00:00', Total: 345, Contact: { Name: '' }, Reference: 'CARD 1234' },
+        { BankTransactionID: 'b2', Type: 'RECEIVE', Status: 'AUTHORISED', DateString: '2026-10-03T00:00:00', Total: 10 },
+      ],
+    });
+    expect(payments.map((p) => [p.date, p.amount_p, p.reconciled])).toEqual([
+      ['2026-10-02', '34500', false],
+      ['2026-10-05', '120050', true],
+    ]);
+    const supplier = (name: string, invoice: string) => ({ id: 's', name, ledger_p: '999999', statement_p: '', paid_after_p: '0', invoices: [{ ref: 'x', date: '2026-09-01', days: 29, amount_p: invoice }] });
+    expect(bankMatches(supplier('BOOKER LIMITED', '1'), payments).map((p) => p.amount_p)).toEqual(['120050']); // by name
+    expect(bankMatches(supplier('Jefferson Gas', '34500'), payments).map((p) => p.amount_p)).toEqual(['34500']); // by amount
+    expect(bankMatches(supplier('Nobody', '1'), payments)).toEqual([]);
+  });
+});
