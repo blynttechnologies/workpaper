@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, ChevronDown, Plus, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Plus, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { getActor } from '@/lib/session';
 import { addPaperToWorkflow, allWorkflowsOf, archiveWorkflow, canCustomise, deleteWorkflow, restoreWorkflow, workflowProgress } from '@/lib/workflows';
@@ -37,12 +37,10 @@ export default function WorkflowDetailPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showAllPapers, setShowAllPapers] = useState(false);
   const [creatingPaper, setCreatingPaper] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [signing, setSigning] = useState(false);
   const [signMessage, setSignMessage] = useState('');
   const [pendingNa, setPendingNa] = useState<Workpaper | null>(null);
   const [naReason, setNaReason] = useState('');
-  const [showNa, setShowNa] = useState(false);
   const refresh = () => setRev((n) => n + 1);
   const engagementId = params?.id as string;
   const wf = allWorkflowsOf(engagementId).find((w) => w.id === params?.wfId);
@@ -70,7 +68,7 @@ export default function WorkflowDetailPage() {
   const signActions = canEdit ? levels.filter((l) => l.may.includes(actor.role)) : [];
   const unreconciled = papers.filter((w) => evaluatePaper(w)?.totals.difference).length;
   const reviewedPct = papers.length ? Math.round((papers.filter((w) => signoffBy(w.id, 'reviewer')).length / papers.length) * 100) : 0;
-  const selectedPapers = papers.filter((w) => selected.has(w.id));
+  const unsigned = (role: string) => papers.filter((w) => !signoffBy(w.id, role));
 
   // Papers this workflow could take: suited to the client's type of business, or already in the year's file
   const suited = new Set(packFor(client?.company_type));
@@ -95,11 +93,11 @@ export default function WorkflowDetailPage() {
     refresh();
   };
 
-  const signSelected = async (action: string, done: string) => {
+  const signAll = async (role: string, action: string, done: string) => {
     setSigning(true);
     const failed: string[] = [];
     let count = 0;
-    for (const w of selectedPapers) {
+    for (const w of unsigned(role)) {
       const res = await fetch(`/api/v1/workpapers/${encodeURIComponent(w.id)}/signoffs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,7 +107,6 @@ export default function WorkflowDetailPage() {
       else failed.push(`${w.ref}: ${(await res.json().catch(() => ({}))).error || `not ${done}`}`);
     }
     setSignMessage(`${count} ${done}.${failed.length ? ` Not ${done}: ${failed.join(' · ')}` : ''}`);
-    setSelected(new Set());
     setSigning(false);
   };
 
@@ -204,22 +201,16 @@ export default function WorkflowDetailPage() {
       {canEdit && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            {signActions.length > 0 && papers.length > 0 && (
-              <label className="flex items-center gap-2 text-xs font-semibold text-[#122654] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedPapers.length === papers.length}
-                  onChange={(e) => setSelected(new Set(e.target.checked ? papers.map((w) => w.id) : []))}
-                  className="rounded border-gray-400"
-                />
-                Select all
-              </label>
-            )}
-            {selectedPapers.length > 0 && signActions.map((l) => (
-              <button key={l.action} type="button" disabled={signing} onClick={() => signSelected(l.action, l.done)} className={`${button} bg-[#122654] border-[#122654] text-white disabled:opacity-60`}>
-                {signing ? 'Signing…' : `Mark ${l.done} (${selectedPapers.length})`}
-              </button>
-            ))}
+            {signActions.map((l) => {
+              const n = unsigned(l.role).length;
+              return (
+                n > 0 && (
+                  <button key={l.action} type="button" disabled={signing} onClick={() => signAll(l.role, l.action, l.done)} className={`${button} bg-[#122654] border-[#122654] text-white disabled:opacity-60`}>
+                    {signing ? 'Signing…' : `Mark all ${l.done} (${n})`}
+                  </button>
+                )
+              );
+            })}
           </div>
           <div className="flex items-center gap-2">
             <button type="button" aria-expanded={showAdd} onClick={() => setShowAdd((v) => !v)} className={`${outline} inline-flex items-center gap-1`}>
@@ -272,20 +263,18 @@ export default function WorkflowDetailPage() {
               const difference = evaluatePaper(w)?.totals.difference;
               return (
                 <li key={w.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 hover:bg-[#F5F8FD]">
-                  {signActions.length > 0 && (
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${w.ref} ${title}`}
-                      checked={selected.has(w.id)}
-                      onChange={(e) => {
-                        const next = new Set(selected);
-                        if (e.target.checked) next.add(w.id);
-                        else next.delete(w.id);
-                        setSelected(next);
-                      }}
-                      className="rounded border-gray-400 shrink-0"
-                    />
-                  )}
+                  <input
+                    type="checkbox"
+                    aria-label={`Use ${w.ref} ${title} this year`}
+                    title="Untick to mark not applicable"
+                    checked
+                    disabled={!canEdit}
+                    onChange={() => {
+                      setPendingNa(w);
+                      setNaReason('');
+                    }}
+                    className="rounded border-gray-400 shrink-0 cursor-pointer"
+                  />
                   <Link href={`/engagements/${engagementId}/workpapers/${w.id}`} className="flex flex-1 min-w-[60%] sm:min-w-0 items-center gap-3">
                     <span className="font-mono text-xs text-[#4A5878] w-10 shrink-0">{w.ref}</span>
                     <span className="flex-1 min-w-0 text-sm font-semibold text-[#122654] truncate">{title}</span>
@@ -302,11 +291,6 @@ export default function WorkflowDetailPage() {
                       );
                     })}
                   </span>
-                  {canEdit && (
-                    <button type="button" onClick={() => { setPendingNa(w); setNaReason(''); }} aria-label={`Mark ${w.ref} ${title} not applicable`} title="Mark not applicable" className="text-[11px] font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer shrink-0">
-                      N/A
-                    </button>
-                  )}
                 </li>
               );
             })}
@@ -315,25 +299,29 @@ export default function WorkflowDetailPage() {
       ))}
 
       {notApplicable.length > 0 && (
-        <section className="bg-white border border-[#E3E7EF] rounded-xl">
-          <button type="button" aria-expanded={showNa} onClick={() => setShowNa((v) => !v)} className="w-full p-3 flex items-center gap-2 text-xs font-bold text-[#4A5878] hover:text-[#122654] cursor-pointer">
-            <ChevronDown className={`w-4 h-4 transition-transform ${showNa ? '' : '-rotate-90'}`} aria-hidden="true" />
-            Not applicable ({notApplicable.length})
-          </button>
-          {showNa && (
+        <section aria-labelledby="area-na" className="bg-white border border-[#E3E7EF] rounded-xl">
+          <h2 id="area-na" className="p-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#4A5878]">
+            Not applicable ({notApplicable.length}) <span className="font-normal normal-case tracking-normal text-[#7E8DA6]">· tick to use again</span>
+          </h2>
             <ul className="px-3 pb-2 divide-y divide-[#E3E7EF]">
               {notApplicable.map((w) => (
                 <li key={w.id} className="py-2 flex items-center gap-3 text-xs text-[#4A5878]">
+                  <input
+                    type="checkbox"
+                    aria-label={`Use ${w.ref} ${templateOf(w)?.title ?? w.ref} this year`}
+                    checked={false}
+                    disabled={!canEdit}
+                    onChange={() => setApplicable(w, true, 'Ticked again on the workflow')}
+                    className="rounded border-gray-400 shrink-0 cursor-pointer"
+                  />
                   <span className="font-mono font-bold w-10 shrink-0">{w.ref}</span>
                   <span className="flex-1 min-w-0">
                     <span className="line-through">{templateOf(w)?.title ?? w.ref}</span>
                     {w.na_reason && <span className="ml-2 text-[11px]">{w.na_reason}</span>}
                   </span>
-                  {canEdit && <button type="button" onClick={() => setApplicable(w, true, 'Restored by user')} className="font-semibold text-[#1D4E89] hover:underline cursor-pointer shrink-0">Make applicable</button>}
                 </li>
               ))}
             </ul>
-          )}
         </section>
       )}
 
