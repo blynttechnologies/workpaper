@@ -82,7 +82,7 @@ export default function ReportsPage() {
             </span>
           </div>
           <p className="text-xs text-[#4A5878] mt-1">
-            Pull any report for any period (RPT-01), generate client management packs (MGT-01), or export complete indexed working paper bundles (RPT-02).
+            Pull any report for any period, generate client management packs, or export complete indexed working paper bundles.
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default function ReportsPage() {
           className="flex items-center gap-2 px-4 py-2 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
         >
           <FileDown className="w-4 h-4 text-[#FF7A66]" />
-          <span>Full File Export Bundle (RPT-02)</span>
+          <span>Full File Export Bundle</span>
         </button>
       </div>
 
@@ -108,7 +108,7 @@ export default function ReportsPage() {
           }`}
         >
           <FileSpreadsheet className="w-4 h-4 text-[#1D4E89]" />
-          <span>Report Library (RPT-01)</span>
+          <span>Report Library</span>
         </button>
 
         <button
@@ -121,7 +121,7 @@ export default function ReportsPage() {
           }`}
         >
           <BarChart3 className="w-4 h-4 text-[#1D4E89]" />
-          <span>Management Pack (MGT-01)</span>
+          <span>Management Pack</span>
         </button>
 
         <button
@@ -134,7 +134,7 @@ export default function ReportsPage() {
           }`}
         >
           <TrendingUp className="w-4 h-4 text-[#0B6B52]" />
-          <span>Cash Flow Statement (MGT-04)</span>
+          <span>Cash Flow Statement</span>
         </button>
 
         <button
@@ -147,7 +147,7 @@ export default function ReportsPage() {
           }`}
         >
           <Calendar className="w-4 h-4 text-purple-700" />
-          <span>12-Month Forecast (MGT-05)</span>
+          <span>12-Month Forecast</span>
         </button>
 
         <button
@@ -160,7 +160,7 @@ export default function ReportsPage() {
           }`}
         >
           <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-          <span>Quarterly Insight Pack (QTR-01)</span>
+          <span>Quarterly Insight Pack</span>
         </button>
       </div>
 
@@ -207,7 +207,7 @@ export default function ReportsPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
             <div>
-              <h2 className="text-base font-bold text-[#122654]">Client Management Accounts Pack (MGT-01)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Client Management Accounts Pack</h2>
               <p className="text-xs text-[#4A5878]">
                 Professional management pack with KPI graphs, P&amp;L variance, and aged debtors summary.
               </p>
@@ -321,9 +321,9 @@ export default function ReportsPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
             <div>
-              <h2 className="text-base font-bold text-[#122654]">Cash Flow Statement - Indirect Method (MGT-04)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Cash Flow Statement - Indirect Method</h2>
               <p className="text-xs text-[#4A5878]">
-                Reconciles operating profit to closing bank balances using balance sheet movements (DAT-03).
+                Reconciles operating profit to closing bank balances using balance sheet movements.
               </p>
             </div>
 
@@ -396,7 +396,7 @@ export default function ReportsPage() {
             </div>
 
             <div className="flex justify-between font-bold text-[#122654] text-xs">
-              <span className="font-sans">Cash at end of financial year (Agrees to REC-02)</span>
+              <span className="font-sans">Cash at end of financial year (agrees to Bank and cash)</span>
               <span>£1,305,350.00</span>
             </div>
           </div>
@@ -407,7 +407,7 @@ export default function ReportsPage() {
       {activeTab === 'forecast_12m' && (
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
           <div className="border-b border-[#E3E7EF] pb-4">
-            <h2 className="text-base font-bold text-[#122654]">12-Month Cash Flow Forecast (MGT-05)</h2>
+            <h2 className="text-base font-bold text-[#122654]">12-Month Cash Flow Forecast</h2>
             <p className="text-xs text-[#4A5878]">
               Dynamic cash model driven by debtor/creditor day assumptions and scheduled tax payment dates.
             </p>
@@ -507,7 +507,7 @@ export default function ReportsPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
             <div>
-              <h2 className="text-base font-bold text-[#122654]">Quarterly Insight Schedule (QTR-01)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Quarterly Insight Schedule</h2>
               <p className="text-xs text-[#4A5878]">
                 2-page executive summary with AI insights, trend charts, and statutory filing timeline.
               </p>
@@ -524,7 +524,7 @@ export default function ReportsPage() {
           <div className="bg-[#FFF1EE]/50 border border-[#FF7A66]/30 rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-[#A23A27]">
               <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-              <span>3 AI Executive Insights (QTR-01 Plain English)</span>
+              <span>3 AI Executive Insights</span>
             </div>
             <ul className="space-y-1.5 text-xs text-[#122654]">
               <li className="flex items-start gap-2">
@@ -549,7 +549,7 @@ export default function ReportsPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-5 max-w-2xl mx-auto">
           <div className="flex items-center gap-3 text-[#122654] border-b border-[#E3E7EF] pb-3">
             <FileDown className="w-6 h-6 text-[#FF7A66]" />
-            <h2 className="text-base font-bold">Full Working Paper File Export (RPT-02)</h2>
+            <h2 className="text-base font-bold">Full Working Paper File Export</h2>
           </div>
 
           <p className="text-xs text-[#4A5878] leading-relaxed">
@@ -585,7 +585,7 @@ export default function ReportsPage() {
               className="px-5 py-2.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2"
             >
               <Download className="w-4 h-4 text-[#FF7A66]" />
-              <span>Build &amp; Download Indexed PDF Bundle (RPT-02)</span>
+              <span>Build &amp; Download Indexed PDF Bundle</span>
             </button>
           </div>
         </div>

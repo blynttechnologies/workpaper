@@ -422,7 +422,7 @@ export default function TrialBalancePage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setDrillExportToast(`Exported ${accountTransactions.length} transactions to CSV (AUD-01 logged).`);
+    setDrillExportToast(`Exported ${accountTransactions.length} transactions to CSV.`);
     setTimeout(() => setDrillExportToast(null), 3000);
   };
 
@@ -495,7 +495,7 @@ export default function TrialBalancePage() {
             className="min-h-[40px] px-3.5 py-2 bg-white hover:bg-[#F5F8FD] text-[#122654] border border-[#D3DCEE] text-xs font-bold rounded-[10px] flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-[0.98]"
           >
             <Upload className="w-4 h-4 text-[#1D4E89]" />
-            <span>Upload TB (DAT-02)</span>
+            <span>Upload TB</span>
           </button>
 
           <button
@@ -504,7 +504,7 @@ export default function TrialBalancePage() {
             className="min-h-[40px] px-3.5 py-2 bg-white hover:bg-[#F5F8FD] text-[#122654] border border-[#D3DCEE] text-xs font-bold rounded-[10px] flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-[0.98]"
           >
             <Database className="w-4 h-4 text-[#0B6B52]" />
-            <span>Import from Xero (DAT-01)</span>
+            <span>Import from Xero</span>
           </button>
 
           <button
@@ -547,7 +547,7 @@ export default function TrialBalancePage() {
             <div className="flex items-center gap-2.5">
               <RefreshCw className="w-4 h-4 text-amber-700" />
               <span className="text-xs font-bold text-amber-900">
-                Ledger changes detected in {engagementSummary(engagementId).clientName} (DAT-01 / DAT-06)
+                Ledger changes detected in {engagementSummary(engagementId).clientName}
               </span>
             </div>
             <button
@@ -593,7 +593,7 @@ export default function TrialBalancePage() {
                 type="button"
                 onClick={handleConfirmAllReady}
                 className="min-h-[38px] px-3.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-[8px] flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
-                title="Bulk confirm high-confidence Ready mappings (DAT-04)"
+                title="Bulk confirm high-confidence Ready mappings"
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>Confirm Ready ({readyCount})</span>
@@ -821,7 +821,7 @@ export default function TrialBalancePage() {
                               setDrillAccount({ code: lead.letter, name: `${lead.title} (Prior Year)` });
                             }}
                             className="underline decoration-dotted hover:decoration-solid hover:text-[#1D4E89] cursor-pointer"
-                            title="Drill down into prior-year transactions (DAT-07)"
+                            title="Drill down into prior-year transactions"
                           >
                             {formatPence(lead.priorYearPence, { accountingFormat: true })}
                           </button>
@@ -838,7 +838,7 @@ export default function TrialBalancePage() {
                             setDrillAccount({ code: lead.letter, name: `${lead.title} (Draft)` });
                           }}
                           className="underline decoration-dotted hover:decoration-solid hover:text-[#1D4E89] font-medium cursor-pointer"
-                          title="Drill down into transactions (DAT-07)"
+                          title="Drill down into transactions"
                         >
                           {formatPence(lead.draftPence, { accountingFormat: true })}
                         </button>
@@ -862,7 +862,7 @@ export default function TrialBalancePage() {
                             setDrillAccount({ code: lead.letter, name: `${lead.title} (Final)` });
                           }}
                           className="underline decoration-dotted hover:decoration-solid hover:text-[#1D4E89] cursor-pointer"
-                          title="Drill down into transactions (DAT-07)"
+                          title="Drill down into transactions"
                         >
                           {formatPence(lead.finalPence, { accountingFormat: true })}
                         </button>
@@ -1172,7 +1172,7 @@ export default function TrialBalancePage() {
               <div>
                 <h3 className="text-base font-extrabold text-[#122654] flex items-center gap-2">
                   <Scale className="w-5 h-5 text-[#B8432F]" />
-                  Opening Balance Check against Ledger (ENG-04)
+                  Opening Balance Check against Ledger
                 </h3>
                 <p className="text-xs text-[#4A5878] mt-0.5">
                   Verifies ledger opening balances against last year&apos;s final figures so unposted adjustments in Xero/QuickBooks are caught.
@@ -1254,7 +1254,7 @@ export default function TrialBalancePage() {
               </div>
 
               <div className="p-3 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[10px] text-xs text-[#4A5878]">
-                <strong className="text-[#122654] block mb-1">Standard Acceptance Rule (ENG-04):</strong>
+                <strong className="text-[#122654] block mb-1">Standard Acceptance Rule:</strong>
                 Any difference over £1 is flagged on the lead schedule. The file cannot be partner-approved with unexplained opening differences.
               </div>
             </div>
@@ -1298,7 +1298,7 @@ export default function TrialBalancePage() {
                   type="button"
                   onClick={handleExportDrillDown}
                   className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer border border-white/20 transition-colors"
-                  title="Export to Excel (CSV) - DAT-07"
+                  title="Export to Excel (CSV)"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Excel</span>
@@ -1476,7 +1476,7 @@ export default function TrialBalancePage() {
               <div>
                 <h3 className="text-base font-extrabold text-[#122654] flex items-center gap-2">
                   <Upload className="w-5 h-5 text-[#1D4E89]" />
-                  Upload Trial Balance (DAT-02)
+                  Upload Trial Balance
                 </h3>
                 <p className="text-xs text-[#4A5878] mt-0.5">
                   Upload .csv, .xlsx or .xls file with AI column detection and balancing validation.
@@ -1562,7 +1562,7 @@ export default function TrialBalancePage() {
                 type="button"
                 onClick={() => {
                   setShowUploadModal(false);
-                  setUploadSuccessToast('Trial balance imported successfully with AI column detection (DAT-02).');
+                  setUploadSuccessToast('Trial balance imported successfully with AI column detection.');
                   setTimeout(() => setUploadSuccessToast(null), 3000);
                   const actor = getActor();
                   db.logAudit(
@@ -1592,7 +1592,7 @@ export default function TrialBalancePage() {
             <div className="p-4 border-b border-[#E3E7EF] flex items-center justify-between bg-[#F5F8FD]">
               <h3 className="text-base font-extrabold text-[#122654] flex items-center gap-2">
                 <Database className="w-5 h-5 text-[#0B6B52]" />
-                Connect Cloud Ledger (DAT-01)
+                Connect Cloud Ledger
               </h3>
               <button
                 type="button"

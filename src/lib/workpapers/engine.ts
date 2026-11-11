@@ -3,6 +3,9 @@ import { asPence, formatPence } from '../money';
 import { TemplateDef, blankPaperData, templateFor, templateOf } from './templates';
 import { JOURNAL_IN_TB, type Workpaper } from '../types/models';
 import { analyticalReview, analyticalRows } from './analytical';
+import { debtorView, type DebtorLine } from './debtors';
+import { PAPER_REVIEWS } from './reviews';
+import type { PaperContext } from './common';
 
 /**
  * Calculations for every working paper: lead figures from the Blynt chart,
@@ -91,6 +94,182 @@ export function linkedFiles(workpaperId: string, rowId: string) {
   );
 }
 
+/* ---------- Bank and cash: one row per account ---------- */
+
+export interface ReconItem {
+  id: string;
+  date?: string;
+  desc: string;
+  amount_p: string;
+  older_than_30_days?: boolean;
+}
+
+export interface ReconAccount {
+  id: string; // also the evidence anchor for the statement or count
+  code: string; // Blynt lead code, or '*' for every lead no other row covers
+  name: string;
+  detail?: string;
+  statement_p: string; // '' until a statement balance or cash count is entered
+  source?: 'manual' | 'upload' | 'open_banking';
+  synced_at?: string;
+  confirmation_p?: string;
+  less: ReconItem[];
+  add: ReconItem[];
+}
+
+export const accountKind = (code: string): 'bank' | 'cash' | 'card' => (code === '620' || code === '645' ? 'cash' : code === '630' ? 'card' : 'bank');
+export const accountName = (a: ReconAccount) => (a.code === '*' ? a.name : `${a.code} ${a.name}`);
+export const statementEntered = (a: ReconAccount) => a.statement_p !== '' && a.statement_p != null;
+
+/**
+ * The accounts on a bank and cash paper. Papers saved before accounts existed keep their
+ * single statement as one row covering every account; untouched papers start with one row
+ * per bank, card and cash account in the trial balance.
+ */
+export function reconAccounts(data: Record<string, any>, leads: LeadFigure[]): ReconAccount[] {
+  if (Array.isArray(data.accounts)) return data.accounts;
+  const sections: any[] = data.sections ?? [];
+  const rowsOf = (neg: boolean) => sections.filter((s) => Number(s.sign) < 0 === neg).flatMap((s) => s.rows ?? []);
+  if (asPence(data.statement_p) !== 0n || sections.some((s) => s.rows?.length)) {
+    return [{ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) }];
+  }
+  return leads
+    .filter((l) => l.mapped || l.final !== 0n)
+    .map((l) => ({ id: `acc_${l.code}`, code: l.code, name: l.label, statement_p: '', less: [], add: [] }));
+}
+
+/** Ledger balance for one row: its lead, or for '*' every lead no other row covers. */
+export function accountLedger(a: ReconAccount, accounts: ReconAccount[], leads: LeadFigure[], creditArea = false) {
+  const others = new Set(accounts.filter((x) => x !== a).map((x) => x.code));
+  const ls = a.code === '*' ? leads.filter((l) => !others.has(l.code)) : leads.filter((l) => l.code === a.code);
+  const final = ls.reduce((acc, l) => acc + l.final, 0n);
+  return { final: creditArea ? -final : final, mapped: ls.some((l) => l.mapped) };
+}
+
+/* ---------- Trade debtors: recoverability decisions ---------- */
+
+/** Revenue (credit-positive) and the debtors control for an engagement, for debtor days. */
+function debtorDays(engagementId: string, adjusted: boolean): bigint | null {
+  const eng = db.engagements.find((e) => e.id === engagementId);
+  if (!eng) return null;
+  const pick = (code: string) => (adjusted ? tbFor(engagementId, code).final : tbFor(engagementId, code).draft);
+  const revenue = -db.blynt_accounts.filter((a) => a.type === 'Revenue').reduce((acc, a) => acc + pick(a.code), 0n);
+  const control = pick('710');
+  const days = BigInt(Math.round((Date.parse(eng.period_end) - Date.parse(eng.period_start)) / 86_400_000) + 1);
+  return revenue > 0n && control > 0n ? (control * days + revenue / 2n) / revenue : null;
+}
+
+/** The journal the debtors decisions need: the provision's movement and credit balances moved to creditors. */
+export function debtorsJournal(totals: Record<string, bigint>) {
+  return { provision: totals.movement ?? 0n, creditors: totals.moved ?? 0n };
+}
+
+/** C-10 checks and totals; returns the conclusion draft. */
+function reviewDebtors(engagementId: string, data: Record<string, any>, leads: LeadFigure[], total: bigint, totals: Record<string, bigint>, checks: PaperCheck[]): string {
+  const views = ((data.lines ?? []) as DebtorLine[]).map(debtorView);
+  const control = leads.find((l) => l.code === '710');
+  // The aged report comes from the client's ledger, so it agrees to the control before any of our journals
+  const controlDraft = control?.draft ?? 0n;
+  const provisionInTb = -(leads.find((l) => l.code === '711')?.draft ?? 0n);
+  const sum = (f: (v: ReturnType<typeof debtorView>) => bigint) => views.reduce((acc, v) => acc + f(v), 0n);
+  const positive = sum((v) => (v.total > 0n ? v.total : 0n));
+  const collected = sum((v) => (v.total > 0n ? (v.after < v.total ? v.after : v.total) : 0n));
+  const provision = sum((v) => v.provision);
+  const moved = sum((v) => v.moved);
+  const prior = db.engagements.find((e) => e.id === engagementId)?.prior_engagement_id;
+  const days = debtorDays(engagementId, false);
+  const daysPy = prior ? debtorDays(prior, true) : null;
+  Object.assign(totals, {
+    control: controlDraft,
+    difference: total - controlDraft,
+    positive,
+    collected,
+    over90: sum((v) => (v.d90 > 0n ? v.d90 : 0n)),
+    over90_count: BigInt(views.filter((v) => v.d90 > 0n).length),
+    provision,
+    suggested: sum((v) => (v.suggestion?.kind === 'provide' ? v.suggestion.amount : 0n)),
+    provision_in_tb: provisionInTb,
+    movement: provision - provisionInTb,
+    moved,
+    ...(days !== null ? { debtor_days: days } : {}),
+    ...(daysPy !== null ? { debtor_days_py: daysPy } : {}),
+  });
+
+  checks.push(tie('control_tb', 'Aged report agrees to control account', total, control?.mapped ? controlDraft : null, 'TB 710 before adjustments'));
+  const unchecked = views.filter((v) => v.total > 0n && v.after === 0n && !v.line.decision);
+  checks.push({
+    id: 'receipts',
+    label: 'After-date receipts checked',
+    detail: data.receipts_from_ledger
+      ? 'Receipts after the period end were matched from the ledger for every customer.'
+      : unchecked.length
+        ? `Record receipts after the period end, or refresh from the ledger, for ${unchecked.map((v) => v.line.desc || 'a customer').join(', ')}.`
+        : 'Every balance has receipts after the period end or a decision.',
+    passed: !!data.receipts_from_ledger || !unchecked.length,
+  });
+  const old = views.filter((v) => v.d90 > 0n);
+  const oldDone = old.filter((v) => !v.suggestion || v.line.decision);
+  checks.push({
+    id: 'over_90',
+    label: `Balances over 90 days reviewed (${oldDone.length}/${old.length})`,
+    detail: old.length === oldDone.length ? 'Every balance over 90 days is collected or has a decision.' : `Decide on ${old.filter((v) => !oldDone.includes(v)).map((v) => v.line.desc).join(', ')}.`,
+    passed: old.length === oldDone.length,
+  });
+  const credits = views.filter((v) => v.total < 0n);
+  const creditsDone = credits.filter((v) => v.line.decision === 'creditors' || (v.line.decision === 'no_provision' && v.line.reason?.trim()));
+  if (credits.length) {
+    checks.push({
+      id: 'credit_balances',
+      label: `Credit balances dealt with (${creditsDone.length}/${credits.length})`,
+      detail: credits.length === creditsDone.length ? 'Every credit balance is moved to creditors or explained.' : `Move to creditors or explain: ${credits.filter((v) => !creditsDone.includes(v)).map((v) => v.line.desc).join(', ')}.`,
+      passed: credits.length === creditsDone.length,
+    });
+  }
+  const noReason = views.filter((v) => v.line.decision === 'no_provision' && !v.line.reason?.trim());
+  checks.push({
+    id: 'no_provision_reasons',
+    label: 'Reasons given for no provision',
+    detail: noReason.length ? `Give a reason for ${noReason.map((v) => v.line.desc).join(', ')}.` : 'Every "no provision" decision has a reason.',
+    passed: !noReason.length,
+  });
+  const need = debtorsJournal(totals);
+  const sent = data.journal;
+  const needed = need.provision !== 0n || need.creditors !== 0n;
+  const matches = sent && asPence(sent.provision_p) === need.provision && asPence(sent.creditors_p) === need.creditors;
+  checks.push({
+    id: 'journal_sent',
+    label: 'Adjustments sent to journals',
+    detail: !needed ? 'The decisions need no journal.' : matches ? `Sent as ${sent.ref}.` : sent ? `The decisions changed after ${sent.ref} was sent. Send the journal again and remove ${sent.ref}.` : 'Send the journal built from the decisions.',
+    passed: !needed || !!matches,
+  });
+
+  const undecided = views.filter((v) => v.needsDecision).length;
+  return !control?.mapped
+    ? ''
+    : `Trade debtors of ${formatPence(controlDraft)} ${total === controlDraft ? 'agree to the aged debtors report' : `differ from the aged debtors report by ${formatPence(total - controlDraft)}`}. ${formatPence(collected)} of ${formatPence(positive)} was received after the period end.${
+        provision ? ` A specific provision of ${formatPence(provision)} is made against balances not expected to be recovered.` : ''
+      }${moved ? ` Credit balances of ${formatPence(moved)} are shown in creditors.` : ''}${undecided ? ` ${undecided} balance(s) still need a decision.` : ''}`;
+}
+
+/** What a paper's own review works from: its data, the trial balance and its linked files. */
+export function paperContext(
+  wp: Workpaper,
+  out: Pick<PaperContext, 'leads' | 'checks' | 'anchors' | 'totals'> = { leads: [], checks: [], anchors: [], totals: {} }
+): PaperContext {
+  const eng = db.engagements.find((e) => e.id === wp.engagement_id);
+  return {
+    wpId: wp.id,
+    engagementId: wp.engagement_id,
+    periodStart: eng?.period_start ?? '',
+    periodEnd: eng?.period_end ?? '',
+    priorId: eng?.prior_engagement_id ?? null,
+    data: wp.data_json as Record<string, any>,
+    ...out,
+    files: (rowId) => linkedFiles(wp.id, rowId).length,
+    tb: (prefix, engagementId = wp.engagement_id) => tbFor(engagementId, prefix),
+  };
+}
+
 export function evaluatePaper(wp: Workpaper): PaperResult | null {
   const t = templateOf(wp);
   if (!t) return null;
@@ -103,46 +282,78 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
   const totals: Record<string, bigint> = {};
   let draft = '';
 
+  const review = PAPER_REVIEWS[t.ref];
+  if (review) draft = review(paperContext(wp, { leads, checks, anchors, totals }));
+
   if (t.kind === 'reconciliation') {
-    const ledger = tbShown;
-    const statement = asPence(data.statement_p);
-    let adjusted = statement;
-    anchors.push({ id: 'statement', label: 'Balance per bank statement' });
-    for (const section of data.sections ?? []) {
-      for (const row of section.rows ?? []) {
-        adjusted += BigInt(section.sign) * asPence(row.amount_p);
-        anchors.push({ id: row.id, label: `${section.label.replace(/^(Less|Add): /, '')} · ${row.desc || 'item'}` });
+    const accounts = reconAccounts(data, leads);
+    const tolerance = toleranceFor(wp.engagement_id);
+    const periodEnd = db.engagements.find((e) => e.id === wp.engagement_id)?.period_end;
+    const staleBefore = periodEnd ? new Date(Date.parse(periodEnd) - 30 * 86400000).toISOString().slice(0, 10) : null;
+    const abs = (x: bigint) => (x < 0n ? -x : x);
+    let ledger = 0n, statement = 0n, adjusted = 0n, difference = 0n, unexplained = 0n;
+    const noStatement: string[] = [], unreconciled: string[] = [], noEvidence: string[] = [], noTb: string[] = [], old: string[] = [], cashCredit: string[] = [];
+    for (const a of accounts) {
+      const name = accountName(a);
+      const l = accountLedger(a, accounts, leads, t.creditArea);
+      const s = asPence(a.statement_p || '0');
+      const less = (a.less ?? []).reduce((acc: bigint, r: any) => acc + asPence(r.amount_p), 0n);
+      const add = (a.add ?? []).reduce((acc: bigint, r: any) => acc + asPence(r.amount_p), 0n);
+      const adj = s - less + add;
+      const diff = adj - l.final;
+      Object.assign(totals, { [`${a.id}_ledger`]: l.final, [`${a.id}_less`]: less, [`${a.id}_add`]: add, [`${a.id}_adjusted`]: adj, [`${a.id}_diff`]: diff });
+      ledger += l.final;
+      statement += s;
+      adjusted += adj;
+      difference += diff;
+      unexplained += abs(diff);
+      if (!l.mapped) noTb.push(name);
+      if (!statementEntered(a)) noStatement.push(name);
+      else if (abs(diff) > tolerance) unreconciled.push(`${name} ${formatPence(diff)}`);
+      if (!linkedFiles(wp.id, a.id).length) noEvidence.push(name);
+      if (accountKind(a.code) === 'cash' && l.final < 0n) cashCredit.push(`${name} shows a credit balance of ${formatPence(l.final)}`);
+      anchors.push({ id: a.id, label: `${name} · ${accountKind(a.code) === 'cash' ? 'cash count' : 'statement'}` });
+      for (const [items, what] of [[a.less ?? [], 'Unpresented'], [a.add ?? [], 'In transit']] as const) {
+        for (const r of items) {
+          anchors.push({ id: r.id, label: `${name} · ${what} · ${r.desc || 'item'}` });
+          if (r.older_than_30_days || (staleBefore && r.date && r.date < staleBefore)) old.push(`${name}: ${r.desc || 'item'} ${formatPence(asPence(r.amount_p))}`);
+        }
+      }
+      const confirmation = asPence(a.confirmation_p);
+      if (confirmation !== 0n) {
+        checks.push({
+          id: `${a.id}_confirmation`,
+          label: `${name} statement agrees to bank confirmation`,
+          detail: `Statement ${formatPence(s)} · confirmation ${formatPence(confirmation)} · difference ${formatPence(s - confirmation)}`,
+          passed: s === confirmation,
+        });
       }
     }
-    totals.ledger = ledger ?? 0n;
-    totals.adjusted = adjusted;
-    totals.difference = adjusted - (ledger ?? 0n);
-    checks.push(tie('adjusted_ledger', 'Adjusted bank balance equals ledger', adjusted, ledger, 'ledger (TB)'));
-    const confirmation = asPence(data.confirmation_p);
-    if (confirmation !== 0n) {
-      checks.push({
-        id: 'confirmation',
-        label: 'Statement agrees to bank confirmation',
-        detail: `Statement ${formatPence(statement)} · confirmation ${formatPence(confirmation)} · difference ${formatPence(statement - confirmation)}`,
-        passed: statement === confirmation,
-      });
-    }
-    const statementFiles = linkedFiles(wp.id, 'statement');
+    // Accounts with a TB balance that no row on the schedule covers
+    const covered = new Set(accounts.map((a) => a.code));
+    const offSchedule = covered.has('*') ? [] : leads.filter((l) => l.mapped && l.final !== 0n && !covered.has(l.code)).map((l) => `${l.code} ${l.label}`);
+    Object.assign(totals, { ledger, statement, adjusted, difference, unexplained, tolerance });
+    const n = accounts.length;
+    const list = (xs: string[]) => xs.join('; ');
     checks.push({
-      id: 'statement_evidence',
-      label: 'Bank statement attached',
-      detail: statementFiles.length ? `${statementFiles.length} file(s) linked to the statement balance` : 'Attach the year-end bank statement to the statement line.',
-      passed: statementFiles.length > 0,
+      id: 'ledger_tb',
+      label: 'Ledger agrees to trial balance',
+      detail: !anyMapped ? 'No confirmed trial balance mapping for bank and cash yet.' : noTb.length || offSchedule.length ? [noTb.length && `No TB balance for ${list(noTb)}.`, offSchedule.length && `In the TB but not on this schedule: ${list(offSchedule)}.`].filter(Boolean).join(' ') : `Every account's ledger balance is taken from the trial balance (${formatPence(ledger)}).`,
+      passed: anyMapped && !noTb.length && !offSchedule.length,
     });
-    draft =
-      ledger === null
-        ? ''
-        : `The bank balance of ${formatPence(ledger)} agrees to the trial balance${
-            adjusted === ledger ? ' and reconciles to the bank statement' : `, with an unreconciled difference of ${formatPence(adjusted > ledger ? adjusted - ledger : ledger - adjusted)}`
-          }.${(data.sections ?? []).some((s: any) => s.rows?.length) ? ' Reconciling items should be vouched to after-date statements.' : ' There are no reconciling items.'}`;
+    checks.push({ id: 'statements', label: `Statement or count for every account (${n - noStatement.length}/${n})`, detail: noStatement.length ? `Still to enter: ${list(noStatement)}.` : 'Entered for every account.', passed: n > 0 && !noStatement.length });
+    checks.push({ id: 'differences', label: 'No unexplained differences', detail: noStatement.length || unreconciled.length ? [unreconciled.length && `Unreconciled: ${list(unreconciled)}.`, noStatement.length && `${noStatement.length} account(s) still to do.`].filter(Boolean).join(' ') : 'Every account reconciles to its ledger balance.', passed: n > 0 && !noStatement.length && !unreconciled.length });
+    checks.push({ id: 'evidence', label: `Evidence on every line (${n - noEvidence.length}/${n})`, detail: noEvidence.length ? `Attach a statement or count sheet for ${list(noEvidence)}.` : 'Every account has a statement or count sheet attached.', passed: n > 0 && !noEvidence.length });
+    checks.push({ id: 'uncleared_30', label: 'No uncleared items over 30 days', detail: old.length ? `Follow up: ${list(old)}.` : 'No reconciling item is more than 30 days old at the period end.', passed: !old.length });
+    if (cashCredit.length) checks.push({ id: 'cash_credit', label: 'Cash is not overdrawn', detail: `${list(cashCredit)}. Cash cannot be overdrawn: look for payments posted to cash in error.`, passed: false });
+    draft = !anyMapped
+      ? ''
+      : `Bank and cash of ${formatPence(ledger)} across ${n} account(s) agrees to the trial balance${
+          unreconciled.length || noStatement.length ? `. ${n - noStatement.length - unreconciled.length} of ${n} reconcile to statements or counts so far` : ' and reconciles to statements and cash counts'
+        }.${accounts.some((a) => (a.less ?? []).length + (a.add ?? []).length) ? ' Reconciling items should be vouched to after-date statements.' : ' There are no reconciling items.'}`;
   }
 
-  if (t.kind === 'assets') {
+  if (!review && t.kind === 'assets') {
     const movements: any[] = data.movements ?? [];
     let cost = 0n,
       dep = 0n,
@@ -216,7 +427,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     }${unvouched.length ? ' Some additions or disposals are still pending evidence.' : ''}`;
   }
 
-  if (t.kind === 'lines') {
+  if (!review && t.kind === 'lines') {
     const cols = (t.columns ?? []).filter((c) => c.money !== false && c.inTotal !== false);
     let total = 0n;
     for (const line of data.lines ?? []) {
@@ -235,6 +446,8 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
         detail: `Current balance ${formatPence(total)} · TB ${formatPence(tbShown ?? 0n)}. Suspense accounts must be nil at period end.`,
         passed: isNil,
       });
+    } else if (t.ref === 'C-10') {
+      draft = reviewDebtors(wp.engagement_id, data, leads, total, totals, checks);
     } else {
       checks.push(tie('total_tb', 'Schedule total agrees to trial balance', total, tbShown, `TB ${t.leads.map((l) => l.code).join(', ')}`));
     }
@@ -243,7 +456,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     if (missing.length) {
       checks.push({ id: 'descriptions', label: 'Every line has a description', detail: `${missing.length} line(s) have no description.`, passed: false });
     }
-    draft =
+    if (t.ref !== 'C-10') draft =
       tbShown === null
         ? ''
         : `${t.areaName} of ${formatPence(tbShown)} ${total === tbShown ? 'agree to the supporting schedule' : `differ from the schedule by ${formatPence(total - tbShown)}`}.`;
@@ -372,7 +585,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     }`;
   }
 
-  if (t.kind === 'dla') {
+  if (!review && t.kind === 'dla') {
     const directors: any[] = data.directors ?? [];
     let netDla = 0n;
     let anyOverdrawn = false;
@@ -537,7 +750,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
         }.${t.materiality && totals.materiality ? ` Materiality is set at ${formatPence(totals.materiality)}.` : ''}`;
   }
 
-  if (t.kind === 'analytical') {
+  if (!review && t.kind === 'analytical') {
     const review = analyticalReview(wp.engagement_id, t.analyticalView ?? 'pl', data);
     const comments: Record<string, string> = data.comments ?? {};
     const rows = analyticalRows(review);
@@ -550,7 +763,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     draft = rows.length && review.hasPrior && !missing.length ? `Figures were compared with the prior year. ${significant.length ? `${significant.length} flagged variance(s) were explained.` : 'No variance reached the flag settings.'}` : '';
   }
 
-  if (t.kind === 'statutory') {
+  if (!review && t.kind === 'statutory') {
     const officers: any[] = data.officers ?? [];
     const directors = officers.filter((o) => o.is_director && !o.resigned);
     const holders = officers.filter((o) => o.is_shareholder);
@@ -595,7 +808,9 @@ export function paperStatus(wp: Workpaper): Workpaper['status'] {
   if (!t) return wp.status;
   const started = JSON.stringify(wp.data_json) !== JSON.stringify(blankPaperData(t));
   if (!started) return 'not_started';
-  const diff = evaluatePaper(wp)?.totals.difference;
+  const totals = evaluatePaper(wp)?.totals;
+  // Bank and cash adds up each account's difference, so two accounts out by opposite amounts never pass
+  const diff = totals?.unexplained ?? totals?.difference;
   if (diff === undefined) return 'in_progress';
   return (diff < 0n ? -diff : diff) <= toleranceFor(wp.engagement_id) ? 'reconciled' : 'unreconciled';
 }

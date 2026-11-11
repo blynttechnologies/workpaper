@@ -153,7 +153,6 @@ export default function TemplatesCatalogPage() {
   // Pack customization state: track enabled refs for each pack
   const [packCustomizations, setPackCustomizations] = useState<Record<string, string[]>>({
     'Small company (FRS 102 1A)': [
-      'A-10',
       'B-10',
       'C-10',
       'F-10',
@@ -194,7 +193,7 @@ export default function TemplatesCatalogPage() {
 
   // Helper for pack papers
   const packKey = COMPANY_TYPE_TO_PACK_KEY[selectedType];
-  const defaultPackPapers = PACKS[packKey] || ['A-10', 'B-10', 'C-10', 'Z-10'];
+  const defaultPackPapers = PACKS[packKey] || ['B-10', 'C-10', 'Z-10'];
   const currentPackPapers = packCustomizations[packKey] ?? defaultPackPapers;
 
   const togglePackPaper = (ref: string) => {

@@ -506,7 +506,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
 
       const evalRes = evaluatePaper(stockWp)!;
       expect(evalRes.template.ref).toBe('D-10');
-      expect(evalRes.totals.total).toBe(4500000n); // £45,000 inventory
+      expect(evalRes.totals.closing).toBe(4500000n); // £45,000 inventory
     });
 
     it('REC-15: Related parties and intercompany disclosure register', () => {

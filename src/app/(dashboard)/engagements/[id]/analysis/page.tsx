@@ -49,7 +49,7 @@ export default function AnalysisPage() {
       priorPence: 23200000n, // £232,000.00
       variancePct: '+29.3%',
       variancePence: 6800000n,
-      aiExplanation: 'Rent up £68,000 (+29.3%): New commercial lease at Unit 4 from March, 8 months at £8,500/mo (evidenced in REC-04).',
+      aiExplanation: 'Rent up £68,000 (+29.3%): New commercial lease at Unit 4 from March, 8 months at £8,500/mo (evidenced on the leases paper).',
       flagged: true,
       comment: 'Expanded storage facility footprint.',
       visibility: 'internal' as const,
@@ -72,7 +72,7 @@ export default function AnalysisPage() {
       priorPence: 2450000n,
       variancePct: '+10.2%',
       variancePence: 250000n,
-      aiExplanation: 'Depreciation up £2,500: Additional plant machinery additions £45,000 depreciated straight-line at 20% (REC-03).',
+      aiExplanation: 'Depreciation up £2,500: Additional plant machinery additions £45,000 depreciated straight-line at 20%.',
       flagged: true,
       comment: '',
       visibility: 'internal' as const,
@@ -81,11 +81,11 @@ export default function AnalysisPage() {
 
   // Balance sheet lines (ANL-02)
   const bsLines = [
-    { name: 'Fixed Assets (NBV)', current: '£2,700,000.00', prior: '£2,450,000.00', movement: '+£250,000.00', explanation: 'Additions £270k less depreciation £20k (REC-03)' },
-    { name: 'Current Assets - Stock', current: '£1,824,000.00', prior: '£1,650,000.00', movement: '+£174,000.00', explanation: 'Stock count agrees to valuation certificate (REC-14)' },
-    { name: 'Current Assets - Debtors', current: '£2,364,500.00', prior: '£1,950,000.00', movement: '+£414,500.00', explanation: 'Debtor days increased from 42 to 46 days (REC-07)' },
-    { name: 'Cash and Bank Equivalents', current: '£1,305,350.00', prior: '£940,000.00', movement: '+£365,350.00', explanation: 'Net cash generation from trading activities (REC-02)' },
-    { name: 'Current Liabilities - Creditors', current: '£1,684,500.00', prior: '£1,420,000.00', movement: '+£264,500.00', explanation: 'Supplier payment terms maintained at 45 days (REC-08)' },
+    { name: 'Fixed Assets (NBV)', current: '£2,700,000.00', prior: '£2,450,000.00', movement: '+£250,000.00', explanation: 'Additions £270k less depreciation £20k' },
+    { name: 'Current Assets - Stock', current: '£1,824,000.00', prior: '£1,650,000.00', movement: '+£174,000.00', explanation: 'Stock count agrees to valuation certificate' },
+    { name: 'Current Assets - Debtors', current: '£2,364,500.00', prior: '£1,950,000.00', movement: '+£414,500.00', explanation: 'Debtor days increased from 42 to 46 days' },
+    { name: 'Cash and Bank Equivalents', current: '£1,305,350.00', prior: '£940,000.00', movement: '+£365,350.00', explanation: 'Net cash generation from trading activities' },
+    { name: 'Current Liabilities - Creditors', current: '£1,684,500.00', prior: '£1,420,000.00', movement: '+£264,500.00', explanation: 'Supplier payment terms maintained at 45 days' },
     { name: 'Net Assets / Total Equity', current: '£6,509,350.00', prior: '£5,570,000.00', movement: '+£939,350.00', explanation: 'Retained profit for the financial year' },
   ];
 
@@ -158,7 +158,7 @@ export default function AnalysisPage() {
           }`}
         >
           <TrendingUp className="w-4 h-4 text-[#1D4E89]" />
-          <span>Profit &amp; Loss Analysis (ANL-01)</span>
+          <span>Profit &amp; Loss Analysis</span>
         </button>
 
         <button
@@ -171,7 +171,7 @@ export default function AnalysisPage() {
           }`}
         >
           <Scale className="w-4 h-4 text-[#1D4E89]" />
-          <span>Balance Sheet &amp; Ratios (ANL-02)</span>
+          <span>Balance Sheet &amp; Ratios</span>
         </button>
 
         <button
@@ -184,7 +184,7 @@ export default function AnalysisPage() {
           }`}
         >
           <ShieldAlert className="w-4 h-4 text-amber-600" />
-          <span>Unusual Transactions (AIX-04)</span>
+          <span>Unusual Transactions</span>
           <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-mono font-bold">
             {unusualTransactions.length}
           </span>
@@ -225,7 +225,7 @@ export default function AnalysisPage() {
                 Lines Flagged for Review (Movement &gt; 10% and &gt; £1,000)
               </span>
               <span className="text-[11px] text-[#4A5878]">
-                Threshold: ±10% / £1,000 per ADM-02
+                Threshold: ±10% / £1,000 (practice default)
               </span>
             </div>
 
@@ -298,7 +298,7 @@ export default function AnalysisPage() {
           <div className="bg-white border-2 border-emerald-500/40 rounded-xl p-5 shadow-xs flex items-start gap-3.5">
             <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-bold text-[#122654]">Going Concern Health Check (ANL-02)</h3>
+              <h3 className="text-sm font-bold text-[#122654]">Going Concern Health Check</h3>
               <p className="text-xs text-[#4A5878] mt-1 leading-relaxed">
                 Zero triggers detected: Positive net current assets (£3,809,350), profitable in FY25 &amp; FY26, HMRC payments up to date, and cash exceeds short-term obligations.
               </p>
@@ -372,7 +372,7 @@ export default function AnalysisPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-[#E3E7EF] pb-3">
             <div>
-              <h3 className="text-sm font-bold text-[#122654]">Unusual Transactions Detector (AIX-04)</h3>
+              <h3 className="text-sm font-bold text-[#122654]">Unusual Transactions Detector</h3>
               <p className="text-xs text-[#4A5878]">
                 Scans all ledger journal lines for round sums, weekend transactions, potential duplicates, and suspense postings.
               </p>

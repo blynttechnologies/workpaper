@@ -38,11 +38,11 @@ describe('analytical reviews', () => {
 
   it('needs every significant movement explained before the paper passes', () => {
     const wp = db.addWorkpaper(ENG, 'Z-30')!;
-    const check = () => evaluatePaper(wp)!.checks.find((c) => c.id === 'explained')!;
-    expect(check()).toMatchObject({ passed: false, detail: '2 of 2 still need an explanation.' });
+    const check = () => evaluatePaper(wp)!.checks.find((c) => c.id === 'movements')!;
+    expect(check().passed).toBe(false);
     wp.data_json.comments = { '100': 'New contract won', '482': 'One-off dispute' };
     expect(check().passed).toBe(true);
-    expect(evaluatePaper(wp)!.draftConclusion).toContain('2 flagged');
+    expect(evaluatePaper(wp)!.draftConclusion).toContain('are explained');
   });
 
   it('shows categories instead of accounts when asked, under main headings, with their own flags', () => {
@@ -65,16 +65,18 @@ describe('statutory information', () => {
   it('checks directors, shareholders, shares and dates', () => {
     const wp = db.addWorkpaper(ENG, 'R-20')!;
     const failed = () => evaluatePaper(wp)!.checks.filter((c) => !c.passed).map((c) => c.id);
-    expect(failed()).toEqual(['director', 'shareholder']);
+    expect(failed()).toEqual(['served', 'holdings', 'signer']);
+    db.addWorkpaper(ENG, 'E-10')!.data_json.classes = [{ id: 'c', name: 'Ordinary', shares: '101005', nominal_p: '100' }];
     wp.data_json.officers = [
-      { id: 'a', surname: 'Abeles', is_director: true, is_shareholder: true, shares: '100000', appointed: '2023-03-20' },
+      { id: 'a', surname: 'Abeles', is_director: true, is_shareholder: true, shares: '100000', appointed: '2023-03-20', psc: true, signs: true },
       { id: 'b', surname: 'Sweny', is_shareholder: true, shares: '1005' },
     ];
     expect(failed()).toEqual([]);
     expect(evaluatePaper(wp)!.totals.shares).toBe(101005n);
+    // Fewer shares than the share capital, a resignation before appointment, and the signer gone
     wp.data_json.officers[1].shares = '';
     wp.data_json.officers[0].resigned = '2020-01-01';
-    expect(failed()).toEqual(['director', 'shares', 'dates']);
+    expect(failed()).toEqual(['served', 'holdings', 'signer']);
   });
 
   it('is only in company packs, and every pack has both analytical reviews', () => {

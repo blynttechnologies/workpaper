@@ -28,7 +28,8 @@ import { services } from '@/lib/server/services';
 import { formatPence } from '@/lib/money';
 import { getActor } from '@/lib/session';
 import { StatusBadge } from '@/components/ui/StatusPill';
-import { evaluatePaper, levelsFor, linkedFiles, paperStatus } from '@/lib/workpapers/engine';
+import { PAPER_SCREENS } from '@/components/workpaper/papers';
+import { evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts } from '@/lib/workpapers/engine';
 import { diffData } from '@/lib/workpapers/diff';
 import { TEMPLATES, templateFor, templateOf } from '@/lib/workpapers/templates';
 import type { Attachment, AttachmentCategory } from '@/lib/types/models';
@@ -52,6 +53,7 @@ import {
 } from '@/components/workpaper/parts';
 import {
   ReconciliationSchedule,
+  DebtorsSchedule,
   AssetsSchedule,
   LinesSchedule,
   ChecklistSchedule,
@@ -62,11 +64,15 @@ import {
   LoansSchedule,
   TaxSchedule,
 } from '@/components/workpaper/schedules';
-import { AnalyticalSchedule, StatutorySchedule } from '@/components/workpaper/review-schedules';
+import { AnalyticalSchedule } from '@/components/workpaper/review-schedules';
+import { CheckChips } from '@/components/workpaper/kit';
+import { ukDate } from '@/lib/dates';
 
 const ROLE_ORDER = ['preparer', 'reviewer', 'partner'] as const;
 type SignRole = (typeof ROLE_ORDER)[number];
 const ROLE_LABEL: Record<SignRole, string> = { preparer: 'Preparer', reviewer: 'Reviewer', partner: 'Partner' };
+// Sign-off buttons on the redesigned papers: [not yet signed, signed]
+const SIGN_BUTTON: Record<SignRole, [string, string]> = { preparer: ['Mark prepared', 'Prepared'], reviewer: ['Reviewed', 'Reviewed'], partner: ['Approved', 'Approved'] };
 const STATUS_SYMBOL: Record<string, string> = { not_started: '○', in_progress: '◑', prepared: '●', signed_off: '✓', stale: '⚠' };
 
 export default function WorkpaperPage() {
@@ -81,7 +87,7 @@ export default function WorkpaperPage() {
 
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [sideTab, setSideTab] = useState<'evidence' | 'comments' | 'ai_review' | 'history'>('comments');
+  const [sideTab, setSideTab] = useState<'evidence' | 'comments' | 'ai_review' | 'history' | null>(null);
   const [unreviewOpen, setUnreviewOpen] = useState(false);
   const [unreviewReason, setUnreviewReason] = useState('');
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -220,7 +226,11 @@ export default function WorkpaperPage() {
   const t = result.template;
   const data = workpaper.data_json as Record<string, any>;
   const isLocked = engagement.status === 'locked';
-  const procedures = db.procedures.filter((p) => p.workpaper_id === workpaper.id);
+  // Redesigned papers tick their own checks from the work, so the separate procedures list goes
+  const checksOnly = !!PAPER_SCREENS[t.ref] || t.ref === 'B-10' || t.ref === 'C-10';
+  // The redesigned papers use the simple layout: header card, schedule, conclusion, checks, review panel
+  const activeTab = sideTab ?? (checksOnly ? 'ai_review' : 'comments');
+  const procedures = checksOnly ? [] :db.procedures.filter((p) => p.workpaper_id === workpaper.id);
   const comments = db.comments.filter((c) => c.workpaper_id === workpaper.id);
   const attachments = db.attachments.filter((a) => a.workpaper_id === workpaper.id);
   const signoffs = db.signoffs.filter((s) => s.workpaper_id === workpaper.id);
@@ -235,7 +245,7 @@ export default function WorkpaperPage() {
     const current = db.workpapers.find((w) => w.id === workpaper.id);
     if (current) {
       if (db.signoffs.some((so) => so.workpaper_id === workpaper.id)) current.status = 'in_progress';
-      current.status = paperStatus(current); // WPS-04: Unreconciled / Reconciled from the difference
+      current.status = paperStatus(current); // Unreconciled / Reconciled from the difference
     }
     setSavedAt(Date.now());
     setMessage(null);
@@ -264,6 +274,19 @@ export default function WorkpaperPage() {
             : 'Other'
         : uploadCategory;
     const { added, errors } = await uploadToPaper(workpaper!, files, { category, rowId: linkRow, permanent: uploadPermanent });
+    // Bank and cash: a statement dropped on an account row has its closing balance read when the row has none yet
+    if (t.kind === 'reconciliation' && linkRow && added.length) {
+      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result!.leads) });
+      if (live().accounts.some((a: any) => a.id === linkRow)) {
+        for (const att of added) {
+          try {
+            services.fillScheduleFromDocument(engagement!.firm_id, actor, att.id, workpaper!.id, linkRow);
+          } catch {
+            // Reading the balance is a convenience: the file is attached either way
+          }
+        }
+      }
+    }
     if (added.length) touchPaper();
     setUploading(false);
     setMessage(
@@ -442,13 +465,13 @@ export default function WorkpaperPage() {
     if (signoffs.some((s) => !s.stale_at && s.user_id === actor.id)) return 'You have already signed another level on this schedule';
     if (role === 'preparer') {
       if (result.totals.difference !== undefined && workpaper.applicable !== false && paperStatus({ ...workpaper, status: 'in_progress' }) !== 'reconciled') return 'The schedule must be Reconciled first';
-      if (unconfirmedAiCount > 0) return `${unconfirmedAiCount} unconfirmed AI value(s) must be confirmed first (DAT-08)`;
+      if (unconfirmedAiCount > 0) return `${unconfirmedAiCount} unconfirmed AI value(s) must be confirmed first`;
       if (openChecks.length > 0) return `${openChecks.length} open check(s) remaining`;
       if (prepLeft.length) return `Left: ${prepLeft.join(', ')}`;
       return null;
     }
     if (!latestSignoff('preparer')) return 'Needs preparer sign-off first';
-    if (openNotes.length) return `${openNotes.length} open review note(s) block review (REV-03)`;
+    if (openNotes.length) return `${openNotes.length} open review note(s) block review`;
     if (role === 'partner' && !latestSignoff('reviewer')) return 'Needs reviewer sign-off first';
     return null;
   };
@@ -521,6 +544,7 @@ export default function WorkpaperPage() {
     />
   );
 
+  const PaperScreen = PAPER_SCREENS[t.ref];
   const scheduleProps = {
     data,
     result,
@@ -531,6 +555,18 @@ export default function WorkpaperPage() {
     preview: setPreview,
     tickFor,
     live,
+    dropFiles: (files: File[], rowId: string | null) => void doUpload(files, rowId),
+    pullFeed: () => {
+      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result.leads) });
+      try {
+        const { feedResponse } = services.reconcileBankWithOpenBanking(engagement.firm_id, actor, workpaper.id);
+        touchPaper();
+        setMessage({ kind: 'ok', text: `Open Banking balance pulled for account ${feedResponse.bank_account_code}.` });
+      } catch (err: any) {
+        setMessage({ kind: 'error', text: err?.message || 'Could not pull the Open Banking feed.' });
+      }
+      refresh();
+    },
   };
   const shownFiles = attachments.filter((a) =>
     fileFilter === 'all' ? true : fileFilter === 'permanent' ? a.is_permanent : a.category === fileFilter
@@ -554,6 +590,91 @@ export default function WorkpaperPage() {
 
   const missingRefs = TEMPLATES.filter((tp) => !papers.some((p) => p.ref === tp.ref));
   const botDraft = !data.conclusion?.bot_dismissed && !conclusionText.trim() ? result.draftConclusion : '';
+  const reviewItems = result.checks.filter((c) => !c.passed);
+  const explainCheck = (id: string) => {
+    const reason = prompt('Why is this acceptable?')?.trim();
+    if (reason) saveData({ explanations: { ...(live().explanations ?? {}), [id]: reason } });
+  };
+
+  const scheduleEl = PaperScreen ? (
+    <PaperScreen {...scheduleProps} />
+  ) : (
+    <>
+      {t.kind === 'reconciliation' && <ReconciliationSchedule {...scheduleProps} />}
+      {t.kind === 'assets' && <AssetsSchedule {...scheduleProps} />}
+      {t.kind === 'lines' && (t.ref === 'C-10' ? <DebtorsSchedule {...scheduleProps} /> : <LinesSchedule {...scheduleProps} />)}
+      {t.kind === 'vat' && <VatSchedule {...scheduleProps} />}
+      {t.kind === 'payroll' && <PayrollSchedule {...scheduleProps} />}
+      {t.kind === 'leases' && <LeasesSchedule {...scheduleProps} />}
+      {t.kind === 'dla' && <DlaSchedule {...scheduleProps} />}
+      {t.kind === 'loans' && <LoansSchedule {...scheduleProps} />}
+      {t.kind === 'checklist' && <ChecklistSchedule {...scheduleProps} />}
+      {t.kind === 'tax' && <TaxSchedule {...scheduleProps} />}
+      {t.kind === 'analytical' && <AnalyticalSchedule {...scheduleProps} />}
+    </>
+  );
+
+  const confirmAi = unconfirmedAiCount > 0 && (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#EFF6FF] border border-[#93C5FD] rounded-[8px] text-xs">
+      <Sparkles className="w-3.5 h-3.5 text-[#1E40AF]" />
+      <span className="font-bold text-[#1E40AF]">{unconfirmedAiCount} to confirm</span>
+      <button
+        type="button"
+        onClick={() => {
+          saveData({ values_to_confirm_count: 0 });
+          db.logAudit(engagement.firm_id, actor, 'CONFIRM_AI_VALUES', 'workpapers', workpaper.id, null, { action: 'confirm_all_ready' });
+          setMessage({ kind: 'ok', text: 'All Ready AI values confirmed.' });
+          refresh();
+        }}
+        className="px-2 py-0.5 bg-[#1E40AF] text-white font-bold rounded-[6px] hover:bg-[#1E3A8A] text-[10px]"
+      >
+        Confirm all Ready
+      </button>
+    </div>
+  );
+
+  const banners = (
+    <>
+      {isLocked && <div className="p-3 rounded-[10px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs text-[#4A5878]">This engagement is locked. The paper is read-only.</div>}
+      {staleSignoffs.length > 0 && (
+        <div className="p-3 rounded-[10px] bg-[#FFF4DB] border border-[#C58B00]/30 text-xs text-[#6B4700]">
+          ⚠ The paper changed after it was signed. {staleSignoffs.length} earlier sign-off{staleSignoffs.length === 1 ? ' is' : 's are'} stale and must be signed again.
+        </div>
+      )}
+      {message && (
+        <div
+          role="status"
+          className={`p-3 rounded-[10px] text-xs border ${message.kind === 'ok' ? 'bg-[#E6F4EF] border-[#0B6B52]/30 text-[#0B6B52]' : 'bg-[#FFF1EE] border-[#FF7A66]/40 text-[#A23A27]'}`}
+        >
+          {message.text}
+        </div>
+      )}
+    </>
+  );
+
+  const unreviewButton = reviewedBy && !isLocked && (
+    <button
+      type="button"
+      onClick={() => setUnreviewOpen(true)}
+      className="min-h-[36px] px-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#B8432F] bg-white border border-[#FF7A66] hover:bg-[#FFF1EE] rounded-[8px]"
+    >
+      <Unlock className="w-3.5 h-3.5" /> Unreview to edit
+    </button>
+  );
+
+  const paperLink = (p: typeof prevPaper, dir: 'prev' | 'next') =>
+    p && (
+      <button
+        type="button"
+        title={dir === 'prev' ? 'Previous paper ( [ )' : 'Next paper ( ] )'}
+        onClick={() => router.push(`/engagements/${engagementId}/workpapers/${p.id}`)}
+        className="min-h-[32px] px-3 text-xs text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[8px]"
+      >
+        {dir === 'prev' ? '‹ ' : ''}
+        {templateOf(p)?.title ?? p.ref}
+        {dir === 'next' ? ' ›' : ''}
+      </button>
+    );
 
   return (
     <div className="flex flex-col gap-4 max-w-[1500px] mx-auto pb-16">
@@ -580,7 +701,7 @@ export default function WorkpaperPage() {
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="font-bold text-base text-[#122654] flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-[#B8432F]" />
-                Unreview Schedule (REV-02)
+                Unreview Schedule
               </h3>
               <button onClick={() => setUnreviewOpen(false)} className="text-[#7E8DA6] hover:text-[#122654]">
                 <X className="w-5 h-5" />
@@ -628,7 +749,7 @@ export default function WorkpaperPage() {
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="font-bold text-base text-[#122654] flex items-center gap-2">
                 <Layers className="w-5 h-5 text-[#122654]" />
-                Schedule Templates Library (WPS-02)
+                Schedule Templates Library
               </h3>
               <button onClick={() => setTemplateModalOpen(false)} className="text-[#7E8DA6] hover:text-[#122654]">
                 <X className="w-5 h-5" />
@@ -675,6 +796,100 @@ export default function WorkpaperPage() {
       )}
 
       {/* Header */}
+      {checksOnly ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[#4A5878]">
+              <Link href={`/engagements/${engagementId}`} className="underline hover:text-[#122654]">
+                {client?.name ?? 'Engagement'}
+              </Link>
+              <span>/</span>
+              <Link href={`/engagements/${engagementId}`} className="underline hover:text-[#122654]">
+                Year end {ukDate(engagement.period_end)}
+              </Link>
+              <span>/</span>
+              <Link href={`/engagements/${engagementId}/workpapers`} className="underline hover:text-[#122654]">
+                Working papers
+              </Link>
+              <span>/</span>
+              <span className="font-bold text-[#122654]">{t.title}</span>
+            </nav>
+            <div className="flex items-center gap-2">
+              {paperLink(prevPaper, 'prev')}
+              {paperLink(nextPaper, 'next')}
+            </div>
+          </div>
+          <div className="p-4 bg-white border border-[#E3E7EF] rounded-[12px] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-extrabold text-[#122654] tracking-tight">
+                  {t.title}
+                  {data.bank_name ? ` · ${data.bank_name}` : ''}
+                </h1>
+                {openChecks.length > 0 ? (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#FFF4DB] text-[#8A5A00]">
+                    {openChecks.length} item{openChecks.length === 1 ? ' needs' : 's need'} action
+                  </span>
+                ) : (
+                  <StatusBadge status={paperStatus(workpaper)} />
+                )}
+                {data.changed_after_review && <span className="px-2 py-0.5 rounded-full bg-[#FFF4DB] text-[#805B00] text-[10px] font-bold">⚠ Changed after review</span>}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#4A5878]">
+                <span>
+                  {workpaper.ref} · {savedAt ? '✓ Saved' : `updated ${fmtDateTime(workpaper.updated_at)}`}
+                </span>
+                {t.alternativeTemplates && t.alternativeTemplates.length > 0 && !isLocked && (
+                  <button type="button" onClick={() => setTemplateModalOpen(true)} className="underline text-[#122654]">
+                    Change template
+                  </button>
+                )}
+                <label className="inline-flex items-center gap-1">
+                  Assigned to
+                  <select
+                    aria-label="Assigned to"
+                    disabled={isLocked}
+                    value={workpaper.assignee_id ?? ''}
+                    onChange={(e) => assign({ assignee_id: e.target.value || null })}
+                    className="bg-transparent text-[#122654] underline"
+                  >
+                    <option value="">no one</option>
+                    {team.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+            {/* A blocked button stays clickable so it can say why it cannot be signed yet */}
+            <div role="group" aria-label="Sign-offs" className="flex flex-wrap items-center gap-2">
+              {confirmAi}
+              {unreviewButton}
+              {ROLE_ORDER.slice(0, levelsFor(workpaper)).map((role) => {
+                const so = latestSignoff(role);
+                const blocked = canSign(role);
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    disabled={Boolean(so) || signing}
+                    title={so ? `${ROLE_LABEL[role]}: ${so.user_name}, ${fmtDateTime(so.signed_at)}` : (blocked ?? `Sign as ${ROLE_LABEL[role].toLowerCase()}`)}
+                    onClick={() => (blocked ? setMessage({ kind: 'error', text: `${ROLE_LABEL[role]}: ${blocked}` }) : sign(role))}
+                    className={`min-h-[36px] px-3 text-xs font-bold rounded-[8px] border ${
+                      so ? 'bg-[#E6F4EF] border-[#0B6B52]/30 text-[#0B6B52]' : blocked ? 'bg-[#F5F8FD] border-[#E3E7EF] text-[#7E8DA6]' : 'bg-white border-[#122654] text-[#122654] hover:bg-[#F5F8FD]'
+                    }`}
+                  >
+                    {so ? `✓ ${SIGN_BUTTON[role][1]}` : SIGN_BUTTON[role][0]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {banners}
+        </div>
+      ) : (
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5 text-xs text-[#4A5878] flex-wrap">
           <Link href={`/engagements/${engagementId}`} className="hover:text-[#B8432F] font-semibold">
@@ -710,7 +925,7 @@ export default function WorkpaperPage() {
                   onClick={() => setTemplateModalOpen(true)}
                   className="px-2 py-0.5 text-[11px] font-bold text-[#122654] bg-[#F5F8FD] border border-[#D3DCEE] hover:border-[#122654] rounded-[6px]"
                 >
-                  Change template (WPS-02)
+                  Change template
                 </button>
               )}
               {result.totals.total !== undefined && (
@@ -787,24 +1002,7 @@ export default function WorkpaperPage() {
             </div>
 
             {/* Confidence Gate (DAT-08) */}
-            {unconfirmedAiCount > 0 && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#EFF6FF] border border-[#93C5FD] rounded-[8px] text-xs">
-                <Sparkles className="w-3.5 h-3.5 text-[#1E40AF]" />
-                <span className="font-bold text-[#1E40AF]">{unconfirmedAiCount} to confirm</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    saveData({ values_to_confirm_count: 0 });
-                    db.logAudit(engagement.firm_id, actor, 'CONFIRM_AI_VALUES', 'workpapers', workpaper.id, null, { action: 'confirm_all_ready' });
-                    setMessage({ kind: 'ok', text: 'All Ready AI values confirmed.' });
-                    refresh();
-                  }}
-                  className="px-2 py-0.5 bg-[#1E40AF] text-white font-bold rounded-[6px] hover:bg-[#1E3A8A] text-[10px]"
-                >
-                  Confirm all Ready
-                </button>
-              </div>
-            )}
+            {confirmAi}
 
             {/* Propose Journal (JNL-02) */}
             <Link
@@ -815,15 +1013,7 @@ export default function WorkpaperPage() {
             </Link>
 
             {/* Unreview Button (REV-02) */}
-            {reviewedBy && !isLocked && (
-              <button
-                type="button"
-                onClick={() => setUnreviewOpen(true)}
-                className="min-h-[36px] px-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#B8432F] bg-white border border-[#FF7A66] hover:bg-[#FFF1EE] rounded-[8px]"
-              >
-                <Unlock className="w-3.5 h-3.5" /> Unreview to edit
-              </button>
-            )}
+            {unreviewButton}
 
             {/* Export (RPT-01) */}
             <button
@@ -877,32 +1067,13 @@ export default function WorkpaperPage() {
             </a>
           ))}
         </nav>
-        {isLocked && (
-          <div className="p-3 rounded-[10px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs text-[#4A5878]">
-            This engagement is locked. The paper is read-only.
-          </div>
-        )}
-        {staleSignoffs.length > 0 && (
-          <div className="p-3 rounded-[10px] bg-[#FFF4DB] border border-[#C58B00]/30 text-xs text-[#6B4700]">
-            ⚠ The paper changed after it was signed. {staleSignoffs.length} earlier sign-off{staleSignoffs.length === 1 ? ' is' : 's are'} stale and must be
-            signed again.
-          </div>
-        )}
-        {message && (
-          <div
-            role="status"
-            className={`p-3 rounded-[10px] text-xs border ${
-              message.kind === 'ok' ? 'bg-[#E6F4EF] border-[#0B6B52]/30 text-[#0B6B52]' : 'bg-[#FFF1EE] border-[#FF7A66]/40 text-[#A23A27]'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
+        {banners}
       </div>
+      )}
 
       <div
         className={`grid gap-5 transition-all ${
-          showComments ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-1'
+          showComments || checksOnly ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-1'
         }`}
       >
         {/* On smaller screens, where the previous and next buttons are harder to use */}
@@ -948,6 +1119,7 @@ export default function WorkpaperPage() {
               {reviewedBy.role === 'partner' ? 'Approved' : 'Reviewed'} by <strong>{reviewedBy.user_name}</strong> on {fmtDateTime(reviewedBy.signed_at)}: read only. Use <strong>Unreview to edit</strong> to change it. Comments can still be added.
             </div>
           )}
+          {!checksOnly && (
           <div className="flex flex-wrap items-center gap-3 text-xs text-[#122654]">
             <label className="inline-flex items-center gap-1.5">
               Assigned to
@@ -976,6 +1148,7 @@ export default function WorkpaperPage() {
               />
             </label>
           </div>
+          )}
           {changesSinceReview.length > 0 && (
             <div className="p-3 rounded-[10px] bg-[#FFF4DB] border border-[#C58B00]/40 text-xs text-[#122654]">
               <p className="font-bold mb-1.5">Changes since the last review ({changesSinceReview.length})</p>
@@ -993,6 +1166,12 @@ export default function WorkpaperPage() {
             </div>
           )}
           <fieldset disabled={readOnly} className="flex flex-col gap-5 min-w-0 border-0 p-0 m-0">
+          {checksOnly ? (
+            <div id="schedule" className="flex flex-col gap-4 min-w-0 scroll-mt-24">
+              {scheduleEl}
+            </div>
+          ) : (
+          <>
           <Section id="figures" num={1} title="Figures" state={stateOf('figures')} stateLabel={leadsAgreed ? undefined : 'Not mapped yet'}>
             <details className="mb-4 text-xs">
               <summary className="font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer">Objective and assertions</summary>
@@ -1095,14 +1274,14 @@ export default function WorkpaperPage() {
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-[#7C3AED]" />
                     <span className="font-bold text-xs text-[#122654]">
-                      AI Extracted Figures (DOC-05 / Confidence Gate DAT-08)
+                      AI Extracted Figures
                     </span>
                     <span className="text-[10px] bg-purple-100 text-purple-800 font-mono font-bold px-2 py-0.5 rounded-full">
                       {data.confidence_gate_items.filter((i: any) => !i.confirmed).length} pending confirmation
                     </span>
                   </div>
                   <span className="text-[10px] text-[#4A5878]">
-                    Values retain AI badges until confirmed by the preparer (ENG-06 audit trail)
+                    Values retain AI badges until confirmed by the preparer
                   </span>
                 </div>
 
@@ -1174,18 +1353,7 @@ export default function WorkpaperPage() {
               </div>
             )}
 
-            {t.kind === 'reconciliation' && <ReconciliationSchedule {...scheduleProps} />}
-            {t.kind === 'assets' && <AssetsSchedule {...scheduleProps} />}
-            {t.kind === 'lines' && <LinesSchedule {...scheduleProps} />}
-            {t.kind === 'vat' && <VatSchedule {...scheduleProps} />}
-            {t.kind === 'payroll' && <PayrollSchedule {...scheduleProps} />}
-            {t.kind === 'leases' && <LeasesSchedule {...scheduleProps} />}
-            {t.kind === 'dla' && <DlaSchedule {...scheduleProps} />}
-            {t.kind === 'loans' && <LoansSchedule {...scheduleProps} />}
-            {t.kind === 'checklist' && <ChecklistSchedule {...scheduleProps} />}
-            {t.kind === 'tax' && <TaxSchedule {...scheduleProps} />}
-            {t.kind === 'analytical' && <AnalyticalSchedule {...scheduleProps} />}
-            {t.kind === 'statutory' && <StatutorySchedule {...scheduleProps} />}
+            {scheduleEl}
             <div className="mt-4 pt-3 border-t border-[#E3E7EF] text-[10px] text-[#4A5878] flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-bold">Tickmarks:</span>
               {tickLibrary.map((tk) => (
@@ -1270,7 +1438,7 @@ export default function WorkpaperPage() {
               ))}
             </ul>
 
-            <div id="procedures" className="mt-5 pt-4 border-t border-[#E3E7EF] scroll-mt-24">
+            <div id="procedures" className={`mt-5 pt-4 border-t border-[#E3E7EF] scroll-mt-24 ${checksOnly ? 'hidden' : ''}`}>
             <h3 className="text-xs font-bold text-[#122654] mb-2">
               Procedures <span className="font-normal text-[#4A5878]">{procedures.length - pending.length} of {procedures.length} done</span>
             </h3>
@@ -1522,9 +1690,54 @@ export default function WorkpaperPage() {
               </>
             )}
           </Section>
-
+          </>
+          )}
           </fieldset>
 
+          {checksOnly ? (
+            <>
+              <fieldset id="conclusion" disabled={readOnly} className="min-w-0 border-0 p-0 m-0 scroll-mt-24">
+                <div className="p-4 bg-white border border-[#E3E7EF] rounded-[12px] text-xs text-[#122654]">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label htmlFor="conclusion-text" className="text-sm font-bold">
+                      Conclusion
+                    </label>
+                    {!isLocked && result.draftConclusion && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConclusionDraft(null);
+                          saveData({ conclusion: { ...(data.conclusion ?? {}), text: result.draftConclusion, source: 'bot', accepted_by: actor.name } });
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-[#EEF1F6] hover:bg-[#E3E7EF] rounded-[8px]"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" /> Draft with AI
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    id="conclusion-text"
+                    disabled={isLocked}
+                    value={conclusionDraft ?? conclusionText}
+                    onChange={(e) => setConclusionDraft(e.target.value)}
+                    onBlur={() => {
+                      if (conclusionDraft !== null && conclusionDraft !== conclusionText) {
+                        saveData({ conclusion: { ...(data.conclusion ?? {}), text: conclusionDraft, source: 'preparer' } });
+                      }
+                      setConclusionDraft(null);
+                    }}
+                    rows={4}
+                    placeholder="Summarise the work done and whether the balance is fairly stated, or let AI draft it from your decisions."
+                    className="w-full p-3 text-xs bg-white border border-[#D3DCEE] rounded-[10px] outline-none focus:border-[#122654] disabled:bg-[#F5F8FD]"
+                  />
+                  <div className="mt-1 text-[10px] text-[#4A5878]">
+                    {data.conclusion?.source === 'bot' ? 'Drafted by AI from your decisions. Edit it so it is yours.' : 'AI wording is a draft until you edit or accept it. It is labelled in the file and in history.'}
+                  </div>
+                </div>
+              </fieldset>
+              <CheckChips checks={[...result.checks, { id: 'conclusion', label: 'Conclusion written', detail: '', passed: !!conclusionText.trim() }]} />
+            </>
+          ) : (
           <Section id="signoff" num={4} title="Conclusion" state={stateOf('signoff')}>
             <fieldset id="conclusion" disabled={readOnly} className="min-w-0 border-0 p-0 m-0 scroll-mt-24">
             {botDraft && !isLocked && (
@@ -1592,31 +1805,40 @@ export default function WorkpaperPage() {
             </details>
             </fieldset>
           </Section>
+          )}
         </div>
 
         {/* Right rail: comments and history */}
-        {showComments && (
+        {(showComments || checksOnly) && (
           <aside className="blynt-card p-4 h-fit xl:sticky xl:top-20">
             <div className="flex items-center justify-between mb-3 border-b border-[#E3E7EF]">
               <div role="tablist" className="flex gap-1 overflow-x-auto pb-1">
-                {[
+                {(checksOnly
+                  ? [
+                      { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
+                      { id: 'comments' as const, label: `Comments (${comments.filter((c) => c.status === 'open').length})`, icon: MessageSquare },
+                      { id: 'evidence' as const, label: `Files (${attachments.length})`, icon: FileText },
+                      { id: 'history' as const, label: 'History', icon: History },
+                    ]
+                  : [
                   { id: 'evidence' as const, label: `Evidence ${attachments.length}`, icon: FileText },
                   { id: 'comments' as const, label: `Comments ${comments.filter((c) => c.status === 'open').length}`, icon: MessageSquare },
                   { id: 'ai_review' as const, label: `AI Review ${db.ai_review_findings.filter((f) => (f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref) && f.status === 'open').length}`, icon: Sparkles },
                   { id: 'history' as const, label: 'History', icon: History },
-                ].map((tab) => (
+                ]).map((tab) => (
                   <button
                     key={tab.id}
                     role="tab"
                     type="button"
-                    aria-selected={sideTab === tab.id}
+                    aria-selected={activeTab === tab.id}
                     onClick={() => setSideTab(tab.id)}
-                    className={`flex items-center gap-1 px-2.5 py-2 text-xs font-bold border-b-2 -mb-px whitespace-nowrap ${sideTab === tab.id ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}
+                    className={`flex items-center gap-1 px-2.5 py-2 text-xs font-bold border-b-2 -mb-px whitespace-nowrap ${activeTab === tab.id ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}
                   >
-                    <tab.icon className="w-3.5 h-3.5" /> {tab.label}
+                    {!checksOnly && <tab.icon className="w-3.5 h-3.5" />} {tab.label}
                   </button>
                 ))}
               </div>
+              {!checksOnly && (
               <button
                 type="button"
                 onClick={toggleComments}
@@ -1626,9 +1848,46 @@ export default function WorkpaperPage() {
               >
                 <PanelRightClose className="w-3.5 h-3.5" />
               </button>
+              )}
             </div>
 
-            {sideTab === 'evidence' && (
+            {activeTab === 'ai_review' && checksOnly && (
+              <div className="flex flex-col gap-2 text-xs text-[#122654]">
+                {reviewItems.length === 0 ? (
+                  <div className="p-3 rounded-[10px] bg-[#E6F4EF] text-[#0B6B52] font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" /> Nothing to review: every check passes.
+                  </div>
+                ) : (
+                  reviewItems.map((c) => (
+                    <div key={c.id} className={`p-3 rounded-[10px] border border-[#E3E7EF] flex flex-col gap-1.5 ${c.explanation ? 'opacity-70' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${c.explanation ? 'bg-[#EEF1F6] text-[#4A5878]' : 'bg-[#FFF4DB] text-[#8A5A00]'}`}>
+                          {c.explanation ? 'Dismissed' : 'Warning'}
+                        </span>
+                        <span className="text-[11px] text-[#4A5878]">{c.label}</span>
+                      </div>
+                      <p className="leading-relaxed">{c.detail}</p>
+                      {c.explanation ? (
+                        <p className="text-[11px] text-[#4A5878]">Reason: {c.explanation}</p>
+                      ) : (
+                        <div className="flex gap-3 text-[11px]">
+                          <a href="#schedule" className="underline">
+                            Go to line
+                          </a>
+                          {!readOnly && (
+                            <button type="button" onClick={() => explainCheck(c.id)} className="underline">
+                              Dismiss with reason
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === 'evidence' && (
               <div className="flex flex-col gap-3 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[#122654]">Attached Documents ({attachments.length})</span>
@@ -1647,7 +1906,7 @@ export default function WorkpaperPage() {
                 </div>
                 {attachments.length === 0 ? (
                   <div className="p-3 bg-[#F5F8FD] rounded-[10px] border border-[#E3E7EF] text-[#4A5878] text-[11px]">
-                    No files linked to this schedule yet. Drag and drop or click attach above to link supporting evidence (DOC-06).
+                    No files linked to this schedule yet. Drag and drop or click attach above to link supporting evidence.
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
@@ -1674,12 +1933,12 @@ export default function WorkpaperPage() {
               </div>
             )}
 
-            {sideTab === 'ai_review' && (
+            {activeTab === 'ai_review' && !checksOnly && (
               <div className="flex flex-col gap-3 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[#122654] flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" />
-                    AI Schedule Review Bot (ANL-04)
+                    AI Schedule Review Bot
                   </span>
                   <span className="text-[10px] text-[#4A5878]">Automated checks</span>
                 </div>
@@ -1788,7 +2047,7 @@ export default function WorkpaperPage() {
               </div>
             )}
 
-            {sideTab === 'comments' && (
+            {activeTab === 'comments' && (
               <div className="flex flex-col gap-3 text-xs">
                 {comments.length === 0 && <p className="text-[#4A5878]">No comments yet.</p>}
                 {comments.map((c, i) => (
@@ -1866,7 +2125,7 @@ export default function WorkpaperPage() {
               </div>
             )}
 
-            {sideTab === 'history' && (
+            {activeTab === 'history' && (
               <div className="flex flex-col gap-3 text-xs">
                 {/* Saved Versions (AUD-02) */}
                 {db.schedule_versions.filter((v) => v.workpaper_id === workpaper.id).length > 0 && (

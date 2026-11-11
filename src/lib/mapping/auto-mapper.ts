@@ -21,7 +21,73 @@ export function matchBlyntAccount(
 ): MappingSuggestion | null {
   // A client's nominal code only coincides with the Blynt chart by chance, so only the name and type decide
   void sourceCode;
-  return matchOwnerAccount(sourceName, structure) ?? strip(matchByName(sourceName, sourceType));
+  const owner = matchOwnerAccount(sourceName, structure);
+  if (owner) return owner;
+  const m = matchByName(sourceName, sourceType);
+  return { ...strip(m), ...scoreMatch(sourceName, sourceType, m.blynt_code, m.reason, !!m.fallback) };
+}
+
+/* ---------- How sure the match is, from the evidence ---------- */
+
+const STOP = new Set(['account', 'accounts', 'and', 'the', 'for', 'other', 'general', 'from', 'with', 'ltd', 'limited', 'total', 'misc', 'sundry']);
+const words = (s: string) =>
+  new Set(
+    s
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((w) => w.length >= 3 && !STOP.has(w))
+      .map((w) => w.replace(/(ies|es|s|ing)$/, ''))
+  );
+
+/** The family a source account type belongs to, from Xero, QuickBooks and Sage type names. */
+function family(sourceType: string): 'asset' | 'liability' | 'equity' | 'income' | 'cost' | null {
+  const t = sourceType.toLowerCase();
+  if (!t || /^(other|general)$/.test(t)) return null;
+  if (/equity|capital|reserve/.test(t)) return 'equity';
+  if (/liabilit|payable|credit card/.test(t)) return 'liability';
+  if (/revenue|income|sales/.test(t)) return 'income';
+  if (/expense|overhead|cost|depreciation|direct/.test(t)) return 'cost';
+  if (/asset|bank|receivable|inventory|prepayment|current|fixed/.test(t)) return 'asset';
+  return null;
+}
+const CHART_FAMILY: Record<string, ReturnType<typeof family>> = { Asset: 'asset', Liability: 'liability', Equity: 'equity', Revenue: 'income', 'Cost of Sales': 'cost', Overhead: 'cost' };
+/** Accounts that collect whatever didn't fit elsewhere, so landing there proves little. */
+const CATCH_ALL = new Set(['499', '749', '770', '290', '390', '140']);
+
+/**
+ * Confidence from the evidence, not a fixed number per pattern: the account's own words
+ * appearing in the chart account, the account type agreeing, and whether the target is a
+ * catch-all. A name match can never reach 100%; only a rule a person made is certain.
+ */
+export function scoreMatch(sourceName: string, sourceType: string, code: string, reason: string, fallback = false): { confidence: number; reason: string } {
+  const target = STANDARD_CHART.find((a) => a.code === code);
+  const src = words(sourceName);
+  const inName = target ? [...words(target.name)].filter((w) => src.has(w)) : [];
+  const inReason = [...words(reason)].filter((w) => src.has(w) && !inName.includes(w));
+  const fam = family(sourceType);
+  const agrees = fam && target ? CHART_FAMILY[target.type] === fam : null;
+  const evidence: string[] = [];
+  let score = fallback ? 30 : 55;
+  if (inName.length) {
+    score += 25;
+    evidence.push(`"${inName.join('", "')}" in both names`);
+  } else if (inReason.length) {
+    score += 10;
+    evidence.push(`"${inReason.join('", "')}" points to it`);
+  } else if (!fallback) evidence.push('no shared words with the chart account');
+  if (agrees === true) {
+    score += 12;
+    evidence.push(`${sourceType} type agrees`);
+  } else if (agrees === false) {
+    score -= 35;
+    evidence.push(`${sourceType} type does not match a ${target!.type.toLowerCase()} account`);
+  }
+  if (CATCH_ALL.has(code) && score > 72) {
+    score = 72;
+    evidence.push('a catch-all account, so worth a look');
+  }
+  const confidence = Math.max(5, Math.min(95, score));
+  return { confidence, reason: fallback ? `No clear match: ${reason.toLowerCase()}` : `${reason} (${evidence.join('; ')})` };
 }
 
 /** Capital, current and drawings accounts of a business without shares. */

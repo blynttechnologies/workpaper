@@ -297,7 +297,8 @@ export default function AccountMappingPage() {
     const item = db.account_mappings.find((m) => m.id === mappingId);
     if (!item) return;
 
-    // The whole ledger name, so a correction never moves a different account
+    // A client rule keys on the client's own nominal code, which stays the same from year to year
+    // even if the account is renamed; a practice rule keys on the whole name, since codes differ between clients
     const pattern = `name:${item.source_name}`;
 
     setPendingCorrection({
@@ -330,7 +331,7 @@ export default function AccountMappingPage() {
       supplier_name: null,
       type: 'mapping',
       scope: ruleScope,
-      pattern: pattern,
+      pattern: ruleScope === 'client' ? `code:${pendingCorrection.sourceCode}` : pattern,
       target_value: targetCode,
       explanation: `Rule learned from correction on ${sourceName} → ${targetCode} ${targetAcc?.name ?? ''}`,
       created_by: actor.id,
@@ -486,9 +487,6 @@ export default function AccountMappingPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#122654] tracking-tight">
               Account mapping &amp; Confidence Gate
             </h1>
-            <span className="text-xs bg-[#EAF5FC] text-[#1D4E89] border border-[#1D4E89]/20 px-2.5 py-0.5 rounded-full font-mono font-bold">
-              DAT-03 · DAT-08
-            </span>
           </div>
           <p className="text-xs text-[#4A5878] mt-1 max-w-3xl leading-relaxed">
             Every nominal account is mapped to a statutory line, schedule, and cash flow category. Rules engine runs first (client &gt; practice &gt; prior-year), followed by the AI confidence gate.
@@ -636,7 +634,7 @@ export default function AccountMappingPage() {
             </div>
           </div>
           <div className="text-[9px] text-[#4A5878] mt-2">
-            Auto-accept: <strong>OFF</strong> (DAT-08)
+            Auto-accept: <strong>OFF</strong>
           </div>
         </div>
       </div>
@@ -786,7 +784,7 @@ export default function AccountMappingPage() {
                 <th scope="col" className="p-3 text-right">Balance</th>
                 {showStatutory && <th scope="col" className="p-3">Statutory Line &amp; Schedule</th>}
                 <th scope="col" className="p-3">Confidence &amp; Gate</th>
-                {showReason && <th scope="col" className="p-3">AI Reason &amp; Evidence (DAT-03)</th>}
+                {showReason && <th scope="col" className="p-3">AI Reason &amp; Evidence</th>}
                 <th scope="col" className="p-3 pr-4">Blynt Account (Mapping)</th>
               </tr>
             </thead>
@@ -947,7 +945,7 @@ export default function AccountMappingPage() {
                   <Sparkles className="w-5 h-5 text-[#FF7A66]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#122654]">Learn Rule from Correction (DAT-09)</h3>
+                  <h3 className="text-sm font-bold text-[#122654]">Learn Rule from Correction</h3>
                   <p className="text-[11px] text-[#4A5878]">Save this correction so the same mistake is never repeated</p>
                 </div>
               </div>

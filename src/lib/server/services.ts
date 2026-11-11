@@ -171,7 +171,8 @@ export const services = {
   suggestMapping(
     firmId: string,
     engagementId: string,
-    line: { code: string; name: string; type?: string }
+    line: { code: string; name: string; type?: string },
+    balanceP?: bigint
   ): GatedResult<string> {
     const eng = db.engagements.find((e) => e.id === engagementId);
     const prior = eng?.prior_engagement_id
@@ -185,19 +186,31 @@ export const services = {
       clientId: eng?.client_id,
       decode: (target) => target,
       ai: () => {
+        // A balance on the wrong side for the account it is matched to lowers confidence
+        const signCheck = (code: string, p: { value: string; confidence: number; reason: string; evidence: string }) => {
+          const credit = db.blynt_accounts.find((a) => a.code === code)?.normal_balance === 'Credit';
+          if (!balanceP || (credit ? balanceP <= 0n : balanceP >= 0n)) return p;
+          return { ...p, confidence: Math.max(5, p.confidence - 20), reason: `${p.reason}; the balance is a ${balanceP > 0n ? 'debit' : 'credit'}, the other way from a normal ${code} balance` };
+        };
         if (prior?.blynt_code) {
-          return { value: prior.blynt_code, confidence: 97, reason: `Mapped to ${prior.blynt_code} last year`, evidence: 'Prior-year mapping' };
+          const same = prior.source_name.trim().toLowerCase() === line.name.trim().toLowerCase();
+          return signCheck(prior.blynt_code, {
+            value: prior.blynt_code,
+            confidence: same ? 95 : 75,
+            reason: same ? `Mapped to ${prior.blynt_code} last year` : `Code ${line.code} was mapped to ${prior.blynt_code} last year, but its name has changed from "${prior.source_name}"`,
+            evidence: 'Prior-year mapping',
+          });
         }
         const client = db.clients.find((c) => c.id === eng?.client_id);
         const s = matchBlyntAccount(line.name, line.type || '', line.code, structureForCompanyType(client?.company_type ?? ''));
-        return s ? { value: s.blynt_code, confidence: s.confidence, reason: s.reason, evidence: 'Name pattern > Nominal code range' } : null;
+        return s ? signCheck(s.blynt_code, { value: s.blynt_code, confidence: s.confidence, reason: s.reason, evidence: 'Account name and type' }) : null;
       },
     });
   },
 
   /** Builds the account mapping row for one imported TB line. */
   buildMapping(firmId: string, engagementId: string, id: string, line: { code: string; name: string; type?: string }, balanceP: bigint): AccountMapping {
-    const g = this.suggestMapping(firmId, engagementId, line);
+    const g = this.suggestMapping(firmId, engagementId, line, balanceP);
     const stat = getStatutoryDetails(g.value, line.name, line.type || '');
     return {
       id,
@@ -1115,9 +1128,10 @@ export const services = {
     firmId: string,
     actor: { id: string; name: string; role: UserRole },
     attachmentId: string,
-    targetWorkpaperId: string
+    targetWorkpaperId: string,
+    accountId?: string
   ) {
-    return aiExtractionService.fillScheduleFromDocument(firmId, actor, attachmentId, targetWorkpaperId);
+    return aiExtractionService.fillScheduleFromDocument(firmId, actor, attachmentId, targetWorkpaperId, accountId);
   },
 
   confirmAiValue(

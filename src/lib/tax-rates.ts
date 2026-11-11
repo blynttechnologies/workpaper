@@ -18,6 +18,11 @@ export interface CentralTaxRates {
     bik_threshold_p: bigint; // £10,000 = 1_000_000 pence
     repayment_window_months: number; // 9 months after accounting period end
   };
+  beneficial_loans: {
+    official_rate_pct: number; // HMRC official rate of interest; reviewed quarterly, so keep this current
+    class_1a_pct: number; // employer Class 1A NIC on benefits
+    threshold_p: bigint; // no benefit while loans stay at or under £10,000 throughout the tax year
+  };
   capital_allowances: {
     annual_investment_allowance_limit_p: bigint; // £1,000,000 = 100_000_000 pence
     main_pool_rate_pct: number; // 18%
@@ -39,6 +44,11 @@ export const CENTRAL_TAX_RATES: CentralTaxRates = {
     rate_pct: 33.75,
     bik_threshold_p: 1000000n, // £10,000 in pence
     repayment_window_months: 9,
+  },
+  beneficial_loans: {
+    official_rate_pct: 3.75, // from 6 April 2025
+    class_1a_pct: 15, // from 6 April 2025
+    threshold_p: 1000000n,
   },
   capital_allowances: {
     annual_investment_allowance_limit_p: 100000000n, // £1,000,000

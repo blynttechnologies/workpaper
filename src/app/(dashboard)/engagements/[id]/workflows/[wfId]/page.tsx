@@ -23,7 +23,7 @@ const SIGN_LEVELS: { role: string; letter: string; label: string; done: string; 
   { role: 'partner', letter: 'Pt', label: 'Approved', done: 'approved', action: 'approve', may: ['partner', 'admin'] },
 ];
 
-const MANDATORY = ['A-10', 'B-10', 'F-10', 'Z-10', 'Z-20'];
+const MANDATORY = ['B-10', 'F-10', 'Z-10', 'Z-20'];
 const initials = (name: string) => name.split(' ').map((n) => n[0]).join('').slice(0, 3).toUpperCase();
 const signoffBy = (workpaperId: string, role: string) => db.signoffs.find((s) => s.workpaper_id === workpaperId && s.role === role && !s.stale_at);
 const byRef = (a: { ref: string }, b: { ref: string }) => a.ref.localeCompare(b.ref, undefined, { numeric: true });

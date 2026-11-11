@@ -129,7 +129,7 @@ export default function HistoryPage() {
     {
       id: 'ail_03',
       outputType: 'Schedule Review Finding',
-      inputs: 'REC-11 Director Loan overdrawn £24,249.96',
+      inputs: 'Director loan overdrawn £24,249.96',
       confidence: '100%',
       modelVersion: 'Blynt-AuditCheck-v1.8',
       decidedBy: 'Sarah Jenkins',
@@ -150,7 +150,7 @@ export default function HistoryPage() {
             </span>
           </div>
           <p className="text-xs text-[#4A5878] mt-1">
-            Complete regulatory audit trail of every change, sign-off, mapping confirmation, and version comparison (AUD-01 to AUD-03).
+            Complete regulatory audit trail of every change, sign-off, mapping confirmation, and version comparison.
           </p>
         </div>
 
@@ -191,7 +191,7 @@ export default function HistoryPage() {
           }`}
         >
           <GitCompare className="w-4 h-4 text-[#1D4E89]" />
-          <span>Schedule Version History (AUD-02)</span>
+          <span>Schedule Version History</span>
         </button>
 
         <button
@@ -204,7 +204,7 @@ export default function HistoryPage() {
           }`}
         >
           <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-          <span>AI Decision &amp; Lineage Log (AUD-03)</span>
+          <span>AI Decision &amp; Lineage Log</span>
         </button>
       </div>
 
@@ -305,7 +305,7 @@ export default function HistoryPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E3E7EF] pb-4">
             <div>
-              <h2 className="text-base font-bold text-[#122654]">Schedule Version Comparison (AUD-02)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Schedule Version Comparison</h2>
               <p className="text-xs text-[#4A5878]">
                 Compare snapshots taken at prior manager reviews against current working paper state.
               </p>
@@ -392,7 +392,7 @@ export default function HistoryPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs overflow-hidden">
           <div className="p-4 bg-[#F5F8FD] border-b border-[#E3E7EF] flex items-center justify-between">
             <span className="text-xs font-bold text-[#122654]">
-              AI Decision Lineage &amp; Model Accuracy (AUD-03)
+              AI Decision Lineage &amp; Model Accuracy
             </span>
             <span className="text-[11px] text-[#0B6B52] bg-[#E6F4EF] font-bold px-2 py-0.5 rounded-full">
               Accuracy: 94.2% Accepted without changes (Target: &gt;90%)

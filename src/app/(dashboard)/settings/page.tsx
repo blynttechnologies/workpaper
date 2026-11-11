@@ -139,7 +139,7 @@ export default function PracticeSettingsPage() {
         type: 'extraction',
         pattern: '*Dell Technologies*PowerEdge*',
         scope: 'supplier',
-        target_value: 'REC-03: Fixed Assets Addition (Computer equipment)',
+        target_value: 'Fixed Assets Addition (Computer equipment)',
         created_by: 'usr_test_reviewer',
         created_by_name: 'Manager',
         created_at: '2026-10-01T09:00:00Z',
@@ -159,7 +159,7 @@ export default function PracticeSettingsPage() {
         created_at: '2026-10-25T16:00:00Z',
         times_used: 6,
         active: true,
-        approved_by_manager: false, // Pending manager approval (DAT-09 criteria 5)
+        approved_by_manager: false, // Pending manager approval
       },
     ];
   });
@@ -278,7 +278,7 @@ export default function PracticeSettingsPage() {
         return r;
       })
     );
-    triggerSaveNotification('Rule approved for practice-wide deployment (DAT-09).');
+    triggerSaveNotification('Rule approved for practice-wide deployment.');
   };
 
   const handleDeleteRule = (id: string) => {
@@ -362,7 +362,7 @@ export default function PracticeSettingsPage() {
           }`}
         >
           <Sliders className="w-4 h-4 text-[#1D4E89]" />
-          <span>Defaults &amp; Thresholds (ADM-02)</span>
+          <span>Defaults &amp; Thresholds</span>
         </button>
 
         <button
@@ -376,7 +376,7 @@ export default function PracticeSettingsPage() {
           }`}
         >
           <Users className="w-4 h-4 text-[#1D4E89]" />
-          <span>Users &amp; Roles (ADM-01)</span>
+          <span>Users &amp; Roles</span>
         </button>
 
         <button
@@ -390,7 +390,7 @@ export default function PracticeSettingsPage() {
           }`}
         >
           <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-          <span>AI Rules &amp; Accuracy (DAT-05)</span>
+          <span>AI Rules &amp; Accuracy</span>
         </button>
 
         <button
@@ -404,7 +404,7 @@ export default function PracticeSettingsPage() {
           }`}
         >
           <Palette className="w-4 h-4 text-[#1D4E89]" />
-          <span>Logo &amp; Branding (QTR-02)</span>
+          <span>Logo &amp; Branding</span>
         </button>
 
         <button
@@ -418,7 +418,7 @@ export default function PracticeSettingsPage() {
           }`}
         >
           <Shield className="w-4 h-4 text-emerald-600" />
-          <span>Security &amp; GDPR (ADM-03)</span>
+          <span>Security &amp; GDPR</span>
         </button>
       </div>
 
@@ -426,7 +426,7 @@ export default function PracticeSettingsPage() {
       {activeTab === 'defaults' && (
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-8 max-w-4xl">
           <div className="border-b border-[#E3E7EF] pb-4">
-            <h2 className="text-base font-bold text-[#122654]">Practice Engagement Defaults (ADM-02)</h2>
+            <h2 className="text-base font-bold text-[#122654]">Practice Engagement Defaults</h2>
             <p className="text-xs text-[#4A5878] mt-0.5">
               Parameters enforced automatically on schedules, lead sheets, variance calculations, and statutory reviews.
               Each client can override the sign-off levels on its client page.
@@ -439,7 +439,7 @@ export default function PracticeSettingsPage() {
           <div className="space-y-6">
             <div>
               <label className="block text-xs font-bold text-[#122654] mb-2">
-                Default Sign-off Levels (REV-01)
+                Default Sign-off Levels
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <label
@@ -531,7 +531,7 @@ export default function PracticeSettingsPage() {
                   className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
                 />
                 <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Expense transactions above this trigger the Capital vs Revenue detector (AIX-02).
+                  Expense transactions above this trigger the Capital vs Revenue detector.
                 </span>
               </div>
 
@@ -546,7 +546,7 @@ export default function PracticeSettingsPage() {
                   className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
                 />
                 <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Suggestions at or above {aiReadyThreshold}% display as &apos;Ready&apos; for 1-click bulk confirmation (DAT-03).
+                  Suggestions at or above {aiReadyThreshold}% display as &apos;Ready&apos; for 1-click bulk confirmation.
                 </span>
               </div>
 
@@ -561,7 +561,7 @@ export default function PracticeSettingsPage() {
                   className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
                 />
                 <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Highlight statutory filing deadlines within {deadlineAlertDays} days in amber/red on dashboard (ENG-05).
+                  Highlight statutory filing deadlines within {deadlineAlertDays} days in amber/red on dashboard.
                 </span>
               </div>
             </div>
@@ -574,7 +574,7 @@ export default function PracticeSettingsPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
             <div>
-              <h2 className="text-base font-bold text-[#122654]">Team Roles &amp; Permissions (ADM-01)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Team Roles &amp; Permissions</h2>
               <p className="text-xs text-[#4A5878] mt-0.5">
                 Practice users with role-based permissions: Preparer, Reviewer/Manager, Partner, and Admin.
               </p>
@@ -600,7 +600,7 @@ export default function PracticeSettingsPage() {
           <div className="border-b border-[#E3E7EF] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2.5">
-                <h2 className="text-base font-bold text-[#122654]">Shared Rules Library (DAT-09)</h2>
+                <h2 className="text-base font-bold text-[#122654]">Shared Rules Library</h2>
                 <span className="text-[10px] font-mono font-bold bg-[#EAF5FC] text-[#1D4E89] px-2 py-0.5 rounded-full border border-[#1D4E89]/20">
                   Rules run before AI
                 </span>
@@ -627,7 +627,7 @@ export default function PracticeSettingsPage() {
               <div>
                 <span className="text-xs font-bold text-[#122654] flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-                  AI Accuracy Performance &amp; Auto-Accept Controls (DAT-08)
+                  AI Accuracy Performance &amp; Auto-Accept Controls
                 </span>
                 <p className="text-[11px] text-[#4A5878] mt-0.5">
                   Auto-accept is OFF at launch. Requires 3 consecutive months ≥90% accepted without change.
@@ -670,7 +670,7 @@ export default function PracticeSettingsPage() {
                 <span>Manager Approval Queue (Practice-Scope Rules Requested by Preparers)</span>
               </div>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Under DAT-09 criteria 5, practice-wide rules created by preparers require manager or partner approval before applying across all client files.
+                Practice-wide rules created by preparers require manager or partner approval before applying across all client files.
               </p>
               <div className="space-y-2 pt-1">
                 {rulesList
@@ -822,7 +822,7 @@ export default function PracticeSettingsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
             <div className="border-b border-[#E3E7EF] pb-4">
-              <h2 className="text-base font-bold text-[#122654]">Practice Logo &amp; Branding (QTR-02)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Practice Logo &amp; Branding</h2>
               <p className="text-xs text-[#4A5878] mt-0.5">
                 Applied across all quarterly insight packs, management accounts, and statutory accounts PDFs.
               </p>
@@ -963,7 +963,7 @@ export default function PracticeSettingsPage() {
       {activeTab === 'security' && (
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6 max-w-3xl">
           <div className="border-b border-[#E3E7EF] pb-4">
-            <h2 className="text-base font-bold text-[#122654]">Security &amp; Data Protection (ADM-03)</h2>
+            <h2 className="text-base font-bold text-[#122654]">Security &amp; Data Protection</h2>
             <p className="text-xs text-[#4A5878] mt-0.5">
               Compliance with UK GDPR, AES-256 encryption at rest and in transit, and firm tenant isolation.
             </p>
@@ -1030,7 +1030,7 @@ export default function PracticeSettingsPage() {
                 <Sliders className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-[#122654]">Apply Practice Defaults (ADM-02)</h3>
+                <h3 className="text-base font-bold text-[#122654]">Apply Practice Defaults</h3>
                 <p className="text-xs text-[#4A5878]">Confirm how changes should propagate to client files</p>
               </div>
             </div>
@@ -1078,7 +1078,7 @@ export default function PracticeSettingsPage() {
             <div className="flex items-center justify-between pb-3 border-b border-[#E3E7EF] mb-4">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-[#1D4E89]" />
-                <h3 className="text-base font-bold text-[#122654]">Invite Team Member (ADM-01)</h3>
+                <h3 className="text-base font-bold text-[#122654]">Invite Team Member</h3>
               </div>
               <button
                 type="button"
@@ -1240,9 +1240,9 @@ export default function PracticeSettingsPage() {
             <form onSubmit={handleAddRule} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-[#122654] mb-1">
-                  Rule Type (DAT-09)
+                  Rule Type
                 </label>
-                <select aria-label="Rule Type (DAT-09)"
+                <select aria-label="Rule Type"
                   value={newRuleType}
                   onChange={(e) => setNewRuleType(e.target.value as any)}
                   className="w-full text-xs p-2.5 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654] font-medium"
@@ -1276,23 +1276,23 @@ export default function PracticeSettingsPage() {
                   onChange={(e) => setNewRuleTarget(e.target.value)}
                   className="w-full text-xs p-2.5 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654] font-medium"
                 >
-                  <option value="1500 Plant & Equipment Cost">1500 Plant &amp; Equipment Cost (REC-03)</option>
-                  <option value="1510 Computer Equipment Cost">1510 Computer Equipment Cost (REC-03)</option>
-                  <option value="1010 Barclays Operating Account">1010 Barclays Operating Account (REC-02)</option>
+                  <option value="1500 Plant & Equipment Cost">1500 Plant &amp; Equipment Cost</option>
+                  <option value="1510 Computer Equipment Cost">1510 Computer Equipment Cost</option>
+                  <option value="1010 Barclays Operating Account">1010 Barclays Operating Account</option>
                   <option value="6000 London Office Rent and Service">6000 London Office Rent and Service</option>
-                  <option value="6200 Staff Salaries">6200 Staff Salaries (REC-05)</option>
-                  <option value="835b Director's Loan Account">835b Director&apos;s Loan Account (REC-11)</option>
-                  <option value="2000 Purchase Ledger Control Account">2000 Purchase Ledger Control Account (REC-08)</option>
-                  <option value="REC-03: Capital Addition">REC-03: Capital Addition</option>
-                  <option value="REC-04: Lease Agreement">REC-04: Lease Agreement</option>
+                  <option value="6200 Staff Salaries">6200 Staff Salaries</option>
+                  <option value="835b Director's Loan Account">835b Director&apos;s Loan Account</option>
+                  <option value="2000 Purchase Ledger Control Account">2000 Purchase Ledger Control Account</option>
+                  <option value="Capital Addition">Capital Addition</option>
+                  <option value="Lease Agreement">Lease Agreement</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-[#122654] mb-1">
-                  Rule Scope (DAT-09)
+                  Rule Scope
                 </label>
-                <select aria-label="Rule Scope (DAT-09)"
+                <select aria-label="Rule Scope"
                   value={newRuleScope}
                   onChange={(e) => setNewRuleScope(e.target.value as any)}
                   className="w-full text-xs p-2.5 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654] font-medium"

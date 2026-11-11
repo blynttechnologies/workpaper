@@ -71,8 +71,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const currentEngagementId = activeEngagement?.id ?? currentEngagementIdProp ?? routeEngagementId ?? null;
   const engagementBase = currentEngagementId ? `/engagements/${currentEngagementId}` : '';
 
-  // Show engagement nav whenever we're on an engagement route OR a company is selected
-  const showEngagementOptions = Boolean(activeEngagement);
+  // Engagement nav only inside a client's engagement; the dashboard and other practice pages hide it
+  const showEngagementOptions = Boolean(routeEngagementId || currentEngagementIdProp);
   const workflows = activeEngagement ? workflowsOf(activeEngagement.id) : [];
 
 

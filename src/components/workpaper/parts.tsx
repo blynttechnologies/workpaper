@@ -103,17 +103,22 @@ export function MoneyInput({
   onCommit,
   label,
   allowNegative = true,
+  placeholder,
 }: {
   value: string | undefined;
   disabled: boolean;
   onCommit: (pence: string) => void;
   label: string;
   allowNegative?: boolean;
+  /** Shown while the value is still blank (''), e.g. "Enter count". */
+  placeholder?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const shown = draft ?? formatPenceInput(value || '0');
+  const blank = placeholder !== undefined && !value;
+  const shown = draft ?? (blank ? '' : formatPenceInput(value || '0'));
   const commit = () => {
     if (draft === null) return;
+    if (blank && !draft.trim()) return setDraft(null);
     let pence: bigint;
     try {
       pence = toPence(draft);
@@ -123,7 +128,7 @@ export function MoneyInput({
     }
     if (!allowNegative && pence < 0n) pence = -pence;
     setDraft(null);
-    if (pence !== asPence(value || '0')) onCommit(pence.toString());
+    if (blank || pence !== asPence(value || '0')) onCommit(pence.toString());
   };
   return (
     <input
@@ -131,6 +136,7 @@ export function MoneyInput({
       inputMode="decimal"
       aria-label={label}
       disabled={disabled}
+      placeholder={placeholder}
       value={shown}
       onChange={(e) => setDraft(e.target.value)}
       onFocus={(e) => e.target.select()}

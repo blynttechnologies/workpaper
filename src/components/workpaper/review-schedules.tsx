@@ -1,7 +1,6 @@
 'use client';
 
 import { Fragment } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
 import { formatPence } from '@/lib/money';
 import { analyticalReview, showsAccounts } from '@/lib/workpapers/analytical';
 import { ukDate } from '@/lib/dates';
@@ -133,83 +132,6 @@ export function AnalyticalSchedule({ data, result, locked, save, live }: Schedul
           </table>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ---------- Statutory information: directors, secretaries and shareholders ---------- */
-type Officer = { id: string; title?: string; first_name?: string; surname?: string; is_director?: boolean; is_secretary?: boolean; is_shareholder?: boolean; share_type?: string; shares?: string; appointed?: string; resigned?: string };
-
-export function StatutorySchedule({ data, result, locked, save, live }: ScheduleProps) {
-  const officers: Officer[] = data.officers ?? [];
-  const update = (id: string, patch: Partial<Officer>) => save({ officers: (live().officers ?? []).map((o: Officer) => (o.id === id ? { ...o, ...patch } : o)) });
-  const add = () => save({ officers: [...(live().officers ?? []), { id: `o_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, share_type: 'ORDINARY' }] });
-  const remove = (id: string) => save({ officers: (live().officers ?? []).filter((o: Officer) => o.id !== id) });
-  const dateField = 'w-[130px] px-2 py-1.5 border border-[#D3DCEE] rounded-[8px] bg-white disabled:bg-[#F5F8FD]';
-  const tick = (o: Officer, key: 'is_director' | 'is_secretary' | 'is_shareholder', label: string) => (
-    <td className="p-2 text-center">
-      <input type="checkbox" aria-label={`${label}: ${[o.first_name, o.surname].filter(Boolean).join(' ') || 'new person'}`} checked={Boolean(o[key])} disabled={locked} onChange={(e) => update(o.id, { [key]: e.target.checked })} />
-    </td>
-  );
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs text-[#122654]">
-          <thead className="bg-[#F5F8FD]">
-            <tr>
-              <th className={`${th} text-left`}>Title</th>
-              <th className={`${th} text-left`}>First name</th>
-              <th className={`${th} text-left`}>Surname</th>
-              <th className={`${th} text-left`}>Display name</th>
-              <th className={th}>Director</th>
-              <th className={th}>Secretary</th>
-              <th className={th}>Shareholder</th>
-              <th className={`${th} text-left`}>Type of shares</th>
-              <th className={`${th} text-right`}>Shares</th>
-              <th className={`${th} text-left`}>Appointed</th>
-              <th className={`${th} text-left`}>Resigned</th>
-              <th className={th}><span className="sr-only">Remove</span></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#E3E7EF]">
-            {officers.map((o) => {
-              const officer = o.is_director || o.is_secretary;
-              return (
-                <tr key={o.id}>
-                  <td className="p-1.5 w-16"><TextInput label="Title" value={o.title} disabled={locked} placeholder="Mr" onCommit={(v) => update(o.id, { title: v })} /></td>
-                  <td className="p-1.5"><TextInput label="First name" value={o.first_name} disabled={locked} onCommit={(v) => update(o.id, { first_name: v })} /></td>
-                  <td className="p-1.5"><TextInput label="Surname" value={o.surname} disabled={locked} onCommit={(v) => update(o.id, { surname: v })} /></td>
-                  <td className="p-2 whitespace-nowrap text-[#4A5878]">{[o.title, o.first_name, o.surname].filter(Boolean).join(' ')}</td>
-                  {tick(o, 'is_director', 'Director')}
-                  {tick(o, 'is_secretary', 'Secretary')}
-                  {tick(o, 'is_shareholder', 'Shareholder')}
-                  <td className="p-1.5 w-28">{o.is_shareholder && <TextInput label="Type of shares" value={o.share_type} disabled={locked} onCommit={(v) => update(o.id, { share_type: v.toUpperCase() })} />}</td>
-                  <td className="p-1.5 w-24">{o.is_shareholder && <TextInput label="Number of shares" value={o.shares} disabled={locked} onCommit={(v) => update(o.id, { shares: v.replace(/[^\d]/g, '') })} />}</td>
-                  <td className="p-1.5">{officer && <input type="date" aria-label="Appointed" className={dateField} value={o.appointed ?? ''} disabled={locked} onChange={(e) => update(o.id, { appointed: e.target.value })} />}</td>
-                  <td className="p-1.5">{officer && <input type="date" aria-label="Resigned" className={dateField} value={o.resigned ?? ''} disabled={locked} onChange={(e) => update(o.id, { resigned: e.target.value })} />}</td>
-                  <td className="p-1.5 text-center">
-                    {!locked && (
-                      <button type="button" onClick={() => remove(o.id)} aria-label={`Remove ${[o.first_name, o.surname].filter(Boolean).join(' ') || 'this person'}`} className="text-[#7E8DA6] hover:text-[#B42318]">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {officers.length === 0 && (
-              <tr><td colSpan={12} className="p-3 text-[#4A5878]">No one added yet. Add each director, secretary and shareholder.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex items-center justify-between text-xs">
-        {!locked ? (
-          <button type="button" onClick={add} className="inline-flex items-center gap-1 font-bold text-[#B8432F] hover:underline"><Plus className="w-3.5 h-3.5" /> Add person</button>
-        ) : <span />}
-        <span className="text-[#4A5878]">Total shares: <strong className="font-mono text-[#122654]">{Number(result.totals.shares ?? 0n).toLocaleString('en-GB')}</strong></span>
-      </div>
     </div>
   );
 }

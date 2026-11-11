@@ -508,6 +508,18 @@ export class InvoicePlatformIntegration {
     const feed = this.pullOpenBankingFeed(firmId, eng?.client_id || '', eng?.period_end || '2026-09-30');
 
     const wpData = { ...wp.data_json };
+    if (Array.isArray(wpData.accounts)) {
+      // One row per account: the feed's balance goes on the account it is for, nothing else changes
+      const target = wpData.accounts.find((a: any) => a.code === feed.bank_account_code) ?? wpData.accounts.find((a: any) => a.code === '*');
+      if (!target) throw new Error(`The feed is for account ${feed.bank_account_code}, which is not on this schedule.`);
+      wpData.accounts = wpData.accounts.map((a: any) =>
+        a.id === target.id ? { ...a, statement_p: feed.balance_p, source: 'open_banking', synced_at: feed.pulled_at } : a
+      );
+      wp.data_json = wpData;
+      wp.updated_at = new Date().toISOString();
+      db.logAudit(firmId, actor, 'BANK_FEED_SYNC', 'workpapers', wp.id, null, { source: feed.source, balance_p: feed.balance_p, account: target.id });
+      return { workpaper: wp, feedResponse: feed };
+    }
     wpData.statement_source = 'Open Banking (via invoice platform)';
     wpData.statement_p = feed.balance_p;
     wpData.open_banking_pulled_at = feed.pulled_at;

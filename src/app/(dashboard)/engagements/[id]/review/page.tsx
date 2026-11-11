@@ -127,7 +127,7 @@ export default function ReviewNotesHubPage() {
 
   const handleApproveAndLock = () => {
     if (openCount > 0) {
-      setActionError('Cannot approve file while review points are open (REV-05).');
+      setActionError('Cannot approve file while review points are open.');
       return;
     }
     if (activeEngagement) {
@@ -149,7 +149,7 @@ export default function ReviewNotesHubPage() {
 
   const handleUnlockEngagement = () => {
     if (unlockReason.trim().length < 10) {
-      setActionError('Reason must be at least 10 characters to unlock (ENG-06).');
+      setActionError('Reason must be at least 10 characters to unlock.');
       return;
     }
     if (activeEngagement) {
@@ -193,8 +193,8 @@ export default function ReviewNotesHubPage() {
           </h1>
           <p className="text-sm text-[#4A5878] mt-0.5">
             {openCount > 0
-              ? `! ${openCount} open review notes currently block partner sign-off (REV-03).`
-              : '✓ All review points cleared. File ready for partner completion checklist (REV-05).'}
+              ? `! ${openCount} open review notes currently block partner sign-off.`
+              : '✓ All review points cleared. File ready for partner completion checklist.'}
           </p>
         </div>
 
@@ -220,7 +220,7 @@ export default function ReviewNotesHubPage() {
                 : 'text-[#4A5878] hover:text-[#122654]'
             }`}
           >
-            File Completion &amp; Lock (REV-05)
+            File Completion &amp; Lock
           </button>
         </div>
       </div>
@@ -230,9 +230,9 @@ export default function ReviewNotesHubPage() {
         <div className="bg-white border border-[#E3E7EF] rounded-xl p-6 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E3E7EF] pb-4">
             <div>
-              <h2 className="text-base font-bold text-[#122654]">Partner Completion Checklist (REV-05)</h2>
+              <h2 className="text-base font-bold text-[#122654]">Partner Completion Checklist</h2>
               <p className="text-xs text-[#4A5878]">
-                All conditions must pass before partner final approval locks the file (ENG-06).
+                All conditions must pass before partner final approval locks the file.
               </p>
             </div>
 
@@ -257,7 +257,7 @@ export default function ReviewNotesHubPage() {
                 className="flex items-center gap-2 px-5 py-2 bg-[#0B6B52] hover:bg-[#095742] text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Approve File &amp; Lock Period (REV-05)</span>
+                <span>Approve File &amp; Lock Period</span>
               </button>
             )}
           </div>
@@ -289,7 +289,7 @@ export default function ReviewNotesHubPage() {
                 <div>
                   <div className="text-xs font-bold text-[#122654]">2. Standard Completeness &amp; Disclosure Checklist</div>
                   <div className="text-[11px] text-[#4A5878]">
-                    100% of mandatory disclosure checklist items completed under FRS 102 1A (STD-03).
+                    100% of mandatory disclosure checklist items completed under FRS 102 1A.
                   </div>
                 </div>
               </div>
@@ -313,7 +313,7 @@ export default function ReviewNotesHubPage() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 <div>
-                  <div className="text-xs font-bold text-[#122654]">4. Opening Balances Agreement Check (ENG-04)</div>
+                  <div className="text-xs font-bold text-[#122654]">4. Opening Balances Agreement Check</div>
                   <div className="text-[11px] text-[#4A5878]">
                     Opening balances match prior period closing balances to the penny.
                   </div>
@@ -326,7 +326,7 @@ export default function ReviewNotesHubPage() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 <div>
-                  <div className="text-xs font-bold text-[#122654]">5. Suspense and Clearing Accounts Must Be Zero (REC-16)</div>
+                  <div className="text-xs font-bold text-[#122654]">5. Suspense and Clearing Accounts Must Be Zero</div>
                   <div className="text-[11px] text-[#4A5878]">
                     All suspense, clearing, and wages control accounts are nil.
                   </div>
@@ -340,7 +340,7 @@ export default function ReviewNotesHubPage() {
           {showUnlockModal && (
             <div className="fixed inset-0 z-50 bg-[#0B1A3B]/50 backdrop-blur-xs flex items-center justify-center p-4">
               <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl border border-[#E3E7EF]">
-                <h3 className="text-base font-bold text-[#122654] mb-2">Unlock Period (ENG-06)</h3>
+                <h3 className="text-base font-bold text-[#122654] mb-2">Unlock Period</h3>
                 <p className="text-xs text-[#4A5878] mb-4">
                   Unlocking requires partner role and resets approval stamps. Enter reason:
                 </p>

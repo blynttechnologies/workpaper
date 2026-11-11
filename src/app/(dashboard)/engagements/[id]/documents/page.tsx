@@ -43,7 +43,7 @@ const DEFAULT_DOCUMENTS: DocumentItem[] = [
     filename: 'Unit_4_Commercial_Lease_Agreement_2025.pdf',
     folder: 'permanent',
     category: 'Lease agreement',
-    aiTag: 'Lease agreement (DOC-03)',
+    aiTag: 'Lease agreement',
     linkedScheduleRef: 'L-10',
     linkedScheduleName: 'Lease schedule (REC-04 / L-10)',
     uploadedBy: 'Sarah Jenkins',
@@ -66,7 +66,7 @@ const DEFAULT_DOCUMENTS: DocumentItem[] = [
     filename: 'Articles_of_Association_and_Incorporation.pdf',
     folder: 'permanent',
     category: 'Constitutional',
-    aiTag: 'Articles of association (DOC-02)',
+    aiTag: 'Articles of association',
     linkedScheduleRef: 'E-10',
     linkedScheduleName: 'Share capital & reserves (REC-12 / E-10)',
     uploadedBy: 'David Thorne',
@@ -84,7 +84,7 @@ const DEFAULT_DOCUMENTS: DocumentItem[] = [
     filename: 'Barclays_Bank_Statement_Sep2026.pdf',
     folder: 'current',
     category: 'Bank statement',
-    aiTag: 'Bank statement (DOC-03)',
+    aiTag: 'Bank statement',
     linkedScheduleRef: 'B-10',
     linkedScheduleName: 'Bank reconciliation (REC-02 / B-10)',
     uploadedBy: 'Marcus Vance',
@@ -103,7 +103,7 @@ const DEFAULT_DOCUMENTS: DocumentItem[] = [
     filename: 'P32_Employer_Payment_Summary_Month12.pdf',
     folder: 'current',
     category: 'Payroll report',
-    aiTag: 'Payroll report (DOC-03)',
+    aiTag: 'Payroll report',
     linkedScheduleRef: 'P-20',
     linkedScheduleName: 'Payroll reconciliation (REC-05 / P-20)',
     uploadedBy: 'Marcus Vance',
@@ -122,7 +122,7 @@ const DEFAULT_DOCUMENTS: DocumentItem[] = [
     filename: 'HMRC_VAT100_Return_Q4_Sep2026.pdf',
     folder: 'current',
     category: 'VAT return',
-    aiTag: 'VAT return (DOC-03)',
+    aiTag: 'VAT return',
     linkedScheduleRef: 'T-20',
     linkedScheduleName: 'VAT reconciliation (REC-06 / T-20)',
     uploadedBy: 'Marcus Vance',
@@ -167,7 +167,7 @@ export default function DocumentsPage() {
             filename: a.filename,
             folder: a.folder || (a.category === 'Constitutional' || a.category === 'Lease agreement' ? 'permanent' : 'current'),
             category: a.category || 'Other',
-            aiTag: a.ai_type_tag || `${a.category} (DOC-03)`,
+            aiTag: a.ai_type_tag || `${a.category}`,
             linkedScheduleRef: a.linked_schedule_ref || a.schedule_reference,
             linkedScheduleName: a.linked_schedule_name,
             uploadedBy: a.uploaded_by || 'User',
@@ -216,7 +216,7 @@ export default function DocumentsPage() {
           filename: att.filename,
           folder: att.folder || activeFolder,
           category: att.category || 'Other',
-          aiTag: att.ai_type_tag || 'AI Tagged (DOC-03)',
+          aiTag: att.ai_type_tag || 'AI Tagged',
           linkedScheduleRef: att.linked_schedule_ref,
           uploadedBy: att.uploaded_by || 'Current User',
           uploadedAt: att.uploaded_at || new Date().toISOString(),
@@ -255,7 +255,7 @@ export default function DocumentsPage() {
         };
         setSelectedDoc(updated);
         setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
-        setActionStatus('✓ AI extraction completed (Confidence Gate DAT-08)');
+        setActionStatus('✓ AI extraction completed');
       }
     } catch {
       setActionStatus('AI extraction completed');
@@ -299,7 +299,7 @@ export default function DocumentsPage() {
     } catch {}
     setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
     if (selectedDoc?.id === doc.id) setSelectedDoc(null);
-    setActionStatus('Moved to 30-day trash bin (DOC-01)');
+    setActionStatus('Moved to 30-day trash bin');
     setTimeout(() => setActionStatus(null), 3000);
   };
 
@@ -338,7 +338,7 @@ export default function DocumentsPage() {
             </span>
           </div>
           <p className="text-xs text-[#4A5878] mt-1">
-            Permanent agreements roll forward automatically (DOC-02). Shared AI extraction service (DOC-04) auto-fills schedules with confidence badges (DOC-05).
+            Permanent agreements roll forward automatically. Shared AI extraction service auto-fills schedules with confidence badges.
           </p>
         </div>
 
@@ -428,7 +428,7 @@ export default function DocumentsPage() {
               Drag and drop invoices, statements, or contracts here, or click to browse
             </div>
             <p className="text-[11px] text-[#4A5878] mt-1">
-              Supports PDF, Word, Excel, CSV up to 50MB. AI automatically classifies document type, extracts terms, and detects duplicates via SHA-256 (DOC-01, DOC-03).
+              Supports PDF, Word, Excel, CSV up to 50MB. AI automatically classifies document type, extracts terms, and detects duplicates via SHA-256.
             </p>
           </div>
 
@@ -554,7 +554,7 @@ export default function DocumentsPage() {
               <div className="flex items-start justify-between border-b border-[#E3E7EF] pb-3">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-                  <h3 className="text-sm font-bold text-[#122654]">AI Document Summary (DOC-04)</h3>
+                  <h3 className="text-sm font-bold text-[#122654]">AI Document Summary</h3>
                 </div>
                 <button
                   type="button"
@@ -615,7 +615,7 @@ export default function DocumentsPage() {
                     </span>
                   </button>
                   <p className="text-[10px] text-center text-[#7E8DA6] mt-1.5">
-                    Extracted figures will be placed with AI badges for preparer confirmation (DOC-05).
+                    Extracted figures will be placed with AI badges for preparer confirmation.
                   </p>
                 </div>
               )}

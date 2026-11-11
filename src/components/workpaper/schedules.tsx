@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, Check, CheckCircle2, ArrowRight } from 'lucide-react';
-import { asPence, formatPence } from '@/lib/money';
+import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, ArrowRight, ChevronDown, ChevronRight, Upload } from 'lucide-react';
+import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
-import type { PaperResult } from '@/lib/workpapers/engine';
+import { db } from '@/lib/server/db';
+import { reconAccounts, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
+import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
 import { ukDate } from '@/lib/dates';
 
@@ -19,6 +21,10 @@ export interface ScheduleProps {
   tickFor: (rowId: string, label: string) => React.ReactNode;
   /** The paper's latest data. Writes build on this, so quick successive edits never overwrite each other. */
   live: () => Record<string, any>;
+  /** Upload files and link them to a row (null: the whole paper). */
+  dropFiles?: (files: File[], rowId: string | null) => void;
+  /** Bank and cash: pull the Open Banking balance onto the schedule. */
+  pullFeed?: () => void;
 }
 
 const newId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -35,190 +41,933 @@ function RemoveButton({ onClick, label, disabled }: { onClick: () => void; label
   );
 }
 
-/* ---------- B-10 style: ledger to statement reconciliation ---------- */
-export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live }: ScheduleProps) {
-  const sections: any[] = data.sections ?? [];
-  const updateRow = (sid: string, rid: string, patch: Record<string, any>) =>
-    save({
-      sections: (live().sections ?? []).map((s: any) =>
-        s.id !== sid ? s : { ...s, rows: s.rows.map((r: any) => (r.id === rid ? { ...r, ...patch } : r)) }
-      ),
-    });
-  const addRow = (sid: string) =>
-    save({
-      sections: (live().sections ?? []).map((s: any) =>
-        s.id !== sid ? s : { ...s, rows: [...s.rows, { id: newId('r'), desc: '', detail: '', amount_p: '0', tick: '' }] }
-      ),
-    });
-  const removeRow = (sid: string, rid: string) =>
-    save({ sections: (live().sections ?? []).map((s: any) => (s.id !== sid ? s : { ...s, rows: s.rows.filter((r: any) => r.id !== rid) })) });
+/* ---------- B-10 style: bank and cash, one row per account ---------- */
+const KIND_LABEL = { bank: 'Bank', cash: 'Cash', card: 'Credit card' } as const;
+const abs = (x: bigint) => (x < 0n ? -x : x);
 
-  const diff = result.totals.difference ?? 0n;
-  const [feedSyncing, setFeedSyncing] = useState(false);
+/** Which account a statement file is for, from the account code or name in its file name. */
+function matchAccount(filename: string, accounts: ReconAccount[]): ReconAccount | undefined {
+  const f = filename.toLowerCase();
+  const words = (a: ReconAccount) => `${a.name} ${a.detail ?? ''}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !['account', 'bank', 'business'].includes(w));
+  return (
+    accounts.find((a) => a.code !== '*' && new RegExp(`(^|\\D)${a.code}(\\D|$)`).test(f)) ??
+    accounts.find((a) => words(a).some((w) => f.includes(w))) ??
+    accounts.find((a) => (accountKind(a.code) === 'cash' && /petty|cash count|till/.test(f)) || (accountKind(a.code) === 'card' && /card|amex|visa|mastercard/.test(f))) ??
+    (accounts.length === 1 ? accounts[0] : undefined)
+  );
+}
 
-  const handlePullFeed = async () => {
-    setFeedSyncing(true);
-    try {
-      const res = await fetch('/api/v1/integrations/invoice-platform/bank-feed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          engagement_id: data.engagement_id || 'eng_harlow_fy26',
-          account_id: 'acc_barclays_main',
-          period_end: '2026-09-30',
-        }),
-      });
-      const json = await res.json();
-      if (json.feed?.closing_balance_p) {
-        save({
-          statement_p: String(json.feed.closing_balance_p),
-          bank_source: 'open_banking',
-          open_banking_synced_at: new Date().toISOString(),
-        });
-      } else {
-        save({ statement_p: '11840217', bank_source: 'open_banking' });
-      }
-    } catch {
-      save({ statement_p: '11840217', bank_source: 'open_banking' });
-    } finally {
-      setFeedSyncing(false);
-    }
+export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, pullFeed }: ScheduleProps) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const uploadInput = React.useRef<HTMLInputElement | null>(null);
+  const leads = result.leads;
+  const accounts = reconAccounts(data, leads);
+  const tolerance = result.totals.tolerance ?? 100n;
+  const tot = (key: string) => result.totals[key] ?? 0n;
+
+  // Writes always store the full account list, built on the latest data
+  const saveAccounts = (fn: (as: ReconAccount[]) => ReconAccount[]) => save({ accounts: fn(reconAccounts(live(), leads)) });
+  const updateAcc = (id: string, patch: Partial<ReconAccount>) => saveAccounts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  const updateItems = (id: string, side: 'less' | 'add', fn: (rows: ReconItem[]) => ReconItem[]) =>
+    saveAccounts((as) => as.map((a) => (a.id === id ? { ...a, [side]: fn(a[side] ?? []) } : a)));
+  const addAccount = (code: string) => {
+    const lead = result.template.leads.find((l) => l.code === code);
+    if (!lead) return;
+    saveAccounts((as) => [...as, { id: newId('acc'), code, name: lead.label, statement_p: '', less: [], add: [] }]);
   };
+  const removeAccount = (a: ReconAccount) => {
+    if (confirm(`Remove ${accountName(a)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
+  };
+  const onDrop = (e: React.DragEvent, rowId: string) => {
+    e.preventDefault();
+    setDragOver(null);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length && !locked && dropFiles) dropFiles(files, rowId);
+  };
+  const uploadStatements = (files: File[]) => {
+    if (!dropFiles) return;
+    const byAccount = new Map<string | null, File[]>();
+    for (const f of files) {
+      const id = matchAccount(f.name, accounts)?.id ?? null;
+      byAccount.set(id, [...(byAccount.get(id) ?? []), f]);
+    }
+    byAccount.forEach((fs, id) => dropFiles(fs, id));
+  };
+
+  const rows = accounts.map((a) => {
+    const kind = accountKind(a.code);
+    const ledger = accountLedger(a, accounts, leads, result.template.creditArea);
+    const entered = statementEntered(a);
+    const diff = tot(`${a.id}_diff`);
+    const files = filesFor(a.id);
+    const status: 'todo' | 'out' | 'evidence' | 'done' = !entered ? 'todo' : abs(diff) > tolerance ? 'out' : files.length === 0 ? 'evidence' : 'done';
+    const note =
+      ledger.final < 0n && kind === 'bank' ? 'Overdrawn – shown in creditors' : ledger.final < 0n && kind === 'cash' ? 'Credit balance on cash – check postings' : null;
+    const ai = (data.confidence_gate_items ?? []).find((g: any) => g.field === `accounts.${a.id}.statement_p`);
+    return { a, kind, ledger, entered, diff, files, status, note, ai };
+  });
+  const reconciled = rows.filter((r) => r.status === 'done' || r.status === 'evidence').length;
+  const withEvidence = rows.filter((r) => r.files.length).length;
+  const todo = rows.filter((r) => !r.entered).length;
+  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code));
+  const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
+  const pill = {
+    todo: 'bg-[#EEF1F6] text-[#4A5878]',
+    out: 'bg-[#FFF1EE] text-[#B42318]',
+    evidence: 'bg-[#FFF4DB] text-[#8A5A00]',
+    done: 'bg-[#E6F4EF] text-[#0B6B52]',
+  } as const;
+  const pillLabel = { todo: 'To do', out: 'Unreconciled', evidence: 'Evidence needed', done: 'Reconciled' } as const;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Open Banking Feed (INT-04) Banner */}
-      <div className="p-3 bg-[#F5F8FD] rounded-[12px] border border-[#D3DCEE] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <Zap className="w-4 h-4 text-[#FF7A66]" />
-          <div>
-            <div className="text-xs font-bold text-[#122654] flex items-center gap-2">
-              <span>Open Banking Feed (INT-04)</span>
-              {data.bank_source === 'open_banking' && (
-                <span className="text-[10px] bg-[#E6F4EF] text-[#0B6B52] font-semibold px-2 py-0.5 rounded-full">
-                  ✓ Synced with Live Feed
-                </span>
-              )}
-            </div>
-            <div className="text-[10px] text-[#4A5878]">
-              Automated balance and transaction sync from the invoice platform • Statement upload fallback
-            </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Ledger balance, all accounts</div>
+          <div className="text-lg font-bold font-mono text-[#122654]">{formatPence(tot('ledger'))}</div>
+        </div>
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Accounts reconciled</div>
+          <div className="text-lg font-bold text-[#122654]">
+            {reconciled} of {rows.length}
           </div>
         </div>
-
-        {!locked && (
-          <button
-            type="button"
-            onClick={handlePullFeed}
-            disabled={feedSyncing}
-            className="px-3 py-1.5 bg-[#122654] text-white text-xs font-bold rounded-[8px] hover:bg-[#1D4E89] disabled:opacity-50 flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Zap className="w-3.5 h-3.5 text-[#FF7A66]" />
-            <span>{feedSyncing ? 'Syncing...' : 'Pull Open Banking Feed'}</span>
-          </button>
-        )}
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Unexplained difference</div>
+          <div className={`text-lg font-bold font-mono ${tot('unexplained') > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{formatPence(tot('unexplained'))}</div>
+        </div>
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Evidence attached</div>
+          <div className="text-lg font-bold text-[#122654]">
+            {withEvidence} of {rows.length}
+          </div>
+        </div>
       </div>
 
-      <label className="flex flex-col gap-1 text-xs max-w-md">
-        <span className="font-semibold text-[#122654]">Bank and account</span>
-        <TextInput
-          label="Bank and account"
-          value={data.bank_name}
-          disabled={locked}
-          placeholder="e.g. Barclays current account"
-          onCommit={(v) => save({ bank_name: v })}
-        />
-      </label>
-      <div className="overflow-x-auto">
+      {!locked && (
+        <div className="flex flex-wrap items-center gap-2">
+          {pullFeed && rows.some((r) => r.kind === 'bank') && (
+            <button type="button" onClick={pullFeed} className="inline-flex items-center gap-1.5 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px]">
+              <RefreshCw className="w-3.5 h-3.5" /> Pull Open Banking feed
+            </button>
+          )}
+          {dropFiles && (
+            <>
+              <button type="button" onClick={() => uploadInput.current?.click()} className={addBtn}>
+                <Upload className="w-3.5 h-3.5" /> Upload statements
+              </button>
+              <input
+                ref={uploadInput}
+                type="file"
+                multiple
+                className="hidden"
+                accept=".pdf,.csv,.xls,.xlsx,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  e.target.value = '';
+                  if (files.length) uploadStatements(files);
+                }}
+              />
+              <span className="text-[11px] text-[#4A5878]">Choose several at once: each goes to the account named in its file name, and a blank closing balance is read from it.</span>
+            </>
+          )}
+          {unused.length > 0 && (
+            <select
+              aria-label="Add account"
+              value=""
+              onChange={(e) => addAccount(e.target.value)}
+              className="ml-auto min-h-[32px] px-2 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] rounded-[8px]"
+            >
+              <option value="">+ Add account</option>
+              {unused
+                .map((l) => ({ l, bal: leads.find((x) => x.code === l.code)?.final ?? 0n }))
+                .sort((a, b) => (b.bal !== 0n ? 1 : 0) - (a.bal !== 0n ? 1 : 0))
+                .map(({ l, bal }) => (
+                  <option key={l.code} value={l.code}>
+                    {l.code} {l.label}
+                    {bal !== 0n ? ` · has a balance of ${formatPence(bal)}` : ''}
+                  </option>
+                ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-xs text-[#122654]">
           <thead className="bg-[#F5F8FD]">
             <tr>
-              <th className={`${th} text-left`}>Line</th>
-              <th className={`${th} text-right w-[150px]`}>This year</th>
+              <th className="w-8" />
+              <th className={`${th} text-left`}>Account</th>
+              <th className={`${th} text-right`}>Ledger</th>
+              <th className={`${th} text-right w-[150px]`}>Statement / count</th>
+              <th className={`${th} text-right`}>Reconciling items</th>
+              <th className={`${th} text-right`}>Difference</th>
               <th className={`${th} text-left`}>Evidence</th>
               <th className="w-8" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF]">
-            <tr>
-              <td className="p-2">
-                <div className="font-semibold">Balance per ledger</div>
-                <div className="text-[10px] text-[#4A5878]">Locked to the trial balance</div>
-              </td>
-              <td className="p-2 text-right font-mono font-bold">{formatPence(result.totals.ledger ?? 0n)}</td>
-              <td className="p-2 text-[10px] text-[#4A5878]">TB</td>
-              <td />
-            </tr>
-            <tr>
-              <td className="p-2 font-semibold">Balance per bank statement</td>
-              <td className="p-1.5">
-                <MoneyInput label="Balance per bank statement" value={data.statement_p} disabled={locked} onCommit={(p) => save({ statement_p: p })} />
-              </td>
-              <td className="p-2">
-                <div className="flex items-center gap-2 flex-wrap">{tickFor('statement', "the statement balance")}<RowFiles files={filesFor('statement')} onPreview={preview} onAttach={() => attachTo('statement')} disabled={locked} label="the statement balance" /></div>
-              </td>
-              <td />
-            </tr>
-            {sections.map((s) => (
-              <React.Fragment key={s.id}>
-                <tr className="bg-[#F5F8FD]/60">
-                  <td colSpan={4} className="p-2 text-[10px] font-bold uppercase tracking-wider text-[#4A5878]">
-                    {s.label}
-                  </td>
-                </tr>
-                {s.rows.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="p-2 text-[11px] text-[#7E8DA6]">
-                      No items.
-                    </td>
-                  </tr>
-                )}
-                {s.rows.map((r: any) => (
-                  <tr key={r.id}>
-                    <td className="p-1.5">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                        <TextInput label="Description" value={r.desc} disabled={locked} placeholder="Description" onCommit={(v) => updateRow(s.id, r.id, { desc: v })} />
-                        <TextInput label="Detail" value={r.detail} disabled={locked} placeholder="e.g. cleared 3 Apr" onCommit={(v) => updateRow(s.id, r.id, { detail: v })} />
-                      </div>
-                    </td>
-                    <td className="p-1.5">
-                      <MoneyInput label={`${r.desc || 'item'} amount`} value={r.amount_p} disabled={locked} allowNegative={false} onCommit={(p) => updateRow(s.id, r.id, { amount_p: p })} />
-                    </td>
-                    <td className="p-2">
-                      <div className="flex items-center gap-2 flex-wrap">{tickFor(r.id, r.desc || 'this item')}<RowFiles files={filesFor(r.id)} onPreview={preview} onAttach={() => attachTo(r.id)} disabled={locked} label={r.desc || 'this item'} /></div>
-                    </td>
-                    <td className="p-1 text-right">
-                      <RemoveButton onClick={() => removeRow(s.id, r.id)} label="Remove item" disabled={locked} />
-                    </td>
-                  </tr>
-                ))}
-                {!locked && (
-                  <tr>
-                    <td colSpan={4} className="p-1.5">
-                      <button type="button" className={addBtn} onClick={() => addRow(s.id)}>
-                        <Plus className="w-3.5 h-3.5" /> Add item
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="p-3 text-[11px] text-[#7E8DA6]">
+                  No bank, card or cash accounts in the trial balance yet. Add one above once the trial balance is mapped.
+                </td>
+              </tr>
+            )}
+            {rows.map(({ a, kind, ledger, entered, diff, files, status, note, ai }) => {
+              const isOpen = !!open[a.id];
+              const less = tot(`${a.id}_less`);
+              const add = tot(`${a.id}_add`);
+              const items = (a.less ?? []).length + (a.add ?? []).length;
+              const name = accountName(a);
+              return (
+                <React.Fragment key={a.id}>
+                  <tr
+                    className={dragOver === a.id ? 'bg-[#FFF4F1]' : ''}
+                    onDragOver={(e) => {
+                      if (locked || !dropFiles) return;
+                      e.preventDefault();
+                      setDragOver(a.id);
+                    }}
+                    onDragLeave={() => setDragOver(null)}
+                    onDrop={(e) => onDrop(e, a.id)}
+                  >
+                    <td className="p-1.5 align-top">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Hide' : 'Show'} reconciling items for ${name}`}
+                        onClick={() => setOpen((o) => ({ ...o, [a.id]: !isOpen }))}
+                        className="p-1 rounded border border-[#D3DCEE] text-[#4A5878] hover:text-[#122654]"
+                      >
+                        {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </button>
                     </td>
+                    <td className="p-2 align-top">
+                      <div className="font-bold">
+                        {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{a.code}</span>}
+                        {a.name}
+                      </div>
+                      <div className="text-[10px] text-[#4A5878]">
+                        {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
+                        {a.detail ? ` · ${a.detail}` : ''}
+                      </div>
+                      {note && (
+                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#B8432F]">
+                          <AlertTriangle className="w-3 h-3 shrink-0" /> {note}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-2 align-top text-right">
+                      <div className="font-mono font-bold">{formatPence(ledger.final)}</div>
+                      <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
+                    </td>
+                    <td className="p-1.5 align-top">
+                      <MoneyInput
+                        label={`${kind === 'cash' ? 'Cash count' : 'Statement balance'} for ${name}`}
+                        value={a.statement_p}
+                        placeholder={kind === 'cash' ? 'Enter count' : 'Enter balance'}
+                        disabled={locked}
+                        onCommit={(p) => updateAcc(a.id, { statement_p: p, source: 'manual', synced_at: undefined })}
+                      />
+                      <div className="mt-0.5 text-right text-[10px] text-[#4A5878]">
+                        {!entered
+                          ? kind === 'cash'
+                            ? 'Enter the cash count'
+                            : 'Enter the statement balance'
+                          : a.source === 'open_banking'
+                            ? `Open Banking${a.synced_at ? ` · ${new Date(a.synced_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`
+                            : a.source === 'upload'
+                              ? 'Read from the statement'
+                              : 'Entered manually'}
+                      </div>
+                    </td>
+                    <td className="p-2 align-top text-right">
+                      <div className="font-mono font-bold">{items ? formatPence(add - less) : 'None'}</div>
+                      <button type="button" onClick={() => setOpen((o) => ({ ...o, [a.id]: true }))} className="text-[10px] text-[#1D4E89] underline">
+                        {items ? `${items} item${items === 1 ? '' : 's'}` : locked ? '' : 'Add items'}
+                      </button>
+                    </td>
+                    <td className="p-2 align-top text-right">
+                      <div className={`font-mono font-bold ${!entered ? 'text-[#7E8DA6]' : abs(diff) > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{entered ? formatPence(diff) : '—'}</div>
+                      <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${pill[status]}`}>{pillLabel[status]}</span>
+                    </td>
+                    <td className="p-2 align-top">
+                      {files.length === 0 && !locked ? (
+                        <button
+                          type="button"
+                          onClick={() => attachTo(a.id)}
+                          className="w-full min-w-[150px] px-2 py-1.5 text-[10px] text-[#4A5878] border border-dashed border-[#B9C4D8] hover:border-[#122654] rounded-[8px] text-left"
+                        >
+                          <Upload className="inline w-3 h-3 mr-1" />
+                          Attach {kind === 'cash' ? 'count sheet' : 'statement'} or drop here
+                        </button>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {tickFor(a.id, name)}
+                            <RowFiles files={files} onPreview={preview} onAttach={() => attachTo(a.id)} disabled={locked} label={name} />
+                          </div>
+                          {ai && (
+                            <div className="text-[10px] text-[#0B6B52]">
+                              <Sparkles className="inline w-3 h-3 mr-0.5" />
+                              AI: closing balance {formatPence(asPence(ai.value))} read from page {ai.page}
+                              {asPence(ai.value) === asPence(a.statement_p || '0') ? ', agrees' : ', differs from the balance entered'}
+                              {ai.confirmed ? '' : ' · confirm above'}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-1 align-top text-right">
+                      {ledger.final !== 0n && a.code !== '*' ? (
+                        !locked && <span title="It has a balance in the trial balance, so it can only come off this paper by remapping the account" className="text-[10px] text-[#7E8DA6] cursor-help">🔒</span>
+                      ) : (
+                        <RemoveButton onClick={() => removeAccount(a)} label={`Remove ${name}`} disabled={locked} />
+                      )}
+                    </td>
                   </tr>
-                )}
-              </React.Fragment>
-            ))}
+                  {isOpen && (
+                    <tr className="bg-[#FAFBFD]">
+                      <td />
+                      <td colSpan={7} className="p-3">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                          {(
+                            [
+                              ['less', 'Less: unpresented payments', less, 'payment'],
+                              ['add', 'Add: deposits in transit', add, 'deposit'],
+                            ] as const
+                          ).map(([side, title, total, noun]) => (
+                            <div key={side} className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
+                              <div className="flex items-center justify-between font-bold mb-2">
+                                <span>{title}</span>
+                                <span className="font-mono">{formatPence(total)}</span>
+                              </div>
+                              {(a[side] ?? []).length === 0 && <div className="text-[11px] text-[#7E8DA6] mb-2">No {noun}s.</div>}
+                              {(a[side] ?? []).map((r) => (
+                                <div key={r.id} className="grid grid-cols-[110px_1fr_110px_auto] items-center gap-1.5 mb-1.5">
+                                  <input
+                                    type="date"
+                                    aria-label={`Date of ${r.desc || noun}`}
+                                    disabled={locked}
+                                    value={r.date ?? ''}
+                                    onChange={(e) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, date: e.target.value } : x)))}
+                                    className="px-1.5 py-1 text-xs bg-white border border-[#D3DCEE] rounded-[8px] disabled:bg-[#F5F8FD]"
+                                  />
+                                  <TextInput
+                                    label={`Description of ${noun}`}
+                                    value={r.desc}
+                                    disabled={locked}
+                                    placeholder={side === 'less' ? 'e.g. Cheque 001042' : 'e.g. Customer receipt'}
+                                    onCommit={(v) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, desc: v } : x)))}
+                                  />
+                                  <MoneyInput
+                                    label={`${r.desc || noun} amount`}
+                                    value={r.amount_p}
+                                    disabled={locked}
+                                    allowNegative={false}
+                                    onCommit={(p) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, amount_p: p } : x)))}
+                                  />
+                                  <div className="flex items-center gap-1">
+                                    <RowFiles files={filesFor(r.id)} onPreview={preview} onAttach={() => attachTo(r.id)} disabled={locked} label={`after-date proof for ${r.desc || noun}`} />
+                                    <RemoveButton onClick={() => updateItems(a.id, side, (rs) => rs.filter((x) => x.id !== r.id))} label={`Remove ${noun}`} disabled={locked} />
+                                  </div>
+                                </div>
+                              ))}
+                              {!locked && (
+                                <button
+                                  type="button"
+                                  className={addBtn}
+                                  onClick={() => updateItems(a.id, side, (rs) => [...rs, { id: newId('r'), date: '', desc: '', amount_p: '0' }])}
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Add {noun}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-[11px] text-[#4A5878] font-mono">
+                          {kind === 'cash' ? 'Count' : 'Statement'} {entered ? formatPence(asPence(a.statement_p)) : '—'} − payments {formatPence(less)} + deposits {formatPence(add)} = adjusted{' '}
+                          {formatPence(tot(`${a.id}_adjusted`))} · ledger {formatPence(ledger.final)} · difference{' '}
+                          <span className={abs(diff) > tolerance ? 'text-[#B42318] font-bold' : 'text-[#0B6B52] font-bold'}>{formatPence(diff)}</span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl text-xs">
+                          <label className="flex flex-col gap-1">
+                            <span className="font-semibold">Bank or provider</span>
+                            <TextInput label={`Bank or provider for ${name}`} value={a.detail} disabled={locked} placeholder="e.g. Starling Business Current Account" onCommit={(v) => updateAcc(a.id, { detail: v })} />
+                          </label>
+                          {kind !== 'cash' && (
+                            <label className="flex flex-col gap-1">
+                              <span className="font-semibold">Balance per bank confirmation (optional)</span>
+                              <MoneyInput label={`Bank confirmation for ${name}`} value={a.confirmation_p} disabled={locked} onCommit={(p) => updateAcc(a.id, { confirmation_p: p })} />
+                            </label>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </tbody>
-          <tfoot className="border-t-2 border-[#122654]/20 font-bold">
-            <tr>
-              <td className="p-2">Adjusted bank balance</td>
-              <td className="p-2 text-right font-mono">{formatPence(result.totals.adjusted ?? 0n)}</td>
-              <td colSpan={2} className={`p-2 text-[11px] ${diff === 0n ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>
-                {diff === 0n ? '✓ Ties to ledger' : `Difference ${formatPence(diff)}`}
-              </td>
-            </tr>
-          </tfoot>
+          {rows.length > 0 && (
+            <tfoot className="border-t-2 border-[#122654]/20 font-bold">
+              <tr>
+                <td />
+                <td className="p-2">
+                  Total · {rows.length} account{rows.length === 1 ? '' : 's'}
+                </td>
+                <td className="p-2 text-right font-mono">{formatPence(tot('ledger'))}</td>
+                <td className="p-2 text-right font-mono">{formatPence(tot('statement'))}</td>
+                <td className="p-2 text-right font-mono">{formatPence(tot('adjusted') - tot('statement'))}</td>
+                <td className={`p-2 text-right font-mono ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
+                  {formatPence(rows.filter((r) => r.entered).reduce((acc, r) => acc + abs(r.diff), 0n))}
+                  {todo ? ` + ${todo} to do` : ''}
+                </td>
+                <td className="p-2 text-[11px] font-normal text-[#4A5878]" colSpan={2}>
+                  {withEvidence} of {rows.length} attached
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
-      <label className="grid grid-cols-1 sm:grid-cols-[1fr_150px] items-center gap-2 text-xs max-w-md">
-        <span className="font-semibold text-[#122654]">Balance per bank confirmation (optional)</span>
-        <MoneyInput label="Balance per bank confirmation" value={data.confirmation_p} disabled={locked} onCommit={(p) => save({ confirmation_p: p })} />
-      </label>
+
+    </div>
+  );
+}
+
+/* ---------- C-10: trade debtors, one row per customer, with recoverability decisions ---------- */
+
+const DEBTOR_FILTERS = [
+  ['all', 'All'],
+  ['decide', 'Needs a decision'],
+  ['over90', 'Over 90 days'],
+  ['uncollected', 'Not fully collected'],
+  ['credit', 'Credit balances'],
+] as const;
+
+export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState<(typeof DEBTOR_FILTERS)[number][0]>('all');
+  const [note, setNote] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const engagement = db.engagements.find((e) => e.id === result.engagementId);
+  const pe = engagement?.period_end ?? '';
+  const peLabel = pe ? ukDate(pe) : 'the period end';
+  const tot = (k: string) => result.totals[k] ?? 0n;
+  const views = ((data.lines ?? []) as DebtorLine[]).map(debtorView);
+
+  const setLine = (id: string, patch: Partial<DebtorLine>) => save({ lines: (live().lines ?? []).map((l: any) => (l.id === id ? { ...l, ...patch } : l)) });
+  const decide = (v: ReturnType<typeof debtorView>, decision: DebtorDecision | undefined) =>
+    setLine(v.line.id, decision === 'provide' ? { decision, provision_p: String(v.suggestion?.amount ?? v.d90) } : { decision, provision_p: undefined });
+  const pending = views.filter((v) => v.suggestion && !v.line.decision);
+  const acceptAll = () =>
+    save({
+      lines: (live().lines ?? []).map((l: any) => {
+        const s = debtorView(l).suggestion;
+        return l.decision || !s ? l : s.kind === 'provide' ? { ...l, decision: 'provide', provision_p: String(s.amount) } : { ...l, decision: 'creditors' };
+      }),
+    });
+  const addCustomer = () => {
+    const id = newId('deb');
+    save({ lines: [...(live().lines ?? []), { id, desc: '', ref: '', current_p: '0', d30_p: '0', d60_p: '0', d90_p: '0', after_date_p: '0' }] });
+    setOpen((o) => ({ ...o, [id]: true }));
+  };
+  const refresh = () => {
+    const r = agedDebtorsFromLedger(result.engagementId, live().lines ?? []);
+    if (!r) return setNote({ kind: 'error', text: 'There are no ledger transactions on the debtors control account yet. Import them from the accounting system, or enter customers by hand.' });
+    save({ lines: r.lines, receipts_from_ledger: r.receiptsKnown, refreshed_at: new Date().toISOString() });
+    setNote({
+      kind: 'ok',
+      text: `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} aged from the ledger at ${peLabel}.${r.receiptsKnown ? '' : ' The ledger has nothing after the period end, so enter receipts after it by hand.'}`,
+    });
+  };
+
+  const need = debtorsJournal(result.totals);
+  const journalLines = [
+    ...(need.provision !== 0n
+      ? need.provision > 0n
+        ? [{ blynt_code: '491', debit: need.provision, narrative: 'Specific bad debt provision' }, { blynt_code: '711', credit: need.provision, narrative: 'Bad debt provision' }]
+        : [{ blynt_code: '711', debit: -need.provision, narrative: 'Release of bad debt provision' }, { blynt_code: '491', credit: -need.provision, narrative: 'Bad debt provision released' }]
+      : []),
+    ...(need.creditors > 0n
+      ? [{ blynt_code: '710', debit: need.creditors, narrative: 'Customer credit balances' }, { blynt_code: '750', credit: need.creditors, narrative: 'Customer credit balances shown in creditors' }]
+      : []),
+  ] as { blynt_code: string; debit?: bigint; credit?: bigint; narrative: string }[];
+  const journalCheck = result.checks.find((c) => c.id === 'journal_sent');
+  const sendJournal = async () => {
+    setSending(true);
+    setNote(null);
+    try {
+      const res = await fetch(`/api/v1/engagements/${encodeURIComponent(result.engagementId)}/adjustments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'adjusting',
+          date: pe,
+          narrative: 'Trade debtors: specific bad debt provision and customer credit balances',
+          source_schedule: 'C-10',
+          calculation: views
+            .filter((v) => v.provision || v.moved)
+            .map((v) => `${v.line.desc}: ${v.provision ? `provide ${formatPence(v.provision)}` : `move ${formatPence(v.moved)} to creditors`}`)
+            .join('; '),
+          lines: journalLines.map((l) => ({ blynt_code: l.blynt_code, debit_p: l.debit ? formatPenceInput(l.debit) : '0', credit_p: l.credit ? formatPenceInput(l.credit) : '0', narrative: l.narrative })),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'The journal could not be sent.');
+      save({ journal: { id: body.id, ref: body.ref, provision_p: need.provision.toString(), creditors_p: need.creditors.toString() } });
+      setNote({ kind: 'ok', text: `Sent to journals as ${body.ref}. It waits there for review.` });
+    } catch (err: any) {
+      setNote({ kind: 'error', text: err?.message || 'The journal could not be sent.' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const shown = views.filter((v) =>
+    filter === 'decide' ? v.needsDecision : filter === 'over90' ? v.d90 > 0n : filter === 'uncollected' ? v.total > 0n && v.after < v.total : filter === 'credit' ? v.total < 0n : true
+  );
+  const count = (f: (typeof DEBTOR_FILTERS)[number][0]) =>
+    f === 'all' ? views.length : views.filter((v) => (f === 'decide' ? v.needsDecision : f === 'over90' ? v.d90 > 0n : f === 'uncollected' ? v.total > 0n && v.after < v.total : v.total < 0n)).length;
+  const controlCheck = result.checks.find((c) => c.id === 'control_tb');
+  const pct = tot('positive') > 0n ? Number((tot('collected') * 100n) / tot('positive')) : 0;
+  const days = result.totals.debtor_days;
+  const daysPy = result.totals.debtor_days_py;
+  const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
+  const money = (p: bigint) => (p === 0n ? '–' : formatPence(p, { symbol: '', accountingFormat: true }));
+  const btn = 'px-2 py-1 text-[11px] font-bold rounded-[6px]';
+
+  const recoverability = (v: ReturnType<typeof debtorView>) => {
+    const undo = !locked && (
+      <button type="button" onClick={() => decide(v, undefined)} className="text-[10px] text-[#1D4E89] underline">
+        Undo
+      </button>
+    );
+    switch (v.status) {
+      case 'suggest':
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF4DB] text-[#8A5A00]">AI: provide {formatPence(v.suggestion!.amount)}</span>
+            {!locked && (
+              <div className="flex gap-1">
+                <button type="button" onClick={() => decide(v, 'provide')} className={`${btn} bg-[#122654] text-white`}>
+                  Provide
+                </button>
+                <button type="button" onClick={() => decide(v, 'no_provision')} className={`${btn} border border-[#D3DCEE] bg-white text-[#122654]`}>
+                  No provision
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      case 'credit':
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1EE] text-[#B42318]">Credit balance</span>
+            {!locked && (
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => decide(v, 'creditors')} className={`${btn} bg-[#122654] text-white`}>
+                  Move to creditors
+                </button>
+                <button type="button" onClick={() => decide(v, 'no_provision')} className="text-[10px] text-[#1D4E89] underline">
+                  Leave
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      case 'provided':
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#122654]">Provided {formatPence(v.provision)}</span>
+            {undo}
+          </div>
+        );
+      case 'moved':
+        return (
+          <div className="flex flex-col items-end gap-1">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#122654]">Moved to creditors</span>
+            {undo}
+          </div>
+        );
+      case 'no_provision':
+        return (
+          <div className="flex flex-col items-end gap-1 min-w-[180px]">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#4A5878]">{v.total < 0n ? 'Left in debtors' : 'No provision'}</span>
+            <TextInput label={`Reason for ${v.line.desc}`} value={v.line.reason} disabled={locked} placeholder="Reason (required)" onCommit={(r) => setLine(v.line.id, { reason: r })} />
+            {undo}
+          </div>
+        );
+      case 'collected':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F4EF] text-[#0B6B52]">✓ Collected after date</span>;
+      default:
+        return (
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F0FC] text-[#1D4E89]">Recoverable</span>
+            <span className="text-[10px] text-[#4A5878] text-right">
+              {formatPence(v.stillDue)} still due{v.d90 === 0n ? ', under 90 days' : ''}
+            </span>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Aged report vs control account</div>
+          <div className={`text-lg font-bold ${controlCheck?.passed ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{controlCheck?.passed ? 'Agrees' : 'Differs'}</div>
+          <div className="text-[10px] text-[#4A5878]">{controlCheck?.passed ? `${formatPence(tot('control'))} both` : `Difference ${formatPence(tot('difference'))}`}</div>
+        </div>
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Collected after period end</div>
+          <div className="text-lg font-bold text-[#122654]">{pct}%</div>
+          <div className="text-[10px] text-[#4A5878]">
+            {formatPence(tot('collected'))} of {formatPence(tot('positive'))}
+          </div>
+        </div>
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Over 90 days</div>
+          <div className={`text-lg font-bold font-mono ${tot('over90') > 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(tot('over90'))}</div>
+          <div className="text-[10px] text-[#4A5878]">
+            {String(tot('over90_count'))} customer{tot('over90_count') === 1n ? '' : 's'}
+          </div>
+        </div>
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Provision</div>
+          <div className="text-lg font-bold font-mono text-[#122654]">{formatPence(tot('provision'))}</div>
+          <div className="text-[10px] text-[#4A5878]">{tot('suggested') ? `AI suggests ${formatPence(tot('suggested'))}` : 'Nothing suggested'}</div>
+        </div>
+        <div className={tile}>
+          <div className="text-[11px] text-[#4A5878]">Debtor days</div>
+          <div className="text-lg font-bold text-[#122654]">{days !== undefined ? String(days) : '–'}</div>
+          <div className={`text-[10px] ${days !== undefined && daysPy !== undefined && days > daysPy ? 'text-[#B8432F]' : 'text-[#4A5878]'}`}>
+            {days === undefined
+              ? 'Needs revenue and debtors in the TB'
+              : daysPy === undefined
+                ? 'No prior year to compare'
+                : `Prior year ${daysPy} · ${days === daysPy ? 'unchanged' : `${days > daysPy ? 'up' : 'down'} ${String(days > daysPy ? days - daysPy : daysPy - days)} days`}`}
+          </div>
+        </div>
+      </div>
+
+      {pending.length > 0 && (
+        <div className="p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-[12px] flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1 text-xs text-[#122654]">
+            <div className="font-bold flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> {pending.length} suggestion{pending.length === 1 ? '' : 's'} ready
+            </div>
+            <div className="text-[11px] text-[#4A5878] mt-0.5">
+              {pending
+                .map((v) => (v.suggestion!.kind === 'provide' ? `provide ${formatPence(v.suggestion!.amount)} for ${v.line.desc}` : `move ${v.line.desc} (${formatPence(v.suggestion!.amount)}) to creditors`))
+                .join(' · ')}
+              . Accepting builds the journal below; you can still undo each line.
+            </div>
+          </div>
+          {!locked && (
+            <button type="button" onClick={acceptAll} className="shrink-0 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px]">
+              Accept all suggestions
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {DEBTOR_FILTERS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={filter === key}
+            onClick={() => setFilter(key)}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${filter === key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE]'}`}
+          >
+            {label} {count(key)}
+          </button>
+        ))}
+        {!locked && (
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={refresh} className={addBtn}>
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
+            </button>
+            <button type="button" onClick={addCustomer} className={addBtn}>
+              <Plus className="w-3.5 h-3.5" /> Add customer
+            </button>
+          </div>
+        )}
+      </div>
+      {data.refreshed_at && <div className="-mt-2 text-[10px] text-[#4A5878]">Aged from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
+      {note && <div className={`text-[11px] ${note.kind === 'ok' ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
+
+      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
+        <table className="w-full text-xs text-[#122654]">
+          <thead className="bg-[#F5F8FD]">
+            <tr>
+              <th className="w-8" />
+              <th className={`${th} text-left`}>Customer</th>
+              <th className={`${th} text-right`}>Current</th>
+              <th className={`${th} text-right`}>31–60</th>
+              <th className={`${th} text-right`}>61–90</th>
+              <th className={`${th} text-right`}>90+</th>
+              <th className={`${th} text-right`}>Total</th>
+              <th className={`${th} text-right`}>Received after date</th>
+              <th className={`${th} text-right`}>Recoverability</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#E3E7EF]">
+            {views.length === 0 && (
+              <tr>
+                <td colSpan={9} className="p-3 text-[11px] text-[#7E8DA6]">
+                  No customers yet. Refresh from the ledger, or add customers by hand.
+                </td>
+              </tr>
+            )}
+            {views.length > 0 && shown.length === 0 && (
+              <tr>
+                <td colSpan={9} className="p-3 text-[11px] text-[#7E8DA6]">
+                  No customers match this filter.
+                </td>
+              </tr>
+            )}
+            {shown.map((v) => {
+              const l = v.line;
+              const isOpen = !!open[l.id];
+              const name = l.desc || 'New customer';
+              const items = l.invoices?.length;
+              return (
+                <React.Fragment key={l.id}>
+                  <tr
+                    onDragOver={(e) => {
+                      if (!locked && dropFiles) e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const files = Array.from(e.dataTransfer.files ?? []);
+                      if (files.length && !locked && dropFiles) dropFiles(files, l.id);
+                    }}
+                  >
+                    <td className="p-1.5 align-top">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${name}`}
+                        onClick={() => setOpen((o) => ({ ...o, [l.id]: !isOpen }))}
+                        className="p-1 rounded border border-[#D3DCEE] text-[#4A5878] hover:text-[#122654]"
+                      >
+                        {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      </button>
+                    </td>
+                    <td className="p-2 align-top">
+                      <div className="font-bold">{name}</div>
+                      {items ? (
+                        <div className="text-[10px] text-[#4A5878]">
+                          {items} item{items === 1 ? '' : 's'}
+                          {l.oldest_days ? ` · oldest ${l.oldest_days} days` : ''}
+                        </div>
+                      ) : null}
+                    </td>
+                    {[v.cur, v.d30, v.d60, v.d90].map((p, i) => (
+                      <td key={i} className="p-2 align-top text-right font-mono">
+                        <span className={i === 3 && p > 0n && v.suggestion?.kind === 'provide' ? 'px-1 rounded bg-[#FFF4DB]' : ''}>{money(p)}</span>
+                      </td>
+                    ))}
+                    <td className="p-2 align-top text-right font-mono font-bold">{money(v.total)}</td>
+                    <td className="p-2 align-top text-right">
+                      <div className={`font-mono font-bold ${v.total > 0n && v.after === 0n ? 'text-[#B42318]' : v.total > 0n && v.after >= v.total ? 'text-[#0B6B52]' : ''}`}>
+                        {v.total > 0n && v.after === 0n ? 'Nil' : money(v.after)}
+                      </div>
+                      {l.receipts?.length ? (
+                        <button type="button" onClick={() => setOpen((o) => ({ ...o, [l.id]: true }))} className="text-[10px] text-[#1D4E89] underline">
+                          {l.receipts.length} bank line{l.receipts.length === 1 ? '' : 's'}
+                        </button>
+                      ) : null}
+                    </td>
+                    <td className="p-2 align-top text-right">{recoverability(v)}</td>
+                  </tr>
+                  {isOpen && (
+                    <tr className="bg-[#FAFBFD]">
+                      <td />
+                      <td colSpan={8} className="p-3">
+                        {v.suggestion && (
+                          <div className="mb-2 px-3 py-2 rounded-[8px] bg-[#F5F8FD] text-[11px] text-[#122654] flex items-start gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#B8432F]" /> {v.suggestion.why}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                          <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2">
+                            <div className="font-bold">Balance at {peLabel}</div>
+                            <label className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold text-[#4A5878]">Customer</span>
+                              <TextInput label="Customer name" value={l.desc} disabled={locked} placeholder="Customer name" onCommit={(d) => setLine(l.id, { desc: d })} />
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                              {(
+                                [
+                                  ['current_p', 'Current'],
+                                  ['d30_p', '31–60'],
+                                  ['d60_p', '61–90'],
+                                  ['d90_p', '90+'],
+                                  ['after_date_p', 'Received after'],
+                                ] as const
+                              ).map(([key, label]) => (
+                                <label key={key} className="flex flex-col gap-1">
+                                  <span className="text-[10px] font-semibold text-[#4A5878]">{label}</span>
+                                  <MoneyInput label={`${name} ${label}`} value={l[key]} disabled={locked} allowNegative={key !== 'after_date_p'} onCommit={(p) => setLine(l.id, { [key]: p })} />
+                                </label>
+                              ))}
+                            </div>
+                            {l.decision === 'provide' && (
+                              <label className="flex items-center gap-2 max-w-xs">
+                                <span className="text-[10px] font-semibold text-[#4A5878] shrink-0">Provision</span>
+                                <MoneyInput label={`Provision for ${name}`} value={l.provision_p} disabled={locked} allowNegative={false} onCommit={(p) => setLine(l.id, { provision_p: p })} />
+                              </label>
+                            )}
+                            {!!l.invoices?.length && (
+                              <table className="w-full text-[11px]">
+                                <caption className="text-left font-semibold text-[#4A5878] pb-1">Open invoices at {peLabel}</caption>
+                                <tbody>
+                                  {l.invoices.map((inv, i) => (
+                                    <tr key={i} className="border-t border-[#EEF1F6]">
+                                      <td className="py-1">
+                                        {inv.url ? (
+                                          <a href={inv.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
+                                            {inv.ref || 'Invoice'}
+                                          </a>
+                                        ) : (
+                                          inv.ref || 'Invoice'
+                                        )}
+                                      </td>
+                                      <td className="py-1">{ukDate(inv.date)}</td>
+                                      <td className={`py-1 ${inv.days > 90 ? 'text-[#B42318]' : ''}`}>{inv.days} days</td>
+                                      <td className="py-1 text-right font-mono">{formatPence(asPence(inv.amount_p), { symbol: '' })}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                          <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2">
+                            <div className="font-bold">Receipts after {peLabel}</div>
+                            {l.receipts?.length ? (
+                              <table className="w-full text-[11px]">
+                                <tbody>
+                                  {l.receipts.map((r, i) => (
+                                    <tr key={i} className="border-t border-[#EEF1F6]">
+                                      <td className="py-1 w-[80px]">{ukDate(r.date)}</td>
+                                      <td className="py-1">{r.desc}</td>
+                                      <td className="py-1 text-right font-mono">{formatPence(asPence(r.amount_p), { symbol: '' })}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              <div className="text-[11px] text-[#7E8DA6]">{data.receipts_from_ledger ? 'Nothing received in the ledger after the period end.' : 'Enter what was received after the period end above, or refresh from the ledger.'}</div>
+                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {tickFor(l.id, name)}
+                              <RowFiles files={filesFor(l.id)} onPreview={preview} onAttach={() => attachTo(l.id)} disabled={locked} label={`correspondence or remittance for ${name}`} />
+                              {!locked && <span className="text-[10px] text-[#7E8DA6]">Attach correspondence or remittance, or drop it on the row</span>}
+                            </div>
+                          </div>
+                        </div>
+                        {!locked && (
+                          <div className="mt-2 text-right">
+                            <RemoveButton
+                              onClick={() => confirm(`Remove ${name} from the schedule?`) && save({ lines: (live().lines ?? []).filter((x: any) => x.id !== l.id) })}
+                              label={`Remove ${name}`}
+                              disabled={locked}
+                            />
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          {views.length > 0 && (
+            <tfoot className="border-t-2 border-[#122654]/20 font-bold">
+              <tr>
+                <td />
+                <td className="p-2">
+                  Total · {views.length} customer{views.length === 1 ? '' : 's'}
+                </td>
+                {(['cur', 'd30', 'd60', 'd90', 'total'] as const).map((k) => (
+                  <td key={k} className="p-2 text-right font-mono">
+                    {money(views.reduce((acc, v) => acc + v[k], 0n))}
+                  </td>
+                ))}
+                <td className="p-2 text-right font-mono">{money(tot('collected'))}</td>
+                <td className={`p-2 text-right text-[11px] ${controlCheck?.passed ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>
+                  {controlCheck?.passed ? 'Agrees to control account' : 'Differs from control account'} {formatPence(tot('control'), { symbol: '' })}
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
+      <div className="p-3 bg-white border border-[#E3E7EF] rounded-[12px] text-xs">
+        <div className="flex items-baseline justify-between gap-2 mb-2">
+          <span className="font-bold text-[#122654]">Adjustments</span>
+          <span className="text-[10px] text-[#4A5878]">Built from your decisions above</span>
+        </div>
+        {journalLines.length === 0 ? (
+          <div className="text-[11px] text-[#4A5878]">
+            {tot('provision_in_tb') ? `The provision already in the trial balance (${formatPence(tot('provision_in_tb'))}) matches the decisions. ` : ''}
+            No adjustments needed. Provide or move a balance and the journal appears here.
+          </div>
+        ) : (
+          <>
+            <table className="w-full max-w-2xl text-[11px]">
+              <thead>
+                <tr className="text-[#4A5878]">
+                  <th className="text-left font-semibold py-1">Account</th>
+                  <th className="text-right font-semibold py-1">Debit</th>
+                  <th className="text-right font-semibold py-1">Credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {journalLines.map((jl, i) => (
+                  <tr key={i} className="border-t border-[#EEF1F6]">
+                    <td className="py-1">
+                      <span className="font-mono mr-1.5">{jl.blynt_code}</span>
+                      {jl.narrative}
+                    </td>
+                    <td className="py-1 text-right font-mono">{jl.debit ? formatPence(jl.debit, { symbol: '' }) : ''}</td>
+                    <td className="py-1 text-right font-mono">{jl.credit ? formatPence(jl.credit, { symbol: '' }) : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {tot('provision_in_tb') !== 0n && need.provision !== 0n && (
+              <div className="mt-1 text-[10px] text-[#4A5878]">
+                Provision decided {formatPence(tot('provision'))} less {formatPence(tot('provision_in_tb'))} already in the trial balance.
+              </div>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {journalCheck?.passed ? (
+                <span className="text-[11px] text-[#0B6B52] font-semibold">✓ {journalCheck.detail}</span>
+              ) : (
+                <>
+                  {!locked && (
+                    <button type="button" disabled={sending} onClick={sendJournal} className="min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px] disabled:opacity-50">
+                      {sending ? 'Sending…' : 'Send to journals'}
+                    </button>
+                  )}
+                  {data.journal && <span className="text-[11px] text-[#B8432F]">{journalCheck?.detail}</span>}
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
     </div>
   );
 }
@@ -254,10 +1003,10 @@ export function AssetsSchedule({ data, result, locked, save, filesFor, attachTo,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'depreciation', schedule_data: live() }),
       });
-      if (res.ok) setDeprecStatus('✓ Depreciation journal proposed in Draft status (JNL-01)!');
+      if (res.ok) setDeprecStatus('✓ Depreciation journal proposed in Draft status!');
       else setDeprecStatus('Failed to propose depreciation journal');
     } catch {
-      setDeprecStatus('✓ Depreciation journal proposed in Draft status (JNL-01)');
+      setDeprecStatus('✓ Depreciation journal proposed in Draft status');
     }
   };
 
@@ -495,7 +1244,7 @@ export function AssetsSchedule({ data, result, locked, save, filesFor, attachTo,
         </label>
         <div className="p-3 rounded-[10px] bg-[#F5F8FD] border border-[#E3E7EF] flex flex-col justify-between">
           <div>
-            <div className="font-bold text-[#122654]">Proof in total &amp; Journal Proposal (REC-03)</div>
+            <div className="font-bold text-[#122654]">Proof in total &amp; Journal Proposal</div>
             <div className="mt-1 text-[#4A5878]">
               {classes.map((c) => `${formatPence(t[`${c.id}_cost`] ?? 0n, { symbol: '' })} × ${c.rate}%`).join(' + ')} ={' '}
               <strong className="font-mono text-[#122654]">{formatPence(t.expected ?? 0n)}</strong>
@@ -620,7 +1369,7 @@ export function AssetsSchedule({ data, result, locked, save, filesFor, attachTo,
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#FF7A66]" />
             <span className="font-bold text-xs text-[#122654]">
-              Proposed Additions from Invoice Platform (INT-01)
+              Proposed Additions from Invoice Platform
             </span>
           </div>
           <span className="text-[10px] text-[#4A5878]">
@@ -678,7 +1427,7 @@ export function AssetsSchedule({ data, result, locked, save, filesFor, attachTo,
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#B8432F]" />
             <span className="font-bold text-xs text-[#122654]">
-              Capital vs Revenue Detector on Expense Accounts (AIX-02)
+              Capital vs Revenue Detector on Expense Accounts
             </span>
           </div>
           <button
@@ -750,12 +1499,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
   };
   const colTotal = (key: string) => lines.reduce<bigint>((acc, l) => acc + asPence(l[`${key}_p`]), 0n);
   const totalCheck = result.checks.find((c) => c.id === 'total_tb');
-  const isDebtors = t.ref === 'C-10';
-  const isCreditors = t.ref === 'K-10';
-  const isPrepayments = t.ref === 'C-20';
   const isAccruals = t.ref === 'K-20';
-  const isStock = t.ref === 'D-10';
-  const isShareCapital = t.ref === 'E-10';
   const isCorpTax = t.ref === 'T-10';
   const isRelatedParties = t.ref === 'R-10';
   const isSuspense = t.ref === 'S-10';
@@ -767,7 +1511,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
         <div className={`p-4 rounded-[12px] border ${result.totals.total === 0n ? 'bg-[#E6F4EF] border-[#0B6B52]/30' : 'bg-[#FFF1EE] border-[#FF7A66]'}`}>
           <div className="flex items-center gap-2 font-bold text-xs text-[#122654]">
             <ShieldAlert className={`w-4 h-4 ${result.totals.total === 0n ? 'text-[#0B6B52]' : 'text-[#B42318]'}`} />
-            REC-16: Suspense, clearing and control accounts must be zero (£0.00 zero tolerance)
+            Suspense, clearing and control accounts must be zero (£0.00 zero tolerance)
           </div>
           <p className="text-[11px] text-[#4A5878] mt-1">
             Current balance: <strong>{formatPence(result.totals.total ?? 0n)}</strong>. Any non-nil balance blocks partner approval until cleared by journal or explained with a manager-approved comment.
@@ -788,107 +1532,13 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
         </div>
       )}
 
-      {/* C-10 Aged Debtors & Recoverability Review (REC-07) */}
-      {isDebtors && (
-        <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-[#122654] flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" />
-              REC-07: Aged Debtors &amp; Post-Period Receipts Analysis
-            </span>
-            <span className="text-[10px] text-[#4A5878]">AI checked bank receipts in the 90 days after period end</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-            <div className="p-2 bg-white rounded-[8px] border border-[#E3E7EF]">
-              <div className="text-[10px] text-[#4A5878]">Current</div>
-              <div className="font-mono font-bold text-[#122654]">{formatPence((result.totals.total ?? 0n) * 60n / 100n)}</div>
-            </div>
-            <div className="p-2 bg-white rounded-[8px] border border-[#E3E7EF]">
-              <div className="text-[10px] text-[#4A5878]">30–60 Days</div>
-              <div className="font-mono font-bold text-[#122654]">{formatPence((result.totals.total ?? 0n) * 25n / 100n)}</div>
-            </div>
-            <div className="p-2 bg-white rounded-[8px] border border-[#E3E7EF]">
-              <div className="text-[10px] text-[#4A5878]">60–90 Days</div>
-              <div className="font-mono font-bold text-[#122654]">{formatPence((result.totals.total ?? 0n) * 10n / 100n)}</div>
-            </div>
-            <div className="p-2 bg-[#FFF4DB] rounded-[8px] border border-[#C58B00]/40">
-              <div className="text-[10px] text-[#805B00] font-bold">90+ Days (Review)</div>
-              <div className="font-mono font-bold text-[#805B00]">{formatPence((result.totals.total ?? 0n) * 5n / 100n)}</div>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold text-[#4A5878]">AI suggestion:</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F4EF] text-[#0B6B52]">
-                ✓ All 90+ day balances have matching post-year-end receipts in bank feed
-              </span>
-            </div>
-            {!locked && (
-              <button
-                type="button"
-                onClick={async () => {
-                  await fetch('/api/v1/schedules/C-10/propose-journals', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'bad_debt', schedule_data: live() }),
-                  });
-                  alert('Bad debt provision journal proposed for review (JNL-01).');
-                }}
-                className="px-2.5 py-1 text-[11px] font-bold bg-[#122654] text-white rounded-[6px] hover:bg-[#1D4E89] cursor-pointer"
-              >
-                Propose Bad Debt Provision
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* K-10 Trade Creditors & Unrecorded Liabilities (REC-08) */}
-      {isCreditors && (
-        <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-[#122654] flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" />
-              REC-08: Unrecorded Liabilities Search (60-day Post Period Scan)
-            </span>
-            <span className="text-[10px] text-[#4A5878]">Scanned post-year-end payments for prior period services</span>
-          </div>
-          
-          <div className="p-3 bg-white rounded-[8px] border border-[#E3E7EF] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="font-bold text-[#122654]">British Gas Commercial — Electricity (Aug–Sep 2026)</div>
-              <div className="text-[10px] text-[#4A5878]">Paid 18 Oct 2026 • Amount: £450.00 • Relates to pre-year-end utilities</div>
-            </div>
-            {!locked && (
-              <button
-                type="button"
-                onClick={async () => {
-                  await fetch('/api/v1/schedules/K-10/propose-journals', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      action: 'unrecorded_liability',
-                      item: { description: 'British Gas Commercial - Electricity (Aug-Sep 2026)', amount_p: '45000' },
-                    }),
-                  });
-                  alert('Added to Accruals Schedule (K-20 / REC-09) and proposed accrual journal.');
-                }}
-                className="px-2.5 py-1 bg-[#122654] hover:bg-[#1D4E89] text-white font-bold rounded-[6px] text-xs transition-colors cursor-pointer shrink-0"
-              >
-                Accrue to REC-09
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* C-20 / K-20 Prepayments & Accruals Auto-reversing Journal (REC-09) */}
-      {(isPrepayments || isAccruals) && (
+      {/* K-20 Accruals auto-reversing journal (REC-09) */}
+      {isAccruals && (
         <div className="p-3.5 rounded-[12px] bg-[#EFF6FF] border border-[#93C5FD] text-xs flex items-center justify-between">
           <div>
             <div className="font-bold text-[#1E40AF] flex items-center gap-1.5">
               <RefreshCw className="w-3.5 h-3.5" />
-              REC-09: Auto-reversing Next Period Journal (JNL-04)
+              Auto-reversing Next Period Journal
             </div>
             <div className="text-[11px] text-[#1E3A8A] mt-0.5">
               Accepted items will automatically create a reversing journal on the first day of the next period.
@@ -903,7 +1553,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    action: isPrepayments ? 'prepayments' : 'accruals',
+                    action: 'accruals',
                     schedule_data: live(),
                   }),
                 });
@@ -916,43 +1566,11 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
         </div>
       )}
 
-      {/* E-10 Share Capital & Distributable Reserves Check (REC-12) */}
-      {isShareCapital && (
-        <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs flex flex-col gap-2">
-          <div className="flex items-center justify-between font-bold text-[#122654]">
-            <span className="flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-[#122654]" />
-              REC-12: Distributable Reserves & Dividend Legality Check
-            </span>
-            <span className="text-[10px] text-[#0B6B52] bg-[#E6F4EF] px-2 py-0.5 rounded-full">✓ Dividends Lawful</span>
-          </div>
-          <div className="text-[11px] text-[#4A5878]">
-            Accumulated profit and loss reserve is sufficient to cover all interim dividends declared during the period.
-          </div>
-        </div>
-      )}
-
-      {/* D-10 Stock & WIP Margin Check (REC-14) */}
-      {isStock && (
-        <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs flex flex-col gap-2">
-          <div className="flex items-center justify-between font-bold text-[#122654]">
-            <span className="flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-[#122654]" />
-              REC-14: Stock Count & Gross Margin Test
-            </span>
-            <span className="text-[10px] text-[#0B6B52] bg-[#E6F4EF] px-2 py-0.5 rounded-full">✓ Margin Consistent</span>
-          </div>
-          <div className="text-[11px] text-[#4A5878]">
-            Gross margin of 38.4% is within 1.2% of the prior-year benchmark (37.2%). No unusual inventory write-downs detected.
-          </div>
-        </div>
-      )}
-
       {/* T-10 Corporation Tax Provision (REC-13) */}
       {isCorpTax && (
         <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs flex flex-col gap-2">
           <div className="flex items-center justify-between font-bold text-[#122654]">
-            <span>REC-13: Corporation Tax Charge Source</span>
+            <span>Corporation Tax Charge Source</span>
             <div className="flex items-center gap-1 text-[11px]">
               <span className="px-2 py-0.5 rounded bg-[#122654] text-white font-bold">Estimate</span>
               <span className="px-2 py-0.5 rounded bg-white text-[#4A5878] border border-[#D3DCEE]">Tax Software</span>
@@ -969,7 +1587,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
       {isRelatedParties && (
         <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] text-xs flex flex-col gap-2">
           <div className="flex items-center justify-between font-bold text-[#122654]">
-            <span>REC-15: Related Party Transactions Register</span>
+            <span>Related Party Transactions Register</span>
             <span className="text-[10px] text-[#4A5878]">FRS 102 Section 1A Disclosures</span>
           </div>
           <div className="text-[11px] text-[#4A5878]">
@@ -1095,7 +1713,7 @@ export function VatSchedule({ data, result, locked, save, filesFor, attachTo, pr
       <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#E3E7EF] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <div>
-            <span className="text-[10px] uppercase font-bold text-[#4A5878] block">VAT Scheme (REC-06)</span>
+            <span className="text-[10px] uppercase font-bold text-[#4A5878] block">VAT Scheme</span>
             <select
               disabled={locked}
               value={data.scheme || 'standard'}
@@ -1782,7 +2400,7 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
       <div className="flex flex-col gap-4 text-xs">
         <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] flex items-center justify-between">
           <div>
-            <div className="font-bold text-[#122654]">REC-13: FRS 102 Timing Differences (Accelerated Capital Allowances)</div>
+            <div className="font-bold text-[#122654]">FRS 102 Timing Differences (Accelerated Capital Allowances)</div>
             <div className="text-[11px] text-[#4A5878] mt-0.5">
               Computes deferred tax provision based on timing difference between fixed asset NBV and tax written-down values.
             </div>
@@ -1908,7 +2526,7 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
     <div className="flex flex-col gap-4 text-xs">
       <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] flex items-center justify-between">
         <div>
-          <div className="font-bold text-[#122654]">REC-13: Corporation Tax Provision Bridge</div>
+          <div className="font-bold text-[#122654]">Corporation Tax Provision Bridge</div>
           <div className="text-[11px] text-[#4A5878] mt-0.5">
             Reconciles prior-year liability, HMRC tax payments, prior-year adjustments, and current-year tax charge.
           </div>

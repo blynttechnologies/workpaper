@@ -180,7 +180,7 @@ export const PeriodSelector: React.FC = () => {
               <h3 className="text-base font-bold text-[#122654]">Unlock Engagement Period</h3>
             </div>
             <p className="text-xs text-[#4A5878] leading-relaxed mb-4">
-              Unlocking resets the partner approval. Only a partner or admin can unlock, and the reason is kept in the activity log (ENG-06).
+              Unlocking resets the partner approval. Only a partner or admin can unlock, and the reason is kept in the activity log.
             </p>
             <div className="mb-4">
               <label htmlFor="unlock-reason" className="block text-xs font-semibold text-[#122654] mb-1">

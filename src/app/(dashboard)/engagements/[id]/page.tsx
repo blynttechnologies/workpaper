@@ -213,7 +213,7 @@ export default function EngagementOverviewPage() {
             icon={<Scale className="w-4 h-4 text-[#1D4E89]" />}
             onClick={handleOpenOpeningCheck}
           >
-            Opening check (ENG-04)
+            Opening check
           </Button>
           <Button
             variant="outline"
@@ -221,7 +221,7 @@ export default function EngagementOverviewPage() {
             icon={<RefreshCw className="w-4 h-4 text-[#1D4E89]" />}
             onClick={handleOpenRollForward}
           >
-            Roll forward (ENG-03)
+            Roll forward
           </Button>
           <Button
             variant="outline"
@@ -229,7 +229,7 @@ export default function EngagementOverviewPage() {
             icon={<FileUp className="w-4 h-4 text-[#1D4E89]" />}
             onClick={() => setImportPyModal(true)}
           >
-            Import PY PDF (ENG-07)
+            Import PY PDF
           </Button>
         </div>
       </div>
@@ -463,7 +463,7 @@ export default function EngagementOverviewPage() {
               <div className="flex items-center gap-2">
                 <Scale className="w-5 h-5 text-[#1D4E89]" />
                 <h3 className="text-base font-bold text-[#122654]">
-                  Opening Balance Check against Ledger (ENG-04)
+                  Opening Balance Check against Ledger
                 </h3>
               </div>
               <button
@@ -567,7 +567,7 @@ export default function EngagementOverviewPage() {
               <div className="flex items-center gap-2">
                 <RefreshCw className="w-5 h-5 text-[#1D4E89]" />
                 <h3 className="text-base font-bold text-[#122654]">
-                  Roll Forward to Next Period (ENG-03)
+                  Roll Forward to Next Period
                 </h3>
               </div>
               <button
@@ -608,7 +608,7 @@ export default function EngagementOverviewPage() {
                 </div>
 
                 <div className="p-3 bg-[#E6F4EF] rounded-xl border border-[#0B6B52]/30 text-[11px] text-[#0B6B52]">
-                  ✓ Permanent documents rolled forward (DOC-02).
+                  ✓ Permanent documents rolled forward.
                   <br />
                   ✓ Blank non-rolling schedules created.
                   <br />
@@ -642,7 +642,7 @@ export default function EngagementOverviewPage() {
               <div className="flex items-center gap-2">
                 <FileUp className="w-5 h-5 text-[#1D4E89]" />
                 <h3 className="text-base font-bold text-[#122654]">
-                  Import Prior-Year PDF Accounts (ENG-07)
+                  Import Prior-Year PDF Accounts
                 </h3>
               </div>
               <button

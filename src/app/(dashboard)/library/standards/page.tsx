@@ -29,7 +29,7 @@ export default function StandardsLibraryPage() {
       <div className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold text-[#122654]">Accounting Standards Library (STD-01)</h1>
+            <h1 className="text-xl font-bold text-[#122654]">Accounting Standards Library</h1>
             <span className="text-xs bg-[#122654] text-white px-2.5 py-1 rounded-full font-mono font-semibold">
               UK GAAP
             </span>
@@ -44,7 +44,7 @@ export default function StandardsLibraryPage() {
       <div className="bg-[#FFF1EE] border border-[#FF7A66]/40 p-4 rounded-xl flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-[#FF7A66] shrink-0 mt-0.5" />
         <div className="text-xs text-[#A23A27] leading-relaxed">
-          <strong>FRS 102 Updated (2024 Amendments):</strong> Leases starting on or after 1 January 2026 now transition to the on-balance-sheet Right-of-Use model in schedule REC-04. Micro-entities under FRS 105 continue under commitment disclosure rules.
+          <strong>FRS 102 Updated (2024 Amendments):</strong> Leases starting on or after 1 January 2026 now transition to the on-balance-sheet Right-of-Use model on the leases schedule. Micro-entities under FRS 105 continue under commitment disclosure rules.
         </div>
       </div>
 

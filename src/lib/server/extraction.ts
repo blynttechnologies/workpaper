@@ -503,7 +503,9 @@ export class AiExtractionService {
     firmId: string,
     actor: { id: string; name: string; role: any },
     attachmentId: string,
-    targetWorkpaperId: string
+    targetWorkpaperId: string,
+    /** Bank and cash: the account row the statement belongs to. */
+    accountId?: string
   ): { workpaper: any; filledFields: string[] } {
     const attachment = db.attachments.find((a) => a.id === attachmentId);
     if (!attachment) throw new Error('Attachment not found');
@@ -547,7 +549,22 @@ export class AiExtractionService {
     if (wp.ref === 'B-10' || wp.ref.startsWith('B-')) {
       // Bank Reconciliation
       const stmtBal = extracted.statement_balance_p?.value;
-      if (stmtBal !== undefined) {
+      const account = Array.isArray(wpData.accounts) ? wpData.accounts.find((a: any) => a.id === accountId) : undefined;
+      if (account) {
+        // Only fill a blank balance: a figure someone entered is never overwritten by the AI
+        if (stmtBal !== undefined && !account.statement_p) {
+          wpData.accounts = wpData.accounts.map((a: any) => (a.id === account.id ? { ...a, statement_p: String(stmtBal), source: 'upload' } : a));
+          addGateItem(
+            `accounts.${account.id}.statement_p`,
+            `${account.code === '*' ? account.name : `${account.code} ${account.name}`} closing balance`,
+            stmtBal,
+            extracted.statement_balance_p.confidence || 95,
+            extracted.statement_balance_p.page,
+            extracted.statement_balance_p.clause,
+            extracted.statement_balance_p.reason
+          );
+        }
+      } else if (stmtBal !== undefined) {
         wpData.statement_p = String(stmtBal);
         wpData.statement_source = 'Upload';
         wpData.statement_date = extracted.statement_date?.value || '2026-09-30';
