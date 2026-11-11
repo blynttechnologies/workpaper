@@ -66,6 +66,9 @@ export function signOff(actor: Actor, wpId: string, action: Action): Signoff {
   if (action === 'prepare') {
     const pending = db.procedures.filter((p) => p.workpaper_id === wp.id && !p.done_at && !p.not_applicable_reason).length;
     if (pending) throw new ServiceError(`${pending} procedure(s) still to do.`, 409);
+    // ANL-04: warnings and errors from the schedule review are answered before the schedule is prepared
+    const findings = db.ai_review_findings.filter((f) => f.workpaper_id === wp.id && f.status === 'open' && f.severity !== 'info').length;
+    if (findings) throw new ServiceError(`${findings} review finding(s) must be fixed or dismissed first.`, 409);
     if (Number(wp.data_json.values_to_confirm_count || 0) > 0) throw new ServiceError('Confirm the AI values first (DAT-08).', 409);
     // Reconciled, or a paper with no difference to clear (checklists), or not applicable
     const hasDifference = evaluatePaper(wp)?.totals.difference !== undefined;

@@ -1,424 +1,189 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  TrendingUp,
-  Sparkles,
-  Scale,
-  ShieldAlert,
-  CheckCircle2,
-} from 'lucide-react';
-import { formatPence } from '@/lib/money';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { db } from '@/lib/server/db';
+import { getActor } from '@/lib/session';
+import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
+import { bsAnalysis, clientQueries, plAnalysis, postBalanceSheetEvents, setCommentary, type MovementRow } from '@/lib/analysis';
+import { budgetVsActual } from '@/lib/management';
+import { btnSecondary, card, th, Tiles } from '@/components/workpaper/kit';
+
+/** Step 13: analysis against last year (ANL-01, ANL-02), commentary (ANL-03), client queries (AIX-03) and events after the year end (AIX-07). */
+
+const signed = (p: bigint) => formatPence(p, { accountingFormat: true });
+type Tab = 'pl' | 'bs' | 'queries' | 'events';
 
 export default function AnalysisPage() {
+  const engagementId = (useParams()?.id as string) || '';
+  const [tab, setTab] = useState<Tab>('pl');
+  const [compare, setCompare] = useState<'prior' | 'budget'>('prior');
+  const [, redraw] = useState(0);
+  const eng = db.engagements.find((e) => e.id === engagementId);
+  if (!eng) return <div className={card}>Engagement not found.</div>;
 
-  const [activeTab, setActiveTab] = useState<'pnl' | 'balance_sheet' | 'unusual'>('pnl');
-  const [comparisonMode, setComparisonMode] = useState<'py' | 'budget' | 'both'>('py');
+  const locked = eng.status === 'locked';
+  const pl = plAnalysis(engagementId);
+  const bs = bsAnalysis(engagementId);
+  const queries = clientQueries(engagementId);
+  const events = postBalanceSheetEvents(engagementId);
+  const budget = budgetVsActual(engagementId);
+  const save = (key: string, change: Parameters<typeof setCommentary>[3]) => {
+    setCommentary(engagementId, key, getActor(), change);
+    redraw((n) => n + 1);
+  };
 
-  // P&L Lines with AI explanations (ANL-01)
-  const pnlLines = [
-    {
-      code: '100',
-      name: 'Wholesale Commercial UK Sales',
-      currentPence: 620000000n, // £6,200,000.00
-      priorPence: 540000000n, // £5,400,000.00
-      variancePct: '+14.8%',
-      variancePence: 80000000n,
-      aiExplanation: 'Sales up £800k (+14.8%): Driven by 3 new major distribution contracts signed in Q2 (Blynt Ledger contracts #1042, #1089).',
-      flagged: true,
-      comment: 'Agrees to order book expansion.',
-      visibility: 'client_facing' as const,
-    },
-    {
-      code: '210',
-      name: 'Direct Component Materials',
-      currentPence: 380000000n, // £3,800,000.00
-      priorPence: 320000000n, // £3,200,000.00
-      variancePct: '+18.8%',
-      variancePence: 60000000n,
-      aiExplanation: 'Materials expense up £600k: Commodity price increases in raw aluminium (+6.2%) and volume growth.',
-      flagged: true,
-      comment: 'Price surcharges were passed to customers starting Q3.',
-      visibility: 'client_facing' as const,
-    },
-    {
-      code: '400',
-      name: 'London Office Rent & Rates',
-      currentPence: 30000000n, // £300,000.00
-      priorPence: 23200000n, // £232,000.00
-      variancePct: '+29.3%',
-      variancePence: 6800000n,
-      aiExplanation: 'Rent up £68,000 (+29.3%): New commercial lease at Unit 4 from March, 8 months at £8,500/mo (evidenced on the leases paper).',
-      flagged: true,
-      comment: 'Expanded storage facility footprint.',
-      visibility: 'internal' as const,
-    },
-    {
-      code: '410',
-      name: 'Gas and Electricity Utilities',
-      currentPence: 4120000n,
-      priorPence: 4050000n,
-      variancePct: '+1.7%',
-      variancePence: 70000n,
-      flagged: false,
-      comment: '',
-      visibility: 'internal' as const,
-    },
-    {
-      code: '492',
-      name: 'Depreciation Charge on Tangibles',
-      currentPence: 2700000n,
-      priorPence: 2450000n,
-      variancePct: '+10.2%',
-      variancePence: 250000n,
-      aiExplanation: 'Depreciation up £2,500: Additional plant machinery additions £45,000 depreciated straight-line at 20%.',
-      flagged: true,
-      comment: '',
-      visibility: 'internal' as const,
-    },
-  ];
+  const Movements = ({ rows }: { rows: MovementRow[] }) => (
+    <div className="bg-white border border-[#E3E7EF] rounded-xl divide-y divide-[#E3E7EF]">
+      {rows.length === 0 && <p className="p-4 text-xs text-[#4A5878]">No figures yet. Import the trial balance and confirm the mapping.</p>}
+      {rows.map((r) => {
+        const c = eng.commentary?.[r.key];
+        return (
+          <div key={r.key} className="p-4 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-bold text-[#122654]">{r.label}</span>
+              <span className="font-mono text-[#122654]">
+                {signed(r.amount)}
+                {r.prior !== null && <span className="text-[#4A5878]"> · last year {signed(r.prior)}</span>}
+                {r.movement !== null && r.movement !== 0n && (
+                  <span className={r.flagged ? 'font-bold text-[#B8432F]' : 'text-[#4A5878]'}> · {r.movement > 0n ? '+' : '−'}{formatPence(r.movement < 0n ? -r.movement : r.movement)}{r.percent !== null ? ` (${r.percent.toFixed(1)}%)` : ''}</span>
+                )}
+              </span>
+            </div>
+            {r.flagged && (
+              <p className={`mt-2 p-2 rounded-lg ${r.explanation ? 'bg-[#F5F8FD] text-[#122654]' : 'bg-[#FFF4DB] text-[#6B4700]'}`}>
+                {r.explanation ? <><strong>Drafted explanation:</strong> {r.explanation}</> : <><strong>Needs explanation.</strong> The ledger does not show why this moved; it is on the client query list until you comment.</>}
+                {r.explanation && !c?.text && !locked && (
+                  <button type="button" className="ml-2 underline font-bold" onClick={() => save(r.key, { text: r.explanation!, ai_text: r.explanation! })}>Use as my comment</button>
+                )}
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                aria-label={`Your comment on ${r.label}`}
+                key={c?.text ?? ''}
+                defaultValue={c?.text ?? ''}
+                disabled={locked}
+                placeholder="Your comment"
+                onBlur={(e) => e.target.value !== (c?.text ?? '') && save(r.key, { text: e.target.value })}
+                className="flex-1 min-w-48 px-3 py-1.5 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654]"
+              />
+              {c?.ai_text && c.text !== c.ai_text && <span className="text-[10px] font-bold uppercase text-[#4A5878]">Edited</span>}
+              <select
+                aria-label={`Who sees the comment on ${r.label}`}
+                value={c?.visibility ?? 'internal'}
+                disabled={locked || !c?.text.trim()}
+                onChange={(e) => save(r.key, { visibility: e.target.value as 'internal' | 'client' })}
+                className="px-2 py-1.5 border border-[#D3DCEE] rounded-lg bg-white text-[#122654]"
+              >
+                <option value="internal">Internal</option>
+                <option value="client">Client-facing</option>
+              </select>
+              {(c?.history.length ?? 0) > 1 && (
+                <details className="basis-full text-[#4A5878]">
+                  <summary className="cursor-pointer">History ({c!.history.length})</summary>
+                  {c!.ai_text && <p className="mt-1">Drafted: {c!.ai_text}</p>}
+                  {c!.history.map((h) => <p key={h.at} className="mt-1">{ukDate(h.at)} {h.by}: {h.text}</p>)}
+                </details>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
-  // Balance sheet lines (ANL-02)
-  const bsLines = [
-    { name: 'Fixed Assets (NBV)', current: '£2,700,000.00', prior: '£2,450,000.00', movement: '+£250,000.00', explanation: 'Additions £270k less depreciation £20k' },
-    { name: 'Current Assets - Stock', current: '£1,824,000.00', prior: '£1,650,000.00', movement: '+£174,000.00', explanation: 'Stock count agrees to valuation certificate' },
-    { name: 'Current Assets - Debtors', current: '£2,364,500.00', prior: '£1,950,000.00', movement: '+£414,500.00', explanation: 'Debtor days increased from 42 to 46 days' },
-    { name: 'Cash and Bank Equivalents', current: '£1,305,350.00', prior: '£940,000.00', movement: '+£365,350.00', explanation: 'Net cash generation from trading activities' },
-    { name: 'Current Liabilities - Creditors', current: '£1,684,500.00', prior: '£1,420,000.00', movement: '+£264,500.00', explanation: 'Supplier payment terms maintained at 45 days' },
-    { name: 'Net Assets / Total Equity', current: '£6,509,350.00', prior: '£5,570,000.00', movement: '+£939,350.00', explanation: 'Retained profit for the financial year' },
-  ];
-
-  // Unusual Transactions (AIX-04)
-  const unusualTransactions = [
-    {
-      id: 'tx_01',
-      date: '2026-08-15',
-      contact: 'Amazon UK',
-      amount: '£4,999.00',
-      reason: 'Round-sum payment just below £5,000 authorization threshold. Possible personal electronics purchase.',
-      severity: 'warning',
-    },
-    {
-      id: 'tx_02',
-      date: '2026-09-27',
-      contact: 'Apex Courier Express',
-      amount: '£1,250.00',
-      reason: 'Postings on Sunday 23:45 out-of-pattern spending with duplicate amount in same week.',
-      severity: 'info',
-    },
-    {
-      id: 'tx_03',
-      date: '2026-09-30',
-      contact: 'Consulting Partners Ltd',
-      amount: '£42,000.00',
-      reason: 'VAT claimed on supplier invoice where VAT number is not verified on HMRC VIES database.',
-      severity: 'error',
-    },
-  ];
+  const tabs: [Tab, string, number?][] = [['pl', 'Profit and loss'], ['bs', 'Balance sheet'], ['queries', 'Client queries', queries.length], ['events', 'After the year end', events.length]];
+  const ratioText = (v: number | null, unit = '%') => (v === null ? '–' : `${unit === 'x' ? v.toFixed(2) : unit === '%' ? v.toFixed(1) : v}${unit}`);
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-200">
-      {/* Header */}
-      <div className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold text-[#122654]">AI Financial Analysis &amp; Schedule Review (ANL)</h1>
-            <span className="text-xs bg-[#FFF1EE] text-[#A23A27] px-2.5 py-1 rounded-full font-mono font-bold flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-[#FF7A66]" /> AI Explanations Active
-            </span>
-          </div>
-          <p className="text-xs text-[#4A5878] mt-1">
-            Automated transaction-level variance explanations, liquidity ratios, and going concern checks.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select aria-label="Comparison"
-            value={comparisonMode}
-            onChange={(e) => setComparisonMode(e.target.value as any)}
-            className="text-xs bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg px-3 py-1.5 text-[#122654] font-medium outline-none"
-          >
-            <option value="py">Compare: Prior Year (FY25)</option>
-            <option value="budget">Compare: Budget (FY26)</option>
-            <option value="both">Compare: Prior Year &amp; Budget</option>
-          </select>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div className="bg-white border border-[#E3E7EF] rounded-xl p-5">
+        <h1 className="text-xl font-bold text-[#122654]">Analysis</h1>
+        <p className="text-xs text-[#4A5878] mt-1">
+          This year against last year, from the confirmed trial balance and journals. A line is flagged when it moves by more than 10% and more than the practice review threshold.
+        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#E3E7EF] pb-1 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab('pnl')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 whitespace-nowrap ${
-            activeTab === 'pnl'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4 text-[#1D4E89]" />
-          <span>Profit &amp; Loss Analysis</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('balance_sheet')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 whitespace-nowrap ${
-            activeTab === 'balance_sheet'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <Scale className="w-4 h-4 text-[#1D4E89]" />
-          <span>Balance Sheet &amp; Ratios</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('unusual')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 whitespace-nowrap ${
-            activeTab === 'unusual'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4 text-amber-600" />
-          <span>Unusual Transactions</span>
-          <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-mono font-bold">
-            {unusualTransactions.length}
-          </span>
-        </button>
+      <div className="flex gap-2 border-b border-[#E3E7EF] overflow-x-auto" role="tablist">
+        {tabs.map(([k, label, count]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${tab === k ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}>
+            {label}{count ? ` (${count})` : ''}
+          </button>
+        ))}
       </div>
 
-      {/* TAB 1: P&L Analysis */}
-      {activeTab === 'pnl' && (
-        <div className="flex flex-col gap-5">
-          {/* Ratio Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-[#E3E7EF] shadow-2xs">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Gross Margin</span>
-              <div className="text-xl font-bold font-mono text-[#0B6B52] mt-1">38.7%</div>
-              <span className="text-[10px] text-[#4A5878] font-medium">-2.1% vs FY25 (40.8%)</span>
+      {(tab === 'pl' || tab === 'bs') && !pl.hasPrior && (
+        <p role="status" className="p-3 rounded-[10px] bg-[#FFF4DB] text-xs text-[#6B4700]">There are no figures for last year, so movements cannot be shown. Roll forward from last year or import the prior year.</p>
+      )}
+
+      {tab === 'pl' && (
+        <>
+          <Tiles items={pl.ratios.map((r) => ({ label: r.label, value: ratioText(r.value) }))} />
+          {budget && (
+            <div className="flex gap-2 text-xs">
+              <button type="button" className={btnSecondary} aria-pressed={compare === 'prior'} onClick={() => setCompare('prior')}>Against last year</button>
+              <button type="button" className={btnSecondary} aria-pressed={compare === 'budget'} onClick={() => setCompare('budget')}>Against budget: {budget.name}</button>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-[#E3E7EF] shadow-2xs">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Operating Margin</span>
-              <div className="text-xl font-bold font-mono text-[#122654] mt-1">18.4%</div>
-              <span className="text-[10px] text-emerald-700 font-medium">+1.3% vs FY25 (17.1%)</span>
+          )}
+          {compare === 'budget' && budget ? (
+            <div className="bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="text-left"><th className={th}>Line</th><th className={`${th} text-right`}>Actual</th><th className={`${th} text-right`}>Budget</th><th className={`${th} text-right`}>Variance</th><th className={`${th} text-right`}>%</th></tr></thead>
+                <tbody>
+                  {budget.rows.map((r) => (
+                    <tr key={r.label} className="border-t border-[#E3E7EF]"><td className="p-2">{r.label}</td><td className="p-2 text-right font-mono">{signed(r.actual)}</td><td className="p-2 text-right font-mono">{signed(r.budget)}</td><td className="p-2 text-right font-mono">{signed(r.variance)}</td><td className="p-2 text-right font-mono">{r.percent === null ? '–' : `${r.percent.toFixed(1)}%`}</td></tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <div className="bg-white p-4 rounded-xl border border-[#E3E7EF] shadow-2xs">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Net Margin</span>
-              <div className="text-xl font-bold font-mono text-[#122654] mt-1">15.1%</div>
-              <span className="text-[10px] text-emerald-700 font-medium">+0.8% vs FY25</span>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-[#E3E7EF] shadow-2xs">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Staff Cost to Turnover</span>
-              <div className="text-xl font-bold font-mono text-[#122654] mt-1">22.4%</div>
-              <span className="text-[10px] text-[#4A5878] font-medium">Stable vs 22.1% prior</span>
+          ) : <Movements rows={pl.rows} />}
+        </>
+      )}
+
+      {tab === 'bs' && (
+        <>
+          <div className={`p-4 rounded-xl border text-xs flex gap-3 ${bs.goingConcern.length ? 'bg-[#FDECEA] border-[#B42318]/30 text-[#B42318]' : 'bg-[#E6F4EF] border-[#0B6B52]/30 text-[#0B6B52]'}`}>
+            {bs.goingConcern.length ? <AlertTriangle className="w-5 h-5 shrink-0" /> : <CheckCircle2 className="w-5 h-5 shrink-0" />}
+            <div>
+              <h2 className="font-bold">Going concern indicators</h2>
+              {bs.goingConcern.length ? <ul className="list-disc pl-4 mt-1">{bs.goingConcern.map((g) => <li key={g}>{g}</li>)}</ul> : <p className="mt-1">None triggered: net assets, net current assets, profit and cash against borrowing and tax were checked.</p>}
             </div>
           </div>
+          <Tiles items={bs.ratios.map((r) => ({ label: r.label, value: ratioText(r.value, r.unit) }))} />
+          <Movements rows={bs.rows} />
+        </>
+      )}
 
-          {/* Variance Grid with AI Explanation and Manual Commentary */}
-          <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs overflow-hidden">
-            <div className="p-4 bg-[#F5F8FD] border-b border-[#E3E7EF] flex items-center justify-between">
-              <span className="text-xs font-bold text-[#122654]">
-                Lines Flagged for Review (Movement &gt; 10% and &gt; £1,000)
-              </span>
-              <span className="text-[11px] text-[#4A5878]">
-                Threshold: ±10% / £1,000 (practice default)
-              </span>
+      {tab === 'queries' && (
+        <div className="bg-white border border-[#E3E7EF] rounded-xl divide-y divide-[#E3E7EF]">
+          {queries.length === 0 && <p className="p-4 text-xs text-[#4A5878]">Nothing to ask the client. Every flagged movement is explained and no evidence is missing.</p>}
+          {queries.map((q) => (
+            <div key={q.id} className="p-4 text-xs flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[#122654]">{q.text}</span>
+              <Link href={q.href} className="font-bold text-[#B8432F] hover:underline">{q.source}</Link>
             </div>
-
-            <div className="divide-y divide-[#E3E7EF]">
-              {pnlLines.map((line) => (
-                <div key={line.code} className="p-4 hover:bg-gray-50/50 transition-colors">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-xs text-[#1D4E89] bg-[#EAF5FC] px-1.5 py-0.5 rounded">
-                        {line.code}
-                      </span>
-                      <span className="font-bold text-xs text-[#122654]">{line.name}</span>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs font-mono">
-                      <div>
-                        <span className="text-[10px] text-[#7E8DA6] block">Current FY26</span>
-                        <span className="font-bold text-[#122654]">{formatPence(line.currentPence)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[#7E8DA6] block">Prior FY25</span>
-                        <span className="text-[#4A5878]">{formatPence(line.priorPence)}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-[#7E8DA6] block">Variance</span>
-                        <span
-                          className={`font-bold ${
-                            line.variancePence > 0n ? 'text-emerald-700' : 'text-red-600'
-                          }`}
-                        >
-                          {line.variancePct} ({formatPence(line.variancePence)})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Explanation Strip (ANL-01) */}
-                  {line.aiExplanation && (
-                    <div className="mt-3 bg-[#FFF1EE]/70 border border-[#FF7A66]/30 rounded-xl p-3 flex items-start gap-2.5">
-                      <Sparkles className="w-4 h-4 text-[#FF7A66] shrink-0 mt-0.5" />
-                      <div className="flex-1 text-xs text-[#A23A27] leading-relaxed">
-                        <strong>AI Commentary:</strong> {line.aiExplanation}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Manual Comment Box (ANL-03) */}
-                  <div className="mt-3 flex items-center gap-3">
-                    <input aria-label="Add preparer explanation or variance note"
-                      type="text"
-                      defaultValue={line.comment}
-                      placeholder="Add preparer explanation or variance note..."
-                      className="flex-1 text-xs px-3 py-1.5 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654] outline-none"
-                    />
-                    <span className="text-[10px] font-bold uppercase text-[#7E8DA6] bg-gray-100 px-2 py-1 rounded">
-                      {line.visibility === 'client_facing' ? 'Client Report Facing' : 'Internal WP Only'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
-      {/* TAB 2: Balance Sheet & Going Concern (ANL-02) */}
-      {activeTab === 'balance_sheet' && (
-        <div className="flex flex-col gap-5">
-          {/* Going Concern Indicators Alert Card */}
-          <div className="bg-white border-2 border-emerald-500/40 rounded-xl p-5 shadow-xs flex items-start gap-3.5">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-bold text-[#122654]">Going Concern Health Check</h3>
-              <p className="text-xs text-[#4A5878] mt-1 leading-relaxed">
-                Zero triggers detected: Positive net current assets (£3,809,350), profitable in FY25 &amp; FY26, HMRC payments up to date, and cash exceeds short-term obligations.
-              </p>
-            </div>
-          </div>
-
-          {/* Key Balance Sheet Ratios Panel */}
-          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-            <div className="bg-white p-3.5 rounded-xl border border-[#E3E7EF] text-center">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Current Ratio</span>
-              <div className="text-lg font-bold font-mono text-[#0B6B52] mt-1">3.26x</div>
-              <span className="text-[9px] text-[#7E8DA6]">Healthy &gt; 1.5x</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-[#E3E7EF] text-center">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Quick Ratio</span>
-              <div className="text-lg font-bold font-mono text-[#0B6B52] mt-1">2.18x</div>
-              <span className="text-[9px] text-[#7E8DA6]">Excl. stock &gt; 1.0x</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-[#E3E7EF] text-center">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Debtor Days</span>
-              <div className="text-lg font-bold font-mono text-[#122654] mt-1">46 days</div>
-              <span className="text-[9px] text-amber-600">+4 days vs FY25</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-[#E3E7EF] text-center">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Creditor Days</span>
-              <div className="text-lg font-bold font-mono text-[#122654] mt-1">45 days</div>
-              <span className="text-[9px] text-[#7E8DA6]">Stable</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-[#E3E7EF] text-center">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Stock Days</span>
-              <div className="text-lg font-bold font-mono text-[#122654] mt-1">54 days</div>
-              <span className="text-[9px] text-[#7E8DA6]">Healthy turn</span>
-            </div>
-            <div className="bg-white p-3.5 rounded-xl border border-[#E3E7EF] text-center">
-              <span className="text-[10px] font-bold uppercase text-[#7E8DA6]">Gearing</span>
-              <div className="text-lg font-bold font-mono text-[#0B6B52] mt-1">0.0%</div>
-              <span className="text-[9px] text-[#7E8DA6]">No external debt</span>
-            </div>
-          </div>
-
-          {/* Balance Sheet Movement Grid */}
-          <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#0B1A3B] text-white text-[11px] font-bold uppercase tracking-wider">
-                <tr>
-                  <th className="py-3 px-4">Balance Sheet Heading</th>
-                  <th className="py-3 px-3">FY26 Final</th>
-                  <th className="py-3 px-3">FY25 Final</th>
-                  <th className="py-3 px-3">Movement</th>
-                  <th className="py-3 px-4">AI Analysis / Schedule Source</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E3E7EF]">
-                {bsLines.map((line, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/50">
-                    <td className="py-3 px-4 font-bold text-[#122654]">{line.name}</td>
-                    <td className="py-3 px-3 font-mono font-medium">{line.current}</td>
-                    <td className="py-3 px-3 font-mono text-[#4A5878]">{line.prior}</td>
-                    <td className="py-3 px-3 font-mono font-bold text-emerald-700">{line.movement}</td>
-                    <td className="py-3 px-4 text-[#4A5878]">{line.explanation}</td>
-                  </tr>
+      {tab === 'events' && (
+        <div className="bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto">
+          {events.length === 0 ? (
+            <p className="p-4 text-xs text-[#4A5878]">No ledger postings over the review threshold are dated after {ukDate(eng.period_end)}. Only postings already pulled from the ledger are scanned.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead><tr className="text-left"><th className={th}>Date</th><th className={th}>Contact</th><th className={th}>Description</th><th className={th}>Account</th><th className={`${th} text-right`}>Amount</th></tr></thead>
+              <tbody>
+                {events.map((t) => (
+                  <tr key={t.id} className="border-t border-[#E3E7EF]"><td className="p-2">{ukDate(t.date)}</td><td className="p-2">{t.contact}</td><td className="p-2">{t.description}</td><td className="p-2">{t.account_code} {t.account_name}</td><td className="p-2 text-right font-mono">{signed(asPence(t.amount_p))}</td></tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: Unusual Transactions (AIX-04) */}
-      {activeTab === 'unusual' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#E3E7EF] pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-[#122654]">Unusual Transactions Detector</h3>
-              <p className="text-xs text-[#4A5878]">
-                Scans all ledger journal lines for round sums, weekend transactions, potential duplicates, and suspense postings.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {unusualTransactions.map((tx) => (
-              <div
-                key={tx.id}
-                className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                  tx.severity === 'error'
-                    ? 'bg-red-50/60 border-red-200'
-                    : tx.severity === 'warning'
-                    ? 'bg-amber-50/60 border-amber-200'
-                    : 'bg-blue-50/60 border-blue-200'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-[#122654]">{ukDate(tx.date)}</span>
-                    <span className="text-xs font-bold text-[#122654]">{tx.contact}</span>
-                    <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-gray-200">
-                      {tx.amount}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#4A5878] mt-1.5">{tx.reason}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-xs font-semibold rounded-lg shadow-2xs"
-                  >
-                    Clear with reason
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-semibold rounded-lg shadow-2xs"
-                  >
-                    Raise client query
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       )}
     </div>

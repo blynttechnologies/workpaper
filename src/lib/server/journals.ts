@@ -147,6 +147,12 @@ export function journalAction(actor: Actor, id: string, d: { action?: string; re
       db.logAudit(actor.firmId, actor, 'CREATE_JOURNAL', 'adjustments', r.id, null, r);
       return r;
     }
+    case 'post':
+      // JNL-03: recorded once the journal is in the ledger; only approved journals can be posted
+      if (j.status !== 'approved') throw new ServiceError('Only an approved journal can be marked as posted.', 409);
+      j.status = 'posted';
+      log('POST_JOURNAL', { ledger_reference: String(d.reason ?? '').slice(0, 200) });
+      return j;
     default:
       throw new ServiceError('Unknown journal action.');
   }

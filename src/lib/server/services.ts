@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { completionBlockers } from '../completion';
 import { mentionsIn } from '../mentions';
 import { db } from './db';
 import { TbSnapshotDiff, UserRole, AccountMapping, Workpaper, Comment, Attachment, BlyntAccount, AnchorJson } from '../types/models';
@@ -870,6 +871,9 @@ export const services = {
       passed: unPrepared.length === 0,
       count: unPrepared.length,
     });
+
+    // REV-05: review warnings, the standard check, the disclosure checklist and the consistency check
+    blockers.push(...completionBlockers(engagementId));
 
     const canLock = blockers.every((b) => b.passed);
     return { blockers, canLock, isBlocked: !canLock };

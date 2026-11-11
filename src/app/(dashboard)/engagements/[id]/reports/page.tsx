@@ -1,594 +1,285 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { db } from '@/lib/server/db';
+import { getActor } from '@/lib/session';
+import { asPence, formatPence, toPence } from '@/lib/money';
+import { ukDate } from '@/lib/dates';
+import { periodLabel } from '@/lib/periods';
+import { downloadText } from '@/lib/download';
+import { buildAccounts } from '@/lib/workpapers/accounts';
+import { checklistFor, notesFor } from '@/lib/completion';
 import {
-  FileDown,
-  Download,
-  FileSpreadsheet,
-  BarChart3,
-  Calendar,
-  Sparkles,
-  CheckCircle2,
-  TrendingUp,
-} from 'lucide-react';
+  REPORTS, buildReport, toCsv, type ReportKey, newBudget, setBudgetCell, setActiveBudget, budgetCsv, importBudgetCsv, budgetVsActual,
+  cashFlow, cashForecast, saveForecast, DEFAULT_FORECAST, quarterlyPack, setQuarterly, fileIndex,
+} from '@/lib/management';
+import { btnPrimary, btnSecondary, card, th, Tiles } from '@/components/workpaper/kit';
+import type { ForecastAssumptions } from '@/lib/types/models';
+
+/** Stage E on one engagement: report library (RPT-01), management pack (MGT-01), budgets (MGT-03), cash flow (MGT-04), forecast (MGT-05), quarterly insight (QTR-01) and the full file (RPT-02). */
+
+const money = (p: bigint) => formatPence(p, { accountingFormat: true });
+const TABS = [['library', 'Report library'], ['pack', 'Management accounts'], ['budgets', 'Budgets'], ['cashflow', 'Cash flow'], ['forecast', 'Cash forecast'], ['quarterly', 'Quarterly insight'], ['file', 'Full file']] as const;
+type Tab = (typeof TABS)[number][0];
+// Plain-English labels for the client version of the pack (MGT-01)
+const PLAIN: Record<string, string> = { Turnover: 'Sales', 'Cost of sales': 'Cost of making those sales', 'Trade debtors': 'Money owed to you', 'Creditors: trade': 'Money you owe suppliers', 'Cash at bank and in hand': 'Money in the bank', 'Taxation and social security': 'Tax you owe' };
+const PACK_SECTIONS = ['Summary', 'Profit and loss', 'Balance sheet', 'Cash flow'] as const;
 
 export default function ReportsPage() {
+  const engagementId = (useParams()?.id as string) || '';
+  const [tab, setTab] = useState<Tab>('library');
+  const [report, setReport] = useState<ReportKey>('tb_adjusted');
+  const [plain, setPlain] = useState(true);
+  const [off, setOff] = useState<string[]>([]);
+  const [clientView, setClientView] = useState(true);
+  const [budgetId, setBudgetId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [, redraw] = useState(0);
+  const fileInput = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<'library' | 'mgt_pack' | 'cash_flow' | 'forecast_12m' | 'quarterly' | 'bundle'>('library');
-  const [plainEnglish, setPlainEnglish] = useState(false);
-  const [cashFlowView, setCashFlowView] = useState<'client' | 'statutory'>('client');
+  const eng = db.engagements.find((e) => e.id === engagementId);
+  const client = db.clients.find((c) => c.id === eng?.client_id);
+  if (!eng || !client) return <div className={card}>Engagement not found.</div>;
+  const firm = db.firms.find((f) => f.id === eng.firm_id);
+  const brand = firm?.settings?.branding;
+  const actor = getActor();
+  const locked = eng.status === 'locked';
+  const snapshot = db.tb_snapshots.filter((s) => s.engagement_id === engagementId).map((s) => (s as { imported_at?: string; created_at?: string }).imported_at ?? (s as { created_at?: string }).created_at ?? '').sort().pop();
+  const done = (msg: string | null = null) => { setNotice(msg); redraw((n) => n + 1); };
+  const logDownload = (what: string) => db.logAudit(eng.firm_id, actor, 'DOWNLOAD_REPORT', 'engagements', eng.id, null, { report: what, period_end: eng.period_end, snapshot: snapshot ?? null });
+  const print = (what: string) => { logDownload(what); window.print(); };
 
-  // Forecast Assumptions (MGT-05)
-  const [debtorDays, setDebtorDays] = useState(45);
-  const [creditorDays, setCreditorDays] = useState(45);
-  const [minimumCash, setMinimumCash] = useState('250,000');
-  const [capexSpend, setCapexSpend] = useState('50,000');
+  const a = buildAccounts(engagementId);
+  const label = (l: string) => (plain ? PLAIN[l] ?? l : l);
 
-  // Report Library Catalog (RPT-01)
-  const reportLibrary = [
-    {
-      id: 'rep_tb',
-      title: 'Full Adjusted & Unadjusted Trial Balance',
-      category: 'Core Ledger',
-      description: 'Side-by-side unadjusted TB, journals/adjustments, final closing balances, and prior year comparatives.',
-      format: 'PDF / Excel',
-    },
-    {
-      id: 'rep_leads',
-      title: 'Lead Schedules Summary (A to Z)',
-      category: 'Workpapers',
-      description: 'All balance sheet and profit & loss lead schedules tied to supporting control account papers.',
-      format: 'PDF / Excel',
-    },
-    {
-      id: 'rep_jnl',
-      title: 'Complete journal register and adjustments',
-      category: 'Adjustments',
-      description: 'Every manual and AI proposed journal with approvals, nominal lines, and effect on profit.',
-      format: 'PDF / Excel',
-    },
-    {
-      id: 'rep_rev',
-      title: 'Review Points & Sign-Off Completion Record',
-      category: 'Review & Governance',
-      description: 'Comprehensive record of all cleared review notes, comments, preparer/manager sign-offs, and timestamps.',
-      format: 'PDF',
-    },
-    {
-      id: 'rep_mgt',
-      title: 'Periodic Management Accounts Pack',
-      category: 'Management',
-      description: 'KPI summary, monthly P&L, balance sheet, cash bridge, and aged debtor analysis.',
-      format: 'PDF / Excel',
-    },
-    {
-      id: 'rep_qtr',
-      title: 'Quarterly Insight Schedule (2-Page Client Briefing)',
-      category: 'Insights',
-      description: 'Executive briefing with headline KPIs, 12-month charts, plain-English AI commentary, and tax deadlines.',
-      format: 'PDF',
-    },
-  ];
+  /** Every printed report carries the client, period, data date and the practice branding. */
+  const Sheet = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="print-area bg-white border border-[#E3E7EF] rounded-xl p-5 text-xs text-[#122654] overflow-x-auto">
+      <div className="flex items-start justify-between gap-4 border-b border-[#E3E7EF] pb-3 mb-3" style={brand?.colour ? { borderColor: brand.colour } : undefined}>
+        <div>
+          <h2 className="text-base font-bold">{title}{locked ? ' · Final' : ''}</h2>
+          <p className="text-[#4A5878]">{client.name} · {periodLabel(eng)}{snapshot ? ` · ledger data from ${ukDate(snapshot)}` : ''}</p>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {brand?.logo_file_key ? <img src={`/api/v1/files/${brand.logo_file_key}`} alt={firm?.name ?? 'Practice logo'} className="h-9" /> : <span className="font-bold">{firm?.name}</span>}
+      </div>
+      {children}
+      {(brand?.footer || brand?.disclaimer) && <p className="mt-4 pt-2 border-t border-[#E3E7EF] text-[10px] text-[#4A5878]">{[brand.footer, brand.disclaimer].filter(Boolean).join(' · ')}</p>}
+    </div>
+  );
+  const Lines = ({ rows }: { rows: [string, bigint, boolean?][] }) => (
+    <table className="w-full max-w-xl">
+      <tbody>{rows.map(([l, v, bold]) => <tr key={l} className={bold ? 'font-bold border-t border-[#E3E7EF]' : ''}><td className="py-1">{l}</td><td className="py-1 text-right font-mono">{money(v)}</td></tr>)}</tbody>
+    </table>
+  );
+
+  const r = tab === 'library' ? buildReport(engagementId, report) : null;
+  const budgets = eng.budgets ?? [];
+  const budget = budgets.find((b) => b.id === budgetId) ?? budgets.find((b) => b.active) ?? budgets[0];
+  const cf = cashFlow(engagementId);
+  const assumptions = eng.forecast ?? DEFAULT_FORECAST;
+  const forecast = cashForecast(engagementId);
+  const q = quarterlyPack(engagementId);
+  const bva = budgetVsActual(engagementId);
+  const setAssumption = (k: keyof ForecastAssumptions, v: string) => {
+    const days = k === 'debtor_days' || k === 'creditor_days';
+    saveForecast(engagementId, { ...assumptions, [k]: days ? Math.max(0, Number(v) || 0) : toPence(v).toString() }, actor);
+    done();
+  };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-200">
-      {/* Top Banner */}
-      <div className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl font-bold text-[#122654]">Financial Reports &amp; Exports (RPT / MGT / QTR)</h1>
-            <span className="text-xs bg-[#EAF5FC] text-[#1D4E89] px-2.5 py-1 rounded-full font-mono font-semibold">
-              Period: FY26 Final
-            </span>
-          </div>
-          <p className="text-xs text-[#4A5878] mt-1">
-            Pull any report for any period, generate client management packs, or export complete indexed working paper bundles.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('bundle')}
-          className="flex items-center gap-2 px-4 py-2 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-        >
-          <FileDown className="w-4 h-4 text-[#FF7A66]" />
-          <span>Full File Export Bundle</span>
-        </button>
+    <div className="flex flex-col gap-5">
+      <div className="bg-white border border-[#E3E7EF] rounded-xl p-5 no-print">
+        <h1 className="text-xl font-bold text-[#122654]">Reports</h1>
+        <p className="text-xs text-[#4A5878] mt-1">Every report reads the same figures for {periodLabel(eng)}. Download PDF opens the print dialog: choose Save as PDF.</p>
       </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#E3E7EF] pb-1 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab('library')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'library'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4 text-[#1D4E89]" />
-          <span>Report Library</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('mgt_pack')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'mgt_pack'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-[#1D4E89]" />
-          <span>Management Pack</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('cash_flow')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'cash_flow'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4 text-[#0B6B52]" />
-          <span>Cash Flow Statement</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('forecast_12m')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'forecast_12m'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <Calendar className="w-4 h-4 text-purple-700" />
-          <span>12-Month Forecast</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('quarterly')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'quarterly'
-              ? 'border-[#FF7A66] text-[#122654]'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-          <span>Quarterly Insight Pack</span>
-        </button>
+      <div className="flex gap-2 border-b border-[#E3E7EF] overflow-x-auto no-print" role="tablist">
+        {TABS.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => { setTab(k); setNotice(null); }} className={`px-3 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${tab === k ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}>{l}</button>)}
       </div>
+      {notice && <p role="status" className="p-3 rounded-[10px] bg-[#F5F8FD] text-xs text-[#122654] no-print">{notice}</p>}
 
-      {/* TAB 1: Report Library (RPT-01) */}
-      {activeTab === 'library' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {reportLibrary.map((rep) => (
-            <div
-              key={rep.id}
-              className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs flex flex-col justify-between hover:border-[#122654]/30 transition-all"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7E8DA6] bg-gray-100 px-2 py-0.5 rounded">
-                    {rep.category}
-                  </span>
-                  <span className="text-[10px] font-mono text-[#1D4E89]">{rep.format}</span>
-                </div>
-                <h3 className="text-sm font-bold text-[#122654] mt-2.5">{rep.title}</h3>
-                <p className="text-xs text-[#4A5878] mt-1 leading-relaxed">{rep.description}</p>
-              </div>
-
-              <div className="pt-4 border-t border-[#E3E7EF] flex items-center justify-between mt-4">
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 text-xs font-semibold text-[#1D4E89] hover:underline"
-                >
-                  <Download className="w-3.5 h-3.5" /> PDF
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 text-xs font-semibold text-[#0B6B52] hover:underline"
-                >
-                  <Download className="w-3.5 h-3.5" /> Excel
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+      {r && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-xs no-print">
+            <select aria-label="Report" value={report} onChange={(e) => setReport(e.target.value as ReportKey)} className="px-3 py-1.5 border border-[#D3DCEE] rounded-lg bg-white text-[#122654]">
+              {REPORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <button type="button" className={btnPrimary} onClick={() => print(r.title)}>Download PDF</button>
+            <button type="button" className={btnSecondary} onClick={() => { logDownload(`${r.title} (Excel)`); downloadText(`${client.name} ${r.title}.csv`, toCsv(r.columns, r.rows)); }}>Download for Excel</button>
+          </div>
+          <Sheet title={r.title}>
+            {r.rows.length === 0 ? <p className="text-[#4A5878]">Nothing to show for this period.</p> : (
+              <table className="w-full">
+                <thead><tr className="text-left">{r.columns.map((c) => <th key={c} className={th}>{c}</th>)}</tr></thead>
+                <tbody>{r.rows.map((row, i) => <tr key={i} className="border-t border-[#E3E7EF]">{row.map((c, j) => <td key={j} className={`p-2 ${typeof c === 'bigint' ? 'text-right font-mono' : ''}`}>{typeof c === 'bigint' ? money(c) : c}</td>)}</tr>)}</tbody>
+              </table>
+            )}
+          </Sheet>
+        </>
       )}
 
-      {/* TAB 2: Management Accounts Pack (MGT-01) */}
-      {activeTab === 'mgt_pack' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
-            <div>
-              <h2 className="text-base font-bold text-[#122654]">Client Management Accounts Pack</h2>
-              <p className="text-xs text-[#4A5878]">
-                Professional management pack with KPI graphs, P&amp;L variance, and aged debtors summary.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-xs font-semibold text-[#122654] cursor-pointer bg-[#F5F8FD] px-3 py-1.5 rounded-lg border border-[#D3DCEE]">
-                <input
-                  type="checkbox"
-                  checked={plainEnglish}
-                  onChange={(e) => setPlainEnglish(e.target.checked)}
-                  className="rounded border-gray-300"
-                />
-                <span>Plain-English labels (e.g. &apos;Money owed to you&apos;)</span>
-              </label>
-
-              <button
-                type="button"
-                className="flex items-center gap-2 px-3.5 py-1.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Pack (PDF)</span>
-              </button>
-            </div>
+      {tab === 'pack' && (
+        <>
+          <div className="flex flex-wrap items-center gap-3 text-xs no-print">
+            {PACK_SECTIONS.map((s) => <label key={s} className="flex items-center gap-1"><input type="checkbox" checked={!off.includes(s)} onChange={() => setOff(off.includes(s) ? off.filter((x) => x !== s) : [...off, s])} />{s}</label>)}
+            <label className="flex items-center gap-1"><input type="checkbox" checked={plain} onChange={() => setPlain(!plain)} />Plain-English labels</label>
+            <button type="button" className={btnPrimary} onClick={() => print('Management accounts')}>Download PDF</button>
           </div>
-
-          {/* KPI Summary Strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200">
-              <span className="text-[10px] font-bold uppercase text-[#1D4E89]">Total Turnover</span>
-              <div className="text-xl font-bold font-mono text-[#122654] mt-1">£6,200,000</div>
-              <span className="text-[10px] text-emerald-700 font-semibold">+14.8% vs last year</span>
+          <Sheet title="Management accounts">
+            <div className="space-y-5">
+              {!off.includes('Summary') && (
+                <section>
+                  <Tiles items={q.kpis.map((k) => ({ label: k.label, value: k.value === null ? '–' : money(k.value) }))} />
+                  {/* Only commentary a person has marked client-facing reaches the pack (ANL-03) */}
+                  {Object.entries(eng.commentary ?? {}).filter(([, c]) => c.visibility === 'client' && c.text.trim()).map(([k, c]) => <p key={k} className="mt-2"><strong>{label(k)}:</strong> {c.text}</p>)}
+                </section>
+              )}
+              {!off.includes('Profit and loss') && (
+                <section><h3 className="font-bold mb-1">Profit and loss</h3>
+                  <table className="w-full max-w-2xl">
+                    <thead><tr className="text-left"><th className={th} /><th className={`${th} text-right`}>This period</th>{a.hasPrior && <th className={`${th} text-right`}>Last year</th>}{bva && <th className={`${th} text-right`}>Budget</th>}{bva && <th className={`${th} text-right`}>Variance</th>}</tr></thead>
+                    <tbody>
+                      {a.pl.map((l) => { const b = bva?.rows.find((x) => x.label === l.label); return <tr key={l.label}><td className="py-1">{label(l.label)}</td><td className="py-1 text-right font-mono">{money(l.amount)}</td>{a.hasPrior && <td className="py-1 text-right font-mono">{money(l.prior ?? 0n)}</td>}{bva && <td className="py-1 text-right font-mono">{money(b?.budget ?? 0n)}</td>}{bva && <td className="py-1 text-right font-mono">{money(b?.variance ?? 0n)}</td>}</tr>; })}
+                      <tr className="font-bold border-t border-[#E3E7EF]"><td className="py-1">{plain ? 'Profit' : 'Profit/(loss) for the period'}</td><td className="py-1 text-right font-mono">{money(a.profit.amount)}</td>{a.hasPrior && <td className="py-1 text-right font-mono">{money(a.profit.prior ?? 0n)}</td>}{bva && <td colSpan={2} />}</tr>
+                    </tbody>
+                  </table>
+                </section>
+              )}
+              {!off.includes('Balance sheet') && (
+                <section><h3 className="font-bold mb-1">Balance sheet</h3>
+                  <Lines rows={[...[...a.bs.fixed, ...a.bs.current].map((l): [string, bigint] => [label(l.label), l.amount]), ...[...a.bs.creditorsShort, ...a.bs.creditorsLong, ...a.bs.provisions].map((l): [string, bigint] => [label(l.label), -l.amount]), [plain ? 'What the business is worth on paper' : 'Net assets', a.netAssets.amount, true]]} />
+                </section>
+              )}
+              {!off.includes('Cash flow') && cf && <section><h3 className="font-bold mb-1">Cash flow</h3><Lines rows={[...cf.lines.map((l): [string, bigint] => [plain ? l.plain : l.label, l.amount]), [plain ? 'Change in your cash' : 'Net change in cash', cf.change, true]]} /></section>}
             </div>
-            <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200">
-              <span className="text-[10px] font-bold uppercase text-[#0B6B52]">Gross Profit</span>
-              <div className="text-xl font-bold font-mono text-[#0B6B52] mt-1">£2,400,000</div>
-              <span className="text-[10px] text-[#4A5878]">Margin: 38.7%</span>
-            </div>
-            <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-200">
-              <span className="text-[10px] font-bold uppercase text-purple-800">Net Profit Before Tax</span>
-              <div className="text-xl font-bold font-mono text-purple-900 mt-1">£939,350</div>
-              <span className="text-[10px] text-emerald-700 font-semibold">+12.4% vs FY25</span>
-            </div>
-            <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-200">
-              <span className="text-[10px] font-bold uppercase text-amber-800">Bank Cash Balance</span>
-              <div className="text-xl font-bold font-mono text-amber-900 mt-1">£1,305,350</div>
-              <span className="text-[10px] text-emerald-700 font-semibold">+£365k generated</span>
-            </div>
-          </div>
-
-          {/* Section preview table */}
-          <div className="border border-[#E3E7EF] rounded-xl overflow-hidden text-xs">
-            <table className="w-full text-left">
-              <thead className="bg-[#F5F8FD] text-[#7E8DA6] text-[10px] font-bold uppercase">
-                <tr>
-                  <th className="py-2.5 px-4">{plainEnglish ? 'What you earned & spent' : 'Account Category'}</th>
-                  <th className="py-2.5 px-4 text-right">This Year (FY26)</th>
-                  <th className="py-2.5 px-4 text-right">Last Year (FY25)</th>
-                  <th className="py-2.5 px-4 text-right">Change</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E3E7EF] font-mono">
-                <tr>
-                  <td className="py-2.5 px-4 font-sans font-bold text-[#122654]">
-                    {plainEnglish ? 'Total Sales Invoiced' : 'Revenue / Turnover'}
-                  </td>
-                  <td className="py-2.5 px-4 text-right font-bold text-[#122654]">£6,200,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-[#4A5878]">£5,400,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-emerald-700 font-bold">+14.8%</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-4 font-sans text-[#122654]">
-                    {plainEnglish ? 'Cost of Goods Bought & Made' : 'Cost of Sales'}
-                  </td>
-                  <td className="py-2.5 px-4 text-right text-[#122654]">£3,800,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-[#4A5878]">£3,200,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-red-600">+18.8%</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-4 font-sans text-[#122654]">
-                    {plainEnglish ? 'Staff Costs & Wages' : 'Employee Salaries & Remuneration'}
-                  </td>
-                  <td className="py-2.5 px-4 text-right text-[#122654]">£1,388,400.00</td>
-                  <td className="py-2.5 px-4 text-right text-[#4A5878]">£1,195,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-red-600">+16.2%</td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 px-4 font-sans text-[#122654]">
-                    {plainEnglish ? 'Office, Rent & Business Overheads' : 'Administrative Overheads'}
-                  </td>
-                  <td className="py-2.5 px-4 text-right text-[#122654]">£344,250.00</td>
-                  <td className="py-2.5 px-4 text-right text-[#4A5878]">£298,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-red-600">+15.5%</td>
-                </tr>
-                <tr className="bg-[#F5F8FD] font-bold">
-                  <td className="py-2.5 px-4 font-sans text-[#0B6B52]">
-                    {plainEnglish ? 'Net Profit Retained' : 'Profit on Ordinary Activities Before Tax'}
-                  </td>
-                  <td className="py-2.5 px-4 text-right text-[#0B6B52]">£939,350.00</td>
-                  <td className="py-2.5 px-4 text-right text-[#4A5878]">£835,000.00</td>
-                  <td className="py-2.5 px-4 text-right text-emerald-700">+12.5%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+          </Sheet>
+        </>
       )}
 
-      {/* TAB 3: Cash Flow Statement (MGT-04) */}
-      {activeTab === 'cash_flow' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
-            <div>
-              <h2 className="text-base font-bold text-[#122654]">Cash Flow Statement - Indirect Method</h2>
-              <p className="text-xs text-[#4A5878]">
-                Reconciles operating profit to closing bank balances using balance sheet movements.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCashFlowView('client')}
-                className={`px-3 py-1 text-xs font-bold rounded-lg ${
-                  cashFlowView === 'client' ? 'bg-[#122654] text-white' : 'bg-gray-100 text-[#4A5878]'
-                }`}
-              >
-                Client View (Bridge)
-              </button>
-              <button
-                type="button"
-                onClick={() => setCashFlowView('statutory')}
-                className={`px-3 py-1 text-xs font-bold rounded-lg ${
-                  cashFlowView === 'statutory' ? 'bg-[#122654] text-white' : 'bg-gray-100 text-[#4A5878]'
-                }`}
-              >
-                Statutory View (FRS 102)
-              </button>
-            </div>
+      {tab === 'budgets' && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-xs no-print">
+            {budgets.length > 0 && <select aria-label="Budget version" value={budget?.id} onChange={(e) => setBudgetId(e.target.value)} className="px-3 py-1.5 border border-[#D3DCEE] rounded-lg bg-white">{budgets.map((b) => <option key={b.id} value={b.id}>{b.name}{b.active ? ' (active)' : ''}</option>)}</select>}
+            {(['prior', 'blank'] as const).map((m) => (
+              <button key={m} type="button" disabled={locked} className={btnSecondary} onClick={() => { const name = window.prompt('Name this budget version', budgets.length ? 'Reforecast' : 'Original'); const b = name && newBudget(engagementId, name, m, actor); if (b) setBudgetId(b.id); done(); }}>{m === 'prior' ? `New from ${a.hasPrior ? 'last year' : 'this year’s figures'}` : 'New blank'}</button>
+            ))}
+            {budget && !budget.active && <button type="button" disabled={locked} className={btnPrimary} onClick={() => { setActiveBudget(engagementId, budget.id, actor); done(); }}>Set as active</button>}
+            {budget && <button type="button" className={btnSecondary} onClick={() => downloadText(`${client.name} budget ${budget.name}.csv`, budgetCsv(budget))}>Export for Excel</button>}
+            {budget && <button type="button" disabled={locked} className={btnSecondary} onClick={() => fileInput.current?.click()}>Import</button>}
+            <input ref={fileInput} type="file" accept=".csv" className="hidden" aria-label="Import budget file" onChange={async (e) => { const f = e.target.files?.[0]; if (f && budget) done(`${importBudgetCsv(engagementId, budget.id, (await f.text()).replace(/^﻿/, ''), actor)} budget lines read from ${f.name}.`); e.target.value = ''; }} />
           </div>
-
-          <div className="border border-[#E3E7EF] rounded-xl p-5 bg-[#F5F8FD]/50 space-y-3 font-mono text-xs max-w-2xl mx-auto">
-            <div className="flex justify-between font-bold text-sm text-[#122654] pb-2 border-b border-gray-300">
-              <span className="font-sans">Operating Profit Before Tax</span>
-              <span>£939,350.00</span>
-            </div>
-
-            <div className="flex justify-between text-gray-700">
-              <span className="font-sans">Add: Depreciation of tangible assets (non-cash)</span>
-              <span>+£27,000.00</span>
-            </div>
-
-            <div className="flex justify-between text-gray-700">
-              <span className="font-sans">Working capital change: (Increase) in stock</span>
-              <span>(£174,000.00)</span>
-            </div>
-
-            <div className="flex justify-between text-gray-700">
-              <span className="font-sans">Working capital change: (Increase) in debtors</span>
-              <span>(£414,500.00)</span>
-            </div>
-
-            <div className="flex justify-between text-gray-700">
-              <span className="font-sans">Working capital change: Increase in trade creditors</span>
-              <span>+£264,500.00</span>
-            </div>
-
-            <div className="flex justify-between font-bold text-[#0B6B52] pt-2 border-t border-gray-300">
-              <span className="font-sans">Cash Generated from Operations</span>
-              <span>£642,350.00</span>
-            </div>
-
-            <div className="flex justify-between text-gray-700">
-              <span className="font-sans">Capital expenditure: Fixed asset additions</span>
-              <span>(£277,000.00)</span>
-            </div>
-
-            <div className="flex justify-between font-bold text-sm text-[#122654] pt-2 border-t-2 border-gray-900 bg-white p-2 rounded">
-              <span className="font-sans">Net Increase in Cash &amp; Equivalents</span>
-              <span className="text-[#0B6B52]">+£365,350.00</span>
-            </div>
-
-            <div className="flex justify-between text-[#4A5878] pt-1 text-[11px]">
-              <span className="font-sans">Cash at beginning of financial year</span>
-              <span>£940,000.00</span>
-            </div>
-
-            <div className="flex justify-between font-bold text-[#122654] text-xs">
-              <span className="font-sans">Cash at end of financial year (agrees to Bank and cash)</span>
-              <span>£1,305,350.00</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: 12-Month Forecast (MGT-05) */}
-      {activeTab === 'forecast_12m' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
-          <div className="border-b border-[#E3E7EF] pb-4">
-            <h2 className="text-base font-bold text-[#122654]">12-Month Cash Flow Forecast</h2>
-            <p className="text-xs text-[#4A5878]">
-              Dynamic cash model driven by debtor/creditor day assumptions and scheduled tax payment dates.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Assumptions Panel */}
-            <div className="bg-[#F5F8FD] p-4 rounded-xl border border-[#E3E7EF] space-y-3.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#7E8DA6] block">
-                Forecast Assumptions
-              </span>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#122654] mb-1">Debtor Days</label>
-                <input aria-label="Debtor Days"
-                  type="number"
-                  value={debtorDays}
-                  onChange={(e) => setDebtorDays(Number(e.target.value))}
-                  className="w-full text-xs p-2 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#122654] mb-1">Creditor Days</label>
-                <input aria-label="Creditor Days"
-                  type="number"
-                  value={creditorDays}
-                  onChange={(e) => setCreditorDays(Number(e.target.value))}
-                  className="w-full text-xs p-2 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#122654] mb-1">Minimum Cash Buffer (£)</label>
-                <input aria-label="Minimum Cash Buffer (£)"
-                  type="text"
-                  value={minimumCash}
-                  onChange={(e) => setMinimumCash(e.target.value)}
-                  className="w-full text-xs p-2 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-[#122654] mb-1">Planned Q2 Capex (£)</label>
-                <input aria-label="Planned Q2 Capex (£)"
-                  type="text"
-                  value={capexSpend}
-                  onChange={(e) => setCapexSpend(e.target.value)}
-                  className="w-full text-xs p-2 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold"
-                />
-              </div>
-
-              <div className="text-[11px] text-[#0B6B52] bg-emerald-50 p-2 rounded-lg font-semibold flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Zero forecast months breach minimum buffer (£{minimumCash})</span>
-              </div>
-            </div>
-
-            {/* Monthly Forecast Table */}
-            <div className="lg:col-span-3 border border-[#E3E7EF] rounded-xl overflow-hidden text-xs">
-              <table className="w-full text-left">
-                <thead className="bg-[#0B1A3B] text-white text-[10px] font-bold uppercase">
-                  <tr>
-                    <th className="py-2.5 px-3">Month</th>
-                    <th className="py-2.5 px-3 text-right">Opening Cash</th>
-                    <th className="py-2.5 px-3 text-right">Inflows</th>
-                    <th className="py-2.5 px-3 text-right">Outflows</th>
-                    <th className="py-2.5 px-3 text-right">Closing Cash</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E3E7EF] font-mono">
-                  {[
-                    { m: 'Oct 2026', op: '£1,305,350', in: '£510,000', out: '£440,000', cl: '£1,375,350' },
-                    { m: 'Nov 2026', op: '£1,375,350', in: '£525,000', out: '£460,000', cl: '£1,440,350' },
-                    { m: 'Dec 2026', op: '£1,440,350', in: '£610,000', out: '£530,000', cl: '£1,520,350' },
-                    { m: 'Jan 2027', op: '£1,520,350', in: '£480,000', out: '£450,000', cl: '£1,550,350' },
-                    { m: 'Feb 2027', op: '£1,550,350', in: '£490,000', out: '£465,000', cl: '£1,575,350' },
-                    { m: 'Mar 2027', op: '£1,575,350', in: '£550,000', out: '£510,000', cl: '£1,615,350' },
-                  ].map((row, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50/50">
-                      <td className="py-2.5 px-3 font-sans font-bold text-[#122654]">{row.m}</td>
-                      <td className="py-2.5 px-3 text-right">{row.op}</td>
-                      <td className="py-2.5 px-3 text-right text-emerald-700">{row.in}</td>
-                      <td className="py-2.5 px-3 text-right text-red-600">{row.out}</td>
-                      <td className="py-2.5 px-3 text-right font-bold text-[#122654]">{row.cl}</td>
+          {!budget ? <p className={card}>No budget yet. Start one from last year’s figures or blank.</p> : (
+            <div className="bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto">
+              <table className="text-xs">
+                <thead><tr><th className={`${th} text-left sticky left-0 bg-white`}>Line (£)</th>{Array.from({ length: 12 }, (_, i) => <th key={i} className={`${th} text-right`}>M{i + 1}</th>)}<th className={`${th} text-right`}>Year</th></tr></thead>
+                <tbody>
+                  {Object.entries(budget.lines).map(([line, months]) => (
+                    <tr key={line} className="border-t border-[#E3E7EF]">
+                      <td className="p-2 whitespace-nowrap sticky left-0 bg-white">{line}</td>
+                      {months.map((m, i) => (
+                        <td key={`${i}:${m}`} className="p-1"><input aria-label={`${line}, month ${i + 1}`} disabled={locked} defaultValue={(Number(asPence(m)) / 100).toFixed(0)} onBlur={(e) => { const p = toPence(e.target.value); if (p !== asPence(m)) { setBudgetCell(engagementId, budget.id, line, i, p, actor); done(); } }} className="w-20 px-1 py-1 text-right font-mono border border-[#E3E7EF] rounded" /></td>
+                      ))}
+                      <td className="p-2 text-right font-mono font-bold">{money(months.reduce((t, m) => t + asPence(m), 0n))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
-      {/* TAB 5: Quarterly Insight Pack (QTR-01) */}
-      {activeTab === 'quarterly' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
-            <div>
-              <h2 className="text-base font-bold text-[#122654]">Quarterly Insight Schedule</h2>
-              <p className="text-xs text-[#4A5878]">
-                2-page executive summary with AI insights, trend charts, and statutory filing timeline.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="flex items-center gap-2 px-3.5 py-1.5 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-lg shadow-xs transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Generate Q4 Pack</span>
-            </button>
+      {tab === 'cashflow' && (!cf ? <p className={card}>A cash flow statement needs last year’s balance sheet. Roll forward from last year or import the prior year.</p> : (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-xs no-print">
+            <button type="button" className={btnSecondary} aria-pressed={clientView} onClick={() => setClientView(true)}>Client view</button>
+            <button type="button" className={btnSecondary} aria-pressed={!clientView} onClick={() => setClientView(false)}>Statutory view</button>
+            <button type="button" className={btnPrimary} disabled={cf.difference !== 0n} onClick={() => print('Cash flow statement')}>Download PDF</button>
           </div>
+          {cf.difference !== 0n && <p role="alert" className="p-3 rounded-[10px] bg-[#FDECEA] text-xs text-[#B42318]">Closing cash is {money(cf.difference)} away from the balance sheet, so this cannot be downloaded. This happens when this year’s or last year’s balance sheet does not balance: finish the mapping for both years.</p>}
+          <Sheet title="Cash flow statement">
+            {(['Operating', 'Investing', 'Financing'] as const).map((g) => (
+              <section key={g} className="mb-3">
+                {!clientView && <h3 className="font-bold mb-1">{g} activities</h3>}
+                <Lines rows={cf.lines.filter((l) => l.group === g).map((l): [string, bigint] => [clientView ? l.plain : l.label, l.amount])} />
+              </section>
+            ))}
+            <Lines rows={[[clientView ? 'Change in your cash' : 'Net increase/(decrease) in cash', cf.change, true], ['Cash at the start', cf.opening], ['Cash at the end (balance sheet)', cf.closing, true]]} />
+          </Sheet>
+        </>
+      ))}
 
-          <div className="bg-[#FFF1EE]/50 border border-[#FF7A66]/30 rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#A23A27]">
-              <Sparkles className="w-4 h-4 text-[#FF7A66]" />
-              <span>3 AI Executive Insights</span>
-            </div>
-            <ul className="space-y-1.5 text-xs text-[#122654]">
-              <li className="flex items-start gap-2">
-                <span className="text-[#FF7A66] font-bold">•</span>
-                <span>Revenue expanded by 14.8% over the year, driven by strong customer demand in Q2.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#FF7A66] font-bold">•</span>
-                <span>Cash collection remains disciplined with debtor days at 46 days against industry norm of 52 days.</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#FF7A66] font-bold">•</span>
-                <span>Corporation tax liability of £22,505.33 is scheduled for payment 9 months post year-end.</span>
-              </li>
-            </ul>
+      {tab === 'forecast' && (!forecast ? <p className={card}>The forecast is built from the active budget. Create a budget first.</p> : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs no-print">
+            {([['debtor_days', 'Debtor days'], ['creditor_days', 'Creditor days'], ['minimum_cash_p', 'Minimum cash (£)'], ['capex_p', 'Planned spend on assets a month (£)'], ['dividends_p', 'Dividends a month (£)']] as const).map(([k, l]) => (
+              <label key={k} className="flex flex-col gap-1 text-[#4A5878]">{l}
+                <input disabled={locked} key={String(assumptions[k])} defaultValue={k.endsWith('_p') ? (Number(asPence(assumptions[k] as string)) / 100).toFixed(0) : assumptions[k]} onBlur={(e) => setAssumption(k, e.target.value)} className="px-2 py-1.5 border border-[#D3DCEE] rounded-lg text-[#122654]" />
+              </label>
+            ))}
           </div>
-        </div>
+          <button type="button" className={`${btnPrimary} self-start no-print`} onClick={() => print('Cash flow forecast')}>Download PDF</button>
+          <Sheet title="12-month cash flow forecast">
+            <table className="w-full">
+              <thead><tr><th className={`${th} text-left`}>Month</th>{['Opening cash', 'Receipts', 'Payments', 'Closing cash'].map((h) => <th key={h} className={`${th} text-right`}>{h}</th>)}</tr></thead>
+              <tbody>{forecast.map((m) => <tr key={m.month} className={`border-t border-[#E3E7EF] ${m.below ? 'bg-[#FDECEA] text-[#B42318] font-bold' : ''}`}><td className="p-2">Month {m.month}{m.below ? ' · below minimum' : ''}</td>{[m.opening, m.receipts, m.payments, m.closing].map((v, i) => <td key={i} className="p-2 text-right font-mono">{money(v)}</td>)}</tr>)}</tbody>
+            </table>
+            <p className="mt-2 text-[#4A5878]">Built from the active budget; receipts arrive after {assumptions.debtor_days} days and bills are paid after {assumptions.creditor_days} days.</p>
+          </Sheet>
+        </>
+      ))}
+
+      {tab === 'quarterly' && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-xs no-print">
+            <span className="px-2 py-1 rounded bg-[#F5F8FD] font-bold text-[#122654]">{q.state.status === 'approved' ? `Approved by ${q.state.approved_by}` : q.state.status === 'ready' ? 'Ready for approval' : 'Needs comment'}</span>
+            {q.state.status === 'draft' && <button type="button" disabled={locked} className={btnPrimary} onClick={() => done(setQuarterly(engagementId, actor, { status: 'ready' }))}>Mark ready</button>}
+            {q.state.status === 'ready' && <button type="button" disabled={locked} className={btnPrimary} onClick={() => done(setQuarterly(engagementId, actor, { status: 'approved' }))}>Approve</button>}
+            <button type="button" className={btnSecondary} disabled={q.state.status !== 'approved'} title={q.state.status === 'approved' ? '' : 'A pack is approved before it leaves the practice'} onClick={() => print('Quarterly insight pack')}>Download PDF</button>
+          </div>
+          <Sheet title="Quarterly insight">
+            {q.unadjusted && <p className="mb-2 font-bold text-[#6B4700]">Based on unadjusted figures: the schedules for this period are not all reviewed.</p>}
+            <Tiles items={q.kpis.map((k) => ({ label: k.label, value: k.value === null ? '–' : money(k.value) }))} />
+            <h3 className="font-bold mt-4 mb-1">What changed</h3>
+            {q.insights.length === 0 && <p className="text-[#4A5878]">No movements large enough to report.</p>}
+            <ul className="space-y-1">{q.insights.map((t) => <li key={t} className="flex justify-between gap-3"><span>{t}</span>{q.state.status === 'draft' && !locked && <button type="button" className="no-print underline text-[#4A5878]" onClick={() => done(setQuarterly(engagementId, actor, { remove: t }))}>Remove</button>}</li>)}</ul>
+            {q.leftOut > 0 && <p className="mt-1 text-[#4A5878] no-print">{q.leftOut} movement(s) left out because the ledger does not explain them.</p>}
+            <h3 className="font-bold mt-4 mb-1">Coming up</h3>
+            {q.deadlines.map((d) => <p key={d.label}>{d.label}: {ukDate(d.date)}</p>)}
+            <h3 className="font-bold mt-4 mb-1">From your accountant</h3>
+            <textarea aria-label="Accountant’s comment" disabled={locked || q.state.status === 'approved'} key={q.state.comment} defaultValue={q.state.comment} rows={3} onBlur={(e) => e.target.value !== q.state.comment && done(setQuarterly(engagementId, actor, { comment: e.target.value }))} className="w-full p-2 border border-[#D3DCEE] rounded-lg" />
+          </Sheet>
+        </>
       )}
 
-      {/* TAB 6: Full File Export Bundle (RPT-02) */}
-      {activeTab === 'bundle' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-6 space-y-5 max-w-2xl mx-auto">
-          <div className="flex items-center gap-3 text-[#122654] border-b border-[#E3E7EF] pb-3">
-            <FileDown className="w-6 h-6 text-[#FF7A66]" />
-            <h2 className="text-base font-bold">Full Working Paper File Export</h2>
-          </div>
-
-          <p className="text-xs text-[#4A5878] leading-relaxed">
-            Exports the complete engagement as an indexed regulatory PDF bundle. Includes:
-          </p>
-
-          <ul className="space-y-2 text-xs text-[#122654] bg-[#F5F8FD] p-4 rounded-xl border border-[#E3E7EF]">
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Working paper index with sign-off initials (P / M / Pt)</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>All 17 Control account schedules &amp; supporting lead sheets</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Journal adjustment register and profit impact summary</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Complete standard disclosure checklist and notes to accounts</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Permanent file evidence and linked invoice receipts</span>
-            </li>
-          </ul>
-
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              className="px-5 py-2.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-2"
-            >
-              <Download className="w-4 h-4 text-[#FF7A66]" />
-              <span>Build &amp; Download Indexed PDF Bundle</span>
-            </button>
-          </div>
-        </div>
+      {tab === 'file' && (
+        <>
+          <button type="button" className={`${btnPrimary} self-start no-print`} onClick={() => print('Full working paper file')}>Download PDF</button>
+          <Sheet title="Working paper file">
+            <h3 className="font-bold mb-1">Index</h3>
+            <ol className="mb-4 columns-2">{fileIndex(engagementId).map((w) => <li key={w.id}><a href={`#file-${w.id}`} className="underline">{w.ref} {w.title}</a> · {w.status}</li>)}</ol>
+            {fileIndex(engagementId).map((w) => (
+              <section key={w.id} id={`file-${w.id}`} className="py-3 border-t border-[#E3E7EF] break-inside-avoid">
+                <h3 className="font-bold">{w.ref} {w.title} · {w.status}</h3>
+                {w.leads.length > 0 && <Lines rows={w.leads.map((l): [string, bigint] => [`${l.code} ${l.label}`, l.final])} />}
+                {w.conclusion && <p className="mt-1"><strong>Conclusion:</strong> {w.conclusion}</p>}
+                <p className="mt-1 text-[#4A5878]">Sign-offs: {w.signoffs.map((s) => `${s.role} ${s.user_name} ${ukDate(s.signed_at)}`).join('; ') || 'none'}</p>
+                {w.comments.map((c) => <p key={c.id} className="text-[#4A5878]">{c.type === 'review_note' ? 'Review point' : 'Comment'} ({c.status}) {c.created_by_name}: {c.body}</p>)}
+                {w.evidence.length > 0 && <p className="text-[#4A5878]">Evidence: {w.evidence.map((x) => x.filename).join(', ')}</p>}
+              </section>
+            ))}
+            <section className="py-3 border-t border-[#E3E7EF]"><h3 className="font-bold mb-1">Journals</h3>
+              {db.adjustments.filter((j) => j.engagement_id === engagementId).map((j) => <p key={j.id}>{j.ref} · {j.status} · {j.narrative} · {money(j.lines.reduce((t, l) => t + asPence(l.debit_p), 0n))}</p>)}
+            </section>
+            <section className="py-3 border-t border-[#E3E7EF]"><h3 className="font-bold mb-1">Disclosure checklist</h3>
+              {checklistFor(engagementId).map((c) => <p key={c.id}>{c.question}: <strong>{c.confirmed_answer ?? 'not confirmed'}</strong>{c.confirmed_by ? ` (${c.confirmed_by})` : ''}</p>)}
+            </section>
+            <section className="py-3 border-t border-[#E3E7EF]"><h3 className="font-bold mb-1">Notes to the accounts</h3>
+              {notesFor(engagementId).map((n) => <p key={n.id}>{n.note_number}. {n.title}: {n.narrative_html}</p>)}
+            </section>
+          </Sheet>
+        </>
       )}
     </div>
   );

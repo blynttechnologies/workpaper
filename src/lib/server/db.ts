@@ -1238,6 +1238,37 @@ class Database {
       });
     });
 
+    // Seed prior year account mappings for Harlow (eng_harlow_fy25) for movement variance & roll-forward
+    seedLines.forEach((line, idx) => {
+      const priorDebit = (line.debit_p * 88n) / 100n;
+      const priorCredit = (line.credit_p * 88n) / 100n;
+      const netBalance = priorDebit - priorCredit;
+      const stat = getStatutoryDetails(line.blynt_code, line.name, line.type);
+      const blyntCode = line.blynt_code || (netBalance >= 0n ? '400' : '760');
+      this.account_mappings.push({
+        id: `map_harlow_fy25_${idx + 1}`,
+        engagement_id: priorEngId,
+        source_code: line.code,
+        source_name: line.name,
+        source_type: line.type,
+        balance_p: netBalance.toString(),
+        blynt_code: blyntCode,
+        status: 'confirmed',
+        confidence: 100,
+        method: 'manual',
+        statutory_line: stat.statutory_line,
+        schedule_ref: stat.schedule_ref,
+        cash_flow_category: stat.cash_flow_category,
+        ai_reason: 'Prior year locked accounts',
+        evidence_used: 'Prior year statutory sign-off',
+        sign_mismatch: false,
+        gate: 'ready',
+        confirmed_by: 'usr_test_partner',
+        confirmed_at: '2025-10-15T10:00:00Z',
+        comment_count: 0,
+      });
+    });
+
     // Seed for Acme Precision Engineering Ltd (eng_acme_fy26) matching redesign boards (6 unmapped, 12 suggested)
     seedLines.forEach((line, idx) => {
       const netBalance = line.debit_p - line.credit_p;

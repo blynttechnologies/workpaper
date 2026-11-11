@@ -125,6 +125,8 @@ export interface Firm {
   settings?: {
     gate?: Partial<Record<AiActionLogItem['output_type'], { ready?: number; check?: number; auto_accept?: boolean }>>;
     defaults?: PracticeDefaults;
+    // QTR-02: shown on every client-facing output produced from now on
+    branding?: { logo_file_key?: string; colour?: string; footer?: string; disclaimer?: string };
   };
 }
 
@@ -233,6 +235,43 @@ export interface Engagement {
   locked_at: string | null;
   locked_by?: string | null;
   prior_engagement_id: string | null;
+  // Stages D and E: these belong to the period, so they are kept on it
+  commentary?: Record<string, Commentary>; // ANL-03, keyed by accounts line
+  std_dismissed?: Record<string, string>; // STD-02: finding id -> why it is not relevant
+  budgets?: Budget[]; // MGT-03
+  forecast?: ForecastAssumptions; // MGT-05
+  quarterly?: QuarterlyPack; // QTR-01
+}
+
+export interface Commentary {
+  text: string;
+  visibility: 'internal' | 'client';
+  ai_text?: string; // the drafted wording, kept when a person edits it
+  history: { text: string; by: string; at: string }[];
+}
+
+export interface Budget {
+  id: string;
+  name: string;
+  active: boolean;
+  /** Twelve monthly amounts in pence per P&L line, signed as the accounts show them */
+  lines: Record<string, string[]>;
+}
+
+export interface ForecastAssumptions {
+  debtor_days: number;
+  creditor_days: number;
+  minimum_cash_p: string;
+  capex_p: string; // per month
+  dividends_p: string; // per month
+}
+
+export interface QuarterlyPack {
+  comment: string;
+  removed: string[]; // insights the accountant deleted
+  status: 'draft' | 'ready' | 'approved';
+  approved_by?: string;
+  approved_at?: string;
 }
 
 export interface BlyntAccount {

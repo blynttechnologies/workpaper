@@ -113,3 +113,11 @@ body {
 .dark-sidebar-scroll::-webkit-scrollbar-thumb:hover {
   background: #2D4C8C;
 }
+
+/* Printing a report (Download PDF): only the report itself goes on the page */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+  .no-print { display: none !important; }
+}

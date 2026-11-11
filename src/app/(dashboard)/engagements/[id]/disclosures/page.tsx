@@ -8,6 +8,15 @@ import { db } from '@/lib/server/db';
 import { useLocale } from '@/context/LocaleContext';
 import { buildAccounts, type AccountsLine } from '@/lib/workpapers/accounts';
 import { structureForCompanyType } from '@/lib/practice-structure';
+import { getActor } from '@/lib/session';
+import { answerChecklist, checklistFor, consistencyChecks, dismissStandardFinding, draftNotes, notesFor, standardCheck } from '@/lib/completion';
+import { btnPrimary, btnSecondary } from '@/components/workpaper/kit';
+import type { DisclosureChecklistItem } from '@/lib/types/models';
+
+const SECTION: Record<DisclosureChecklistItem['section'], string> = {
+  accounting_policies: 'Accounting policies', balance_sheet_notes: 'Balance sheet notes', pl_notes: 'Profit and loss notes', directors: 'Directors',
+  related_parties: 'Related parties', commitments: 'Commitments', post_balance_sheet: 'Events after the year end', going_concern: 'Going concern',
+};
 
 // Pounds, rounded; negatives in brackets as in published accounts
 const fmt = (p: bigint | null) => {
@@ -16,17 +25,7 @@ const fmt = (p: bigint | null) => {
   return p < 0n ? `(${v})` : v;
 };
 
-// Company-law disclosures to confirm before the accounts are approved (STD-03)
-const CHECKLIST = [
-  ['Accounting policies', 'Basis of preparation and the accounting framework are stated', 'FRS 102 1A.3(a)'],
-  ['Accounting policies', 'Depreciation methods and useful lives are disclosed for each asset class', 'FRS 102 17.31'],
-  ['Employees', 'Average number of employees during the year is disclosed', 'Companies Act 2006 s411'],
-  ['Directors', 'Advances and credits to directors, with interest and repayments, are disclosed', 'Companies Act 2006 s413'],
-  ['Commitments', 'Financial commitments, guarantees and contingencies not in the balance sheet are disclosed', 'FRS 102 1A.C'],
-  ['Events after the year end', 'Material non-adjusting events after the reporting date are described', 'FRS 102 Section 32'],
-];
-
-type Tab = 'accounts' | 'notes' | 'checklist';
+type Tab = 'accounts' | 'notes' | 'checklist' | 'checks';
 
 export default function DisclosuresPage() {
   const params = useParams();
@@ -34,6 +33,8 @@ export default function DisclosuresPage() {
   const { formatDate } = useLocale();
   const [tab, setTab] = useState<Tab>('accounts');
   const [filing, setFiling] = useState(false);
+  const [, redraw] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const engagement = db.engagements.find((e) => e.id === engagementId);
   const client = engagement ? db.clients.find((c) => c.id === engagement.client_id) : undefined;
@@ -46,13 +47,24 @@ export default function DisclosuresPage() {
     return <div className="bg-white border border-[#E3E7EF] rounded-xl p-8 text-center text-xs text-[#4A5878]">Engagement not found.</div>;
   }
 
+  const actor = getActor();
+  const locked = engagement.status === 'locked';
+  const act = (result: string | null | void) => { setError(result ?? null); redraw((n) => n + 1); };
+  const firm = db.firms.find((f) => f.id === engagement.firm_id);
+  const brand = firm?.settings?.branding;
+  const checklist = isCompany ? checklistFor(engagementId) : [];
+  const notes = notesFor(engagementId);
+  const findings = standardCheck(engagementId);
+  const checks = consistencyChecks(engagementId);
+  const lineAmount = (label: string) => Object.values(a.bs).flat().find((l) => l.label === label)?.amount;
   const yearLabel = (iso?: string) => (iso ? formatDate(iso, { year: 'numeric', month: 'short' }) : '');
   const balanced = a.netAssets.amount === a.capitalAndReserves.amount;
   const empty = a.pl.length === 0 && Object.values(a.bs).every((l) => l.length === 0);
   const tabs: [Tab, string, React.ReactNode][] = [
     ['accounts', isCompany ? 'Statutory accounts preview' : 'Accounts preview', <Eye key="i" className="w-4 h-4 text-[#1D4E89]" />],
-    ['notes', 'Notes: line breakdown', <FileText key="i" className="w-4 h-4 text-[#1D4E89]" />],
-    ...(isCompany ? ([['checklist', 'Disclosure checklist', <ShieldCheck key="i" className="w-4 h-4 text-[#1D4E89]" />]] as [Tab, string, React.ReactNode][]) : []),
+    ['notes', 'Notes', <FileText key="i" className="w-4 h-4 text-[#1D4E89]" />],
+    ...(isCompany ? ([['checklist', `Disclosure checklist (${checklist.filter((c) => c.confirmed_answer).length}/${checklist.length})`, <ShieldCheck key="i" className="w-4 h-4 text-[#1D4E89]" />]] as [Tab, string, React.ReactNode][]) : []),
+    ['checks', `Final checks (${checks.filter((c) => !c.passed).length + findings.filter((f) => !f.dismissed).length} to clear)`, <CheckCircle2 key="i" className="w-4 h-4 text-[#1D4E89]" />],
   ];
 
   const Row = ({ label, amount, prior: p, bold, indent, rule }: { label: string; amount: bigint; prior: bigint | null; bold?: boolean; indent?: boolean; rule?: boolean }) => (
@@ -104,6 +116,7 @@ export default function DisclosuresPage() {
         ))}
       </div>
 
+      {error && <p role="alert" className="p-3 rounded-[10px] bg-[#FDECEA] text-xs text-[#B42318]">{error}</p>}
       {a.unmappedPence !== 0n && (
         <div role="alert" className="p-3 rounded-[10px] bg-[#FFF4DB] border border-[#6B4700]/20 text-xs text-[#6B4700] flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -129,6 +142,7 @@ export default function DisclosuresPage() {
                     <button type="button" onClick={() => setFiling(true)} className={`px-3 py-1 font-bold rounded-lg ${filing ? 'bg-[#122654] text-white' : 'bg-[#F5F8FD] text-[#4A5878]'}`}>Companies House filing version</button>
                   </div>
                 ) : <span />}
+                <button type="button" className={`${btnPrimary} no-print`} disabled={!balanced} title={balanced ? 'Opens the print dialog: choose Save as PDF' : 'The balance sheet must balance first'} onClick={() => { db.logAudit(engagement.firm_id, actor, 'PRODUCE_ACCOUNTS_PDF', 'engagements', engagement.id, null, { version: filing ? 'filing' : 'full' }); window.print(); }}>Download PDF</button>
                 <div className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${balanced ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FDECEA] text-[#B42318]'}`}>
                   {balanced ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                   {balanced
@@ -139,8 +153,10 @@ export default function DisclosuresPage() {
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded-xl p-4 sm:p-8 bg-gray-50/50 max-w-3xl mx-auto space-y-6 text-[#122654] overflow-x-auto">
+              <div className="print-area border border-gray-200 rounded-xl p-4 sm:p-8 bg-gray-50/50 max-w-3xl mx-auto space-y-6 text-[#122654] overflow-x-auto">
                 <div className="text-center space-y-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {brand?.logo_file_key && <img src={`/api/v1/files/${brand.logo_file_key}`} alt={firm?.name ?? 'Practice logo'} className="h-10 mx-auto mb-2" />}
                   <h2 className="text-lg font-bold tracking-tight">{client.name}</h2>
                   {isCompany && client.company_no && <p className="text-xs text-[#4A5878]">Registered number {client.company_no}</p>}
                 </div>
@@ -191,6 +207,14 @@ export default function DisclosuresPage() {
                   </table>
                 </div>
 
+                {!filing && notes.map((n) => (
+                  <div key={n.id} className="font-sans text-xs">
+                    <p className="font-bold">{n.note_number}. {n.title}</p>
+                    {n.narrative_html && <p className="mt-1 text-[#4A5878] leading-relaxed">{n.narrative_html}</p>}
+                    {n.figures.length > 0 && <table className="w-full font-mono mt-1"><tbody>{n.figures.map((f) => <tr key={f.label}><td className="py-0.5 font-sans">{f.label}</td><td className="py-0.5 text-right">{fmt(BigInt(f.amount_p))}</td></tr>)}</tbody></table>}
+                  </div>
+                ))}
+                {(brand?.footer || brand?.disclaimer) && <p className="pt-3 border-t border-gray-300 text-[10px] text-[#4A5878] font-sans">{[brand.footer, brand.disclaimer].filter(Boolean).join(' · ')}</p>}
                 {structure === 'ltd' && (
                   <p className="pt-4 border-t border-gray-300 text-[11px] text-[#4A5878] leading-relaxed font-sans">
                     For the year ended {formatDate(engagement.period_end)} the company was entitled to exemption from audit under section 477 of the Companies Act 2006 relating to small companies. The members have not required the company to obtain an audit of its accounts.
@@ -204,46 +228,97 @@ export default function DisclosuresPage() {
 
       {tab === 'notes' && (
         <div className="space-y-4">
-          {[...a.bs.fixed, ...a.bs.current, ...a.bs.creditorsShort, ...a.bs.creditorsLong, ...a.bs.provisions, ...a.pl]
-            .filter((l) => l.accounts.length > 0)
-            .map((l) => (
-              <div key={l.label} className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs">
-                <h3 className="text-sm font-bold text-[#122654] border-b border-[#E3E7EF] pb-2 mb-2">{l.label}</h3>
-                <table className="w-full text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[#4A5878]">
+            <button type="button" className={btnPrimary} disabled={locked || empty} onClick={() => act(void draftNotes(engagementId, actor))}>{notes.length ? 'Re-draft notes' : 'Draft notes'}</button>
+            <span>Figures come from the balance sheet. Wording you have edited is kept when you re-draft.</span>
+          </div>
+          {notes.map((n) => {
+            const stale = n.figures.some((f) => (lineAmount(f.label) ?? 0n).toString() !== f.amount_p);
+            return (
+              <div key={n.id} className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E3E7EF] pb-2 mb-2">
+                  <h3 className="text-sm font-bold text-[#122654]">{n.note_number}. {n.title}</h3>
+                  {stale && <span className="px-2 py-0.5 rounded bg-[#FFF4DB] text-[#6B4700] font-bold">Figures updated – re-draft</span>}
+                </div>
+                <p className="text-[#4A5878] mb-2">Why included: {n.why_included} ({n.standard_ref})</p>
+                <textarea
+                  aria-label={`Wording for ${n.title}`}
+                  defaultValue={n.narrative_html}
+                  disabled={locked}
+                  rows={3}
+                  onBlur={(e) => {
+                    if (e.target.value === n.narrative_html) return;
+                    const before = n.narrative_html;
+                    n.narrative_html = e.target.value;
+                    n.is_custom_wording = true;
+                    db.logAudit(engagement.firm_id, actor, 'EDIT_NOTE', 'statutory_notes', n.id, { narrative: before }, { narrative: n.narrative_html });
+                    act(null);
+                  }}
+                  className="w-full p-2 border border-[#D3DCEE] rounded-lg text-[#122654]"
+                />
+                {n.is_custom_wording && <span className="text-[10px] font-bold uppercase text-[#4A5878]">Edited</span>}
+                <table className="w-full mt-2">
                   <tbody>
-                    {l.accounts.map((x) => (
-                      <tr key={x.code}>
-                        <td className="py-1 font-mono text-[#4A5878] w-14">{x.code}</td>
-                        <td className="py-1 text-[#122654]">{x.name}</td>
-                        <td className="py-1 text-right font-mono">{fmt(x.amount)}</td>
-                      </tr>
+                    {n.figures.map((f) => (
+                      <tr key={f.label}><td className="py-1 text-[#122654]">{f.label}</td><td className="py-1 text-right font-mono underline">{fmt(BigInt(f.amount_p))}</td></tr>
                     ))}
-                    <tr className="font-bold border-t border-[#E3E7EF]">
-                      <td colSpan={2} className="py-1">Total</td>
-                      <td className="py-1 text-right font-mono">{fmt(l.amount)}</td>
-                    </tr>
                   </tbody>
                 </table>
               </div>
-            ))}
-          {empty && <p className="text-xs text-[#4A5878]">No figures yet.</p>}
+            );
+          })}
+          {notes.length === 0 && <p className="text-xs text-[#4A5878]">{empty ? 'No figures yet.' : 'No notes drafted yet.'}</p>}
         </div>
       )}
 
       {tab === 'checklist' && isCompany && (
         <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs overflow-hidden">
           <p className="p-4 bg-[#F5F8FD] border-b border-[#E3E7EF] text-xs text-[#4A5878]">
-            Confirm each disclosure in the notes before the accounts are approved.
+            Confirm every answer before the accounts are approved. The suggestion comes from the figures in the file; a No needs a manager to accept it.
           </p>
           <ul className="divide-y divide-[#E3E7EF]">
-            {CHECKLIST.map(([section, question, ref]) => (
-              <li key={question} className="p-4 flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
-                <span className="font-mono font-bold text-[#1D4E89] bg-[#EAF5FC] px-1.5 py-0.5 rounded self-start">{ref}</span>
-                <span className="text-[#4A5878]">{section}:</span>
-                <span className="font-semibold text-[#122654]">{question}</span>
+            {checklist.map((c) => (
+              <li key={c.id} className="p-4 text-xs space-y-2">
+                <p><span className="text-[#4A5878]">{SECTION[c.section]}:</span> <span className="font-semibold text-[#122654]">{c.question}</span> <span className="font-mono text-[#1D4E89]">{c.standard_ref}</span></p>
+                <p className="text-[#4A5878]">Suggested: <strong>{c.ai_suggested_answer}</strong>{c.ai_confidence < 90 ? ' (check)' : ''}. {c.ai_reason}</p>
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label={`Answer: ${c.question}`}>
+                  {(['Yes', 'No', 'N/A'] as const).map((ans) => (
+                    <button key={ans} type="button" disabled={locked} aria-pressed={c.confirmed_answer === ans} className={c.confirmed_answer === ans ? btnPrimary : btnSecondary} onClick={() => act(answerChecklist(c.id, ans, actor))}>{ans}</button>
+                  ))}
+                  {c.confirmed_answer ? <span className="text-[#0B6B52]">Confirmed by {c.confirmed_by}</span> : <span className="text-[#6B4700]">Not confirmed</span>}
+                  {c.confirmed_answer === 'No' && (c.manager_override_reason
+                    ? <span className="text-[#4A5878]">Accepted: {c.manager_override_reason}</span>
+                    : <button type="button" disabled={locked} className={btnSecondary} onClick={() => { const r = window.prompt('Why is a No acceptable here?'); if (r) act(answerChecklist(c.id, 'No', actor, r)); }}>Needs manager acceptance</button>)}
+                </div>
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {tab === 'checks' && (
+        <div className="space-y-4 text-xs">
+          <div className="bg-white border border-[#E3E7EF] rounded-xl divide-y divide-[#E3E7EF]">
+            <h2 className="p-4 text-sm font-bold text-[#122654]">Accounts consistency</h2>
+            {checks.map((c) => (
+              <div key={c.id} className="p-4 flex flex-wrap items-center justify-between gap-2">
+                <span className={c.passed ? 'text-[#0B6B52]' : 'text-[#B42318] font-bold'}>{c.passed ? '✓' : '✗'} {c.title}. <span className="font-normal text-[#4A5878]">{c.detail}</span></span>
+                {!c.passed && c.href && <Link href={c.href} className="font-bold text-[#B8432F] hover:underline">Open</Link>}
+              </div>
+            ))}
+          </div>
+          {isCompany && (
+            <div className="bg-white border border-[#E3E7EF] rounded-xl divide-y divide-[#E3E7EF]">
+              <h2 className="p-4 text-sm font-bold text-[#122654]">Standard check: {engagement.framework}</h2>
+              {findings.length === 0 && <p className="p-4 text-[#0B6B52]">✓ Every schedule the standard requires is in the file.</p>}
+              {findings.map((f) => (
+                <div key={f.id} className="p-4 flex flex-wrap items-center justify-between gap-2">
+                  <span><strong className={f.dismissed ? 'text-[#4A5878]' : 'text-[#B42318]'}>{f.title}.</strong> {f.why}{f.dismissed && <em> Not relevant: {f.dismissed}</em>}</span>
+                  {!f.dismissed && <button type="button" disabled={locked} className={btnSecondary} onClick={() => { const r = window.prompt('Why is this not relevant? A manager or partner must accept it.'); if (r) act(dismissStandardFinding(engagementId, f.id, r, actor)); }}>Not relevant</button>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
