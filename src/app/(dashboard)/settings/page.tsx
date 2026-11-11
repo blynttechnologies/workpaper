@@ -2,28 +2,20 @@
 
 import React, { useState } from 'react';
 import {
-  Sliders,
-  Shield,
   Users,
-  Palette,
   Sparkles,
-  Save,
-  Upload,
   CheckCircle2,
   AlertCircle,
   X,
   Plus,
   Trash2,
-  FileText,
 } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { StaffManager } from '@/components/settings/StaffManager';
 import { getCurrentUserId } from '@/lib/session';
-import { BackupCodesCard } from '@/components/settings/BackupCodes';
 
 export default function PracticeSettingsPage() {
-
-  const [activeTab, setActiveTab] = useState<'defaults' | 'roles' | 'rules' | 'branding' | 'security'>('defaults');
+  const [activeTab, setActiveTab] = useState<'roles' | 'rules'>('roles');
   const [savedToast, setSavedToast] = useState<string | null>(null);
 
   React.useEffect(() => {
@@ -32,32 +24,8 @@ export default function PracticeSettingsPage() {
       const tab = params.get('tab');
       if (tab === 'rules' || tab === 'ai-rules') setActiveTab('rules');
       else if (tab === 'roles' || tab === 'users') setActiveTab('roles');
-      else if (tab === 'branding') setActiveTab('branding');
-      else if (tab === 'security') setActiveTab('security');
-      else if (tab === 'defaults') setActiveTab('defaults');
     }
-    // Saved practice defaults (ADM-02)
-    fetch('/api/v1/firm/settings')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d?.defaults) return;
-        setSignOffLevels(d.defaults.signoff_levels === 2 ? '2' : '3');
-        setReconciliationTolerance((Number(d.defaults.tolerance_p) / 100).toFixed(2));
-        setReviewThreshold((Number(d.defaults.review_threshold_p) / 100).toFixed(2));
-      })
-      .catch(() => {});
   }, []);
-
-  // ADM-02 Practice Defaults
-  const [signOffLevels, setSignOffLevels] = useState<'3' | '2'>('3');
-  const [reconciliationTolerance, setReconciliationTolerance] = useState('1.00');
-  const [reviewThreshold, setReviewThreshold] = useState('500.00');
-  const [capitalisationThreshold, setCapitalisationThreshold] = useState('500.00');
-  const [aiReadyThreshold, setAiReadyThreshold] = useState('90');
-  const [deadlineAlertDays, setDeadlineAlertDays] = useState('30');
-
-  // Confirmation modal for ADM-02
-  const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
 
   // ADM-01 Users & Roles
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -171,37 +139,9 @@ export default function PracticeSettingsPage() {
   const [newRuleScope, setNewRuleScope] = useState<'supplier' | 'client' | 'practice'>('practice');
   const [newRuleType, setNewRuleType] = useState<'mapping' | 'extraction' | 'proposal' | 'finding'>('mapping');
 
-  // QTR-02 Branding
-  const [brandPrimary, setBrandPrimary] = useState('#122654');
-  const [brandAccent, setBrandAccent] = useState('#FF7A66');
-  const [brandFont, setBrandFont] = useState('Inter');
-  const [footerDisclaimer, setFooterDisclaimer] = useState('Prepared by Blynt Practice & Co LLP under FRS 102 Section 1A. Registered in England & Wales.');
-
-  // ADM-03 Security & Data
-  const [hostingRegion] = useState('EU (Stockholm, eu-north-1)');
-  const [retentionYears] = useState('7');
-
   const triggerSaveNotification = (msg: string) => {
     setSavedToast(msg);
     setTimeout(() => setSavedToast(null), 3000);
-  };
-
-  const handleConfirmSave = async (mode: 'new_only' | 'all') => {
-    setShowSaveConfirmModal(false);
-    const res = await fetch('/api/v1/firm/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tolerance: reconciliationTolerance, review_threshold: reviewThreshold, signoff_levels: Number(signOffLevels) }),
-    }).catch(() => null);
-    if (!res?.ok) {
-      triggerSaveNotification((await res?.json().catch(() => null))?.error || 'Could not save the practice defaults. Try again.');
-      return;
-    }
-    triggerSaveNotification(
-      mode === 'new_only'
-        ? 'Settings saved successfully. Changes will apply to all new engagements.'
-        : 'Settings saved and synced across all active practice engagements.'
-    );
   };
 
   const closeInviteModal = () => {
@@ -313,28 +253,19 @@ export default function PracticeSettingsPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-200 max-w-7xl mx-auto pb-16">
-      {/* Top Banner (Page 5 Screen Map) */}
+      {/* Top Banner */}
       <div className="bg-white border border-[#E3E7EF] rounded-[20px] p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-extrabold text-[#122654] tracking-tight">Practice Settings &amp; Defaults</h1>
+            <h1 className="text-2xl font-extrabold text-[#122654] tracking-tight">Practice Settings</h1>
             <span className="text-xs bg-[#EAF5FC] text-[#1D4E89] border border-[#1D4E89]/20 px-2.5 py-1 rounded-full font-mono font-bold">
               Blynt Practice &amp; Co LLP
             </span>
           </div>
           <p className="text-xs text-[#4A5878] mt-1.5 leading-relaxed">
-            Configure firm-wide working paper methodology, 3-level sign-off rules, AI confidence thresholds, white-label branding, and UK GDPR governance.
+            Manage practice team members, roles, permissions, and firm-wide AI mapping and extraction rules.
           </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setShowSaveConfirmModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer shrink-0 active:scale-[0.98]"
-        >
-          <Save className="w-4 h-4 text-[#FF7A66]" />
-          <span>Save Changes</span>
-        </button>
       </div>
 
       {savedToast && (
@@ -343,28 +274,14 @@ export default function PracticeSettingsPage() {
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{savedToast}</span>
           </div>
-          <button type="button" onClick={() => setSavedToast(null)} className="text-emerald-700 hover:text-emerald-900">
+          <button type="button" onClick={() => setSavedToast(null)} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Tabs Navigation (ADM-01, ADM-02, DAT-05, QTR-02, ADM-03) */}
+      {/* Tabs Navigation: Users & Roles and AI Rules & Accuracy */}
       <div className="flex items-center gap-2 border-b border-[#E3E7EF] pb-1 overflow-x-auto">
-        <button
-          id="tab-defaults"
-          type="button"
-          onClick={() => setActiveTab('defaults')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-            activeTab === 'defaults'
-              ? 'border-[#FF7A66] text-[#122654] bg-[#F5F8FD]/50 rounded-t-lg'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <Sliders className="w-4 h-4 text-[#1D4E89]" />
-          <span>Defaults &amp; Thresholds</span>
-        </button>
-
         <button
           id="tab-roles"
           type="button"
@@ -392,184 +309,9 @@ export default function PracticeSettingsPage() {
           <Sparkles className="w-4 h-4 text-[#FF7A66]" />
           <span>AI Rules &amp; Accuracy</span>
         </button>
-
-        <button
-          id="tab-branding"
-          type="button"
-          onClick={() => setActiveTab('branding')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-            activeTab === 'branding'
-              ? 'border-[#FF7A66] text-[#122654] bg-[#F5F8FD]/50 rounded-t-lg'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <Palette className="w-4 h-4 text-[#1D4E89]" />
-          <span>Logo &amp; Branding</span>
-        </button>
-
-        <button
-          id="tab-security"
-          type="button"
-          onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 cursor-pointer ${
-            activeTab === 'security'
-              ? 'border-[#FF7A66] text-[#122654] bg-[#F5F8FD]/50 rounded-t-lg'
-              : 'border-transparent text-[#4A5878] hover:text-[#122654]'
-          }`}
-        >
-          <Shield className="w-4 h-4 text-emerald-600" />
-          <span>Security &amp; GDPR</span>
-        </button>
       </div>
 
-      {/* TAB 1: Defaults & Thresholds (ADM-02) */}
-      {activeTab === 'defaults' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-8 max-w-4xl">
-          <div className="border-b border-[#E3E7EF] pb-4">
-            <h2 className="text-base font-bold text-[#122654]">Practice Engagement Defaults</h2>
-            <p className="text-xs text-[#4A5878] mt-0.5">
-              Parameters enforced automatically on schedules, lead sheets, variance calculations, and statutory reviews.
-              Each client can override the sign-off levels on its client page.
-            </p>
-            <a href="/onboarding" className="inline-block mt-2 text-xs font-semibold text-[#1D4E89] hover:underline">
-              Edit practice details (name, structure, regulator, address, VAT)
-            </a>
-          </div>
-
-          <div className="space-y-6">
-            <div>
-              <label className="block text-xs font-bold text-[#122654] mb-2">
-                Default Sign-off Levels
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <label
-                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
-                    signOffLevels === '3'
-                      ? 'border-[#122654] bg-[#F5F8FD] shadow-xs'
-                      : 'border-[#E3E7EF] hover:border-gray-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="signOff"
-                    checked={signOffLevels === '3'}
-                    onChange={() => setSignOffLevels('3')}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="font-bold text-[#122654]">3 Levels: Preparer &gt; Manager &gt; Partner</div>
-                    <div className="text-[11px] text-[#4A5878] mt-0.5">
-                      Standard UK practice segregation of duties with required manager clearance before partner sign-off.
-                    </div>
-                  </div>
-                </label>
-
-                <label
-                  className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
-                    signOffLevels === '2'
-                      ? 'border-[#122654] bg-[#F5F8FD] shadow-xs'
-                      : 'border-[#E3E7EF] hover:border-gray-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="signOff"
-                    checked={signOffLevels === '2'}
-                    onChange={() => setSignOffLevels('2')}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="font-bold text-[#122654]">2 Levels: Preparer &gt; Partner</div>
-                    <div className="text-[11px] text-[#4A5878] mt-0.5">
-                      Streamlined workflow suitable for sole practitioners and smaller practice setups.
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
-              <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-                <label className="block text-xs font-bold text-[#122654] mb-1">
-                  Reconciliation Tolerance (£)
-                </label>
-                <input aria-label="Reconciliation Tolerance (£)"
-                  type="text"
-                  value={reconciliationTolerance}
-                  onChange={(e) => setReconciliationTolerance(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
-                />
-                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Default £1.00. Differences within tolerance are treated as Reconciled automatically.
-                </span>
-              </div>
-
-              <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-                <label htmlFor="review-threshold" className="block text-xs font-bold text-[#122654] mb-1">
-                  Review Threshold (£)
-                </label>
-                <input
-                  id="review-threshold"
-                  type="text"
-                  value={reviewThreshold}
-                  onChange={(e) => setReviewThreshold(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
-                />
-                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Movements above this are flagged for review.
-                </span>
-              </div>
-
-              <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-                <label className="block text-xs font-bold text-[#122654] mb-1">
-                  Capitalisation Threshold (£)
-                </label>
-                <input aria-label="Capitalisation Threshold (£)"
-                  type="text"
-                  value={capitalisationThreshold}
-                  onChange={(e) => setCapitalisationThreshold(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
-                />
-                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Expense transactions above this trigger the Capital vs Revenue detector.
-                </span>
-              </div>
-
-              <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-                <label className="block text-xs font-bold text-[#122654] mb-1">
-                  AI &apos;Ready&apos; Confidence Threshold (%)
-                </label>
-                <input aria-label="AI ready threshold (%)"
-                  type="number"
-                  value={aiReadyThreshold}
-                  onChange={(e) => setAiReadyThreshold(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
-                />
-                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Suggestions at or above {aiReadyThreshold}% display as &apos;Ready&apos; for 1-click bulk confirmation.
-                </span>
-              </div>
-
-              <div className="p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-                <label className="block text-xs font-bold text-[#122654] mb-1">
-                  Deadline Alert Days
-                </label>
-                <input aria-label="Deadline Alert Days"
-                  type="number"
-                  value={deadlineAlertDays}
-                  onChange={(e) => setDeadlineAlertDays(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-white border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654] focus:ring-1 focus:ring-[#1D4E89] outline-none"
-                />
-                <span className="text-[11px] text-[#7E8DA6] mt-1 block">
-                  Highlight statutory filing deadlines within {deadlineAlertDays} days in amber/red on dashboard.
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: Users & Roles (ADM-01) */}
+      {/* TAB 1: Users & Roles (ADM-01) */}
       {activeTab === 'roles' && (
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E3E7EF] pb-4">
@@ -593,7 +335,7 @@ export default function PracticeSettingsPage() {
         </div>
       )}
 
-      {/* TAB 3: Shared Rules Library & AI Accuracy (DAT-09, DAT-05, ADM-02) */}
+      {/* TAB 2: Shared Rules Library & AI Accuracy (DAT-09, DAT-05, ADM-02) */}
       {activeTab === 'rules' && (
         <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-8">
           {/* Header */}
@@ -696,14 +438,14 @@ export default function PracticeSettingsPage() {
                         <button
                           type="button"
                           onClick={() => handleApproveRule(rule.id)}
-                          className="px-3 py-1.5 bg-[#0B6B52] hover:bg-[#095742] text-white text-xs font-bold rounded-lg shadow-2xs"
+                          className="px-3 py-1.5 bg-[#0B6B52] hover:bg-[#095742] text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer"
                         >
                           Approve for Practice
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteRule(rule.id)}
-                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg"
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg cursor-pointer"
                         >
                           Reject
                         </button>
@@ -723,7 +465,7 @@ export default function PracticeSettingsPage() {
                   key={sc}
                   type="button"
                   onClick={() => setRuleScopeFilter(sc)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all ${
+                  className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all cursor-pointer ${
                     ruleScopeFilter === sc
                       ? 'bg-[#122654] text-white'
                       : 'bg-[#F5F8FD] text-[#4A5878] hover:text-[#122654]'
@@ -741,7 +483,7 @@ export default function PracticeSettingsPage() {
                   key={tp}
                   type="button"
                   onClick={() => setRuleTypeFilter(tp)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all ${
+                  className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all cursor-pointer ${
                     ruleTypeFilter === tp
                       ? 'bg-[#1D4E89] text-white'
                       : 'bg-[#F5F8FD] text-[#4A5878] hover:text-[#122654]'
@@ -805,7 +547,7 @@ export default function PracticeSettingsPage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteRule(r.id)}
-                      className="text-gray-400 hover:text-red-600 p-1 rounded"
+                      className="text-gray-400 hover:text-red-600 p-1 rounded cursor-pointer"
                       title="Delete rule"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -813,256 +555,6 @@ export default function PracticeSettingsPage() {
                   </div>
                 </div>
               ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: Branding (QTR-02) */}
-      {activeTab === 'branding' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6">
-            <div className="border-b border-[#E3E7EF] pb-4">
-              <h2 className="text-base font-bold text-[#122654]">Practice Logo &amp; Branding</h2>
-              <p className="text-xs text-[#4A5878] mt-0.5">
-                Applied across all quarterly insight packs, management accounts, and statutory accounts PDFs.
-              </p>
-            </div>
-
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-[#122654] mb-2">Practice Logo</label>
-                <div className="border-2 border-dashed border-[#D3DCEE] hover:border-[#122654] rounded-xl p-6 text-center bg-[#F5F8FD] transition-colors cursor-pointer">
-                  <Upload className="w-8 h-8 text-[#7E8DA6] mx-auto mb-2" />
-                  <span className="text-xs font-bold text-[#122654] block">Click to upload brand logo</span>
-                  <span className="text-[11px] text-[#7E8DA6]">PNG, JPG, or SVG (up to 5MB)</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#122654] mb-1.5">Brand Navy Primary</label>
-                  <div className="flex items-center gap-2">
-                    <input aria-label="Brand Navy Primary"
-                      type="color"
-                      value={brandPrimary}
-                      onChange={(e) => setBrandPrimary(e.target.value)}
-                      className="w-9 h-9 rounded-lg border-none cursor-pointer"
-                    />
-                    <input aria-label="Brand navy primary colour (hex)"
-                      type="text"
-                      value={brandPrimary}
-                      onChange={(e) => setBrandPrimary(e.target.value)}
-                      className="flex-1 text-xs p-2 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#122654] mb-1.5">Brand Coral Accent</label>
-                  <div className="flex items-center gap-2">
-                    <input aria-label="Brand Coral Accent"
-                      type="color"
-                      value={brandAccent}
-                      onChange={(e) => setBrandAccent(e.target.value)}
-                      className="w-9 h-9 rounded-lg border-none cursor-pointer"
-                    />
-                    <input aria-label="Brand coral accent colour (hex)"
-                      type="text"
-                      value={brandAccent}
-                      onChange={(e) => setBrandAccent(e.target.value)}
-                      className="flex-1 text-xs p-2 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg font-mono font-bold text-[#122654]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#122654] mb-1.5">Typography Family</label>
-                <select aria-label="Typography Family"
-                  value={brandFont}
-                  onChange={(e) => setBrandFont(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654] font-medium"
-                >
-                  <option value="Inter">Inter (Clean modern sans-serif)</option>
-                  <option value="Roboto">Roboto (Technical precision)</option>
-                  <option value="Outfit">Outfit (Contemporary brand display)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#122654] mb-1.5">Report Footer Disclaimer</label>
-                <textarea aria-label="Report Footer Disclaimer"
-                  rows={3}
-                  value={footerDisclaimer}
-                  onChange={(e) => setFooterDisclaimer(e.target.value)}
-                  className="w-full text-xs p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-lg text-[#122654] leading-relaxed outline-none focus:ring-1 focus:ring-[#1D4E89]"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Live Report Preview (QTR-02) */}
-          <div className="lg:col-span-5 bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E3E7EF]">
-              <span className="text-xs font-bold text-[#122654] flex items-center gap-1.5">
-                <FileText className="w-4 h-4 text-[#FF7A66]" />
-                Live PDF Report Preview
-              </span>
-              <span className="text-[10px] text-[#0B6B52] bg-emerald-50 font-bold px-2 py-0.5 rounded-full">
-                Synchronized
-              </span>
-            </div>
-
-            <div
-              className="p-5 rounded-xl border border-gray-200 shadow-inner flex flex-col justify-between min-h-[360px]"
-              style={{ backgroundColor: '#ffffff', fontFamily: brandFont }}
-            >
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: brandPrimary }}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white text-xs" style={{ backgroundColor: brandPrimary }}>
-                      BP
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold" style={{ color: brandPrimary }}>Blynt Practice &amp; Co LLP</div>
-                      <div className="text-[10px] text-gray-500">Chartered Accountants</div>
-                    </div>
-                  </div>
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: brandAccent }} />
-                </div>
-
-                <div className="mt-5 space-y-2">
-                  <div className="text-sm font-bold text-gray-900">Quarterly Management Report</div>
-                  <div className="text-[11px] text-gray-500">Client: Harlow &amp; Finch Fine Goods Ltd · Q4 FY26</div>
-                  <div className="h-16 bg-gray-50 rounded-lg p-2.5 text-[10px] text-gray-600 mt-3 border border-gray-100 flex items-center justify-around font-mono">
-                    <div className="text-center">
-                      <div className="text-gray-400">Revenue</div>
-                      <div className="font-bold text-gray-800">£6,200,000</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-gray-400">Gross Margin</div>
-                      <div className="font-bold text-emerald-600">38.7%</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-gray-400">Cash</div>
-                      <div className="font-bold text-blue-600">£1,305,350</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 text-[9px] text-gray-500 leading-tight">
-                {footerDisclaimer}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: Security & GDPR (ADM-03) */}
-      {activeTab === 'security' && (
-        <div className="bg-white border border-[#E3E7EF] rounded-[20px] shadow-xs p-6 sm:p-8 space-y-6 max-w-3xl">
-          <div className="border-b border-[#E3E7EF] pb-4">
-            <h2 className="text-base font-bold text-[#122654]">Security &amp; Data Protection</h2>
-            <p className="text-xs text-[#4A5878] mt-0.5">
-              Compliance with UK GDPR, AES-256 encryption at rest and in transit, and firm tenant isolation.
-            </p>
-          </div>
-
-          <div className="space-y-4 text-xs text-[#122654]">
-            <div className="flex items-center justify-between p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-              <div>
-                <div className="font-bold text-[#122654]">Hosting Region</div>
-                <div className="text-[11px] text-[#4A5878] mt-0.5">Practice and client data stored exclusively in UK/EU sovereign cloud</div>
-              </div>
-              <span className="font-mono font-bold text-[#0B6B52] bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                {hostingRegion}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-              <div>
-                <div className="font-bold text-[#122654]">Multi-Factor Authentication (MFA)</div>
-                <div className="text-[11px] text-[#4A5878] mt-0.5">Enforced on all staff sign-ins across the practice</div>
-              </div>
-              <span className="font-mono font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg">
-                Enforced ✓
-              </span>
-            </div>
-
-            <BackupCodesCard />
-
-            <div className="flex items-center justify-between p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-              <div>
-                <div className="font-bold text-[#122654]">Record retention period</div>
-                <div className="text-[11px] text-[#4A5878] mt-0.5">Archive retention before automatic purging (ICAEW / Companies Act compliance)</div>
-              </div>
-              <span className="font-mono font-bold text-[#122654] bg-white border border-gray-200 px-3 py-1 rounded-lg">
-                {retentionYears} Years
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-[#F5F8FD] rounded-xl border border-[#E3E7EF]">
-              <div>
-                <div className="font-bold text-[#122654]">AI Model Training Opt-In</div>
-                <div className="text-[11px] text-[#4A5878] mt-0.5">
-                  Client financial numbers and vouchers are NEVER used to train shared foundation models
-                </div>
-              </div>
-              <span className="font-mono font-bold text-[#A23A27] bg-[#FFF1EE] border border-[#A23A27]/20 px-2.5 py-1 rounded-lg">
-                Opted Out (Private)
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Save Changes Confirmation Modal (ADM-02) */}
-      {showSaveConfirmModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-[#0B1A3B]/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
-        >
-          <div className="bg-white border border-[#E3E7EF] rounded-[24px] shadow-2xl max-w-lg w-full p-6 sm:p-8 animate-in zoom-in-95">
-            <div className="flex items-center gap-3 text-[#122654] mb-3">
-              <div className="w-10 h-10 rounded-xl bg-[#EAF5FC] text-[#1D4E89] flex items-center justify-center shrink-0">
-                <Sliders className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-[#122654]">Apply Practice Defaults</h3>
-                <p className="text-xs text-[#4A5878]">Confirm how changes should propagate to client files</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-[#4A5878] leading-relaxed mb-6">
-              You are updating practice-wide defaults and thresholds. Would you like to apply these new parameters to 
-              <strong> new engagements only</strong>, or <strong>also update existing active engagements</strong> across the practice?
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowSaveConfirmModal(false)}
-                className="w-full sm:w-auto px-4 py-2.5 text-xs text-[#4A5878] hover:text-[#122654] font-medium cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleConfirmSave('new_only')}
-                className="w-full sm:w-auto px-4 py-2.5 bg-white border border-[#122654] text-[#122654] hover:bg-[#F5F8FD] text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Apply to new engagements only
-              </button>
-              <button
-                type="button"
-                onClick={() => handleConfirmSave('all')}
-                className="w-full sm:w-auto px-4 py-2.5 bg-[#122654] hover:bg-[#1D4E89] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                Also update existing engagements
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1084,7 +576,7 @@ export default function PracticeSettingsPage() {
                 type="button"
                 onClick={closeInviteModal}
                 aria-label="Close"
-                className="text-[#4A5878] hover:text-[#122654]"
+                className="text-[#4A5878] hover:text-[#122654] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1186,7 +678,7 @@ export default function PracticeSettingsPage() {
                 <div className="p-3 rounded-lg bg-[#EAF6F0] border border-[#0B6B52]/20 text-xs text-[#122654] space-y-2">
                   <p className="font-semibold">Invitation created. Send this link to {inviteEmail.trim()} (valid for 7 days):</p>
                   <input aria-label="Invite link" readOnly value={inviteLink} onFocus={(e) => e.target.select()} className="w-full font-mono text-[11px] p-2 border border-[#D3DCEE] rounded bg-white" />
-                  <button type="button" onClick={() => navigator.clipboard?.writeText(inviteLink)} className="text-[#1D4E89] font-semibold hover:underline">
+                  <button type="button" onClick={() => navigator.clipboard?.writeText(inviteLink)} className="text-[#1D4E89] font-semibold hover:underline cursor-pointer">
                     Copy link
                   </button>
                 </div>
@@ -1196,7 +688,7 @@ export default function PracticeSettingsPage() {
                 <button
                   type="button"
                   onClick={closeInviteModal}
-                  className="px-3.5 py-2 text-xs text-[#4A5878] hover:text-[#122654] font-medium"
+                  className="px-3.5 py-2 text-xs text-[#4A5878] hover:text-[#122654] font-medium cursor-pointer"
                 >
                   {inviteLink ? 'Done' : 'Cancel'}
                 </button>
@@ -1231,7 +723,7 @@ export default function PracticeSettingsPage() {
               <button
                 type="button"
                 onClick={() => setShowRuleModal(false)}
-                className="text-[#4A5878] hover:text-[#122654]"
+                className="text-[#4A5878] hover:text-[#122654] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1307,7 +799,7 @@ export default function PracticeSettingsPage() {
                 <button
                   type="button"
                   onClick={() => setShowRuleModal(false)}
-                  className="px-3.5 py-2 text-xs text-[#4A5878] hover:text-[#122654] font-medium"
+                  className="px-3.5 py-2 text-xs text-[#4A5878] hover:text-[#122654] font-medium cursor-pointer"
                 >
                   Cancel
                 </button>
