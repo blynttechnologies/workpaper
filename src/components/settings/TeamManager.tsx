@@ -1,7 +1,7 @@
 'use client';
 
 import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Check, Loader2, Pencil, Trash2, UserPlus, X } from 'lucide-react';
+import { AlertCircle, Check, Loader2, Mail, Pencil, Trash2, UserPlus, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { getCurrentUserId } from '@/lib/session';
 import { ROLES, StaffEditor, StaffRow, cap } from '@/components/settings/StaffManager';
@@ -191,6 +191,26 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
   );
 }
 
+/** The invitation email: a short welcome, what they can do, and the one-time link. */
+export function inviteEmail(name: string, role: string, link: string, firm?: string) {
+  const origin = link ? new URL(link).origin : '';
+  return {
+    subject: `You're invited to Blynt Workpapers${firm ? ` at ${firm}` : ''}`,
+    body: [
+      `Hi ${name},`,
+      '',
+      `You have been given access to Blynt Workpapers${firm ? ` at ${firm}` : ''} as ${/^[aeiou]/i.test(role) ? 'an' : 'a'} ${role}.`,
+      '',
+      'Use this link to set your password and sign in. It works once and expires in 7 days:',
+      link,
+      '',
+      `After that, sign in any time at ${origin}/login with this email address.`,
+      '',
+      'Please do not forward this email.',
+    ].join('\n'),
+  };
+}
+
 function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: string; clientName: string; onClose: () => void; onAdded: (inviteId: string) => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -201,9 +221,11 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
   const [error, setError] = useState('');
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedMsg, setCopiedMsg] = useState(false);
   const clients = db.clients.filter((c) => !c.archived_at);
   const seesAll = role === 'partner' || role === 'admin';
   const field = 'mt-1 w-full min-h-[38px] px-3 border border-[#D3DCEE] rounded-[8px] disabled:bg-[#F5F8FD]';
+  const invite = inviteEmail(name.trim(), role, link, db.firms[0]?.name);
 
   const submit = async () => {
     if (!name.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) return setError('Enter a name and a valid email address.');
@@ -296,7 +318,23 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
                   {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <p className="text-[11px] text-[#4A5878]">Send it to {name.trim()} privately. It’s only shown once.</p>
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <a href={`mailto:${encodeURIComponent(email.trim())}?subject=${encodeURIComponent(invite.subject)}&body=${encodeURIComponent(invite.body)}`} className="min-h-[32px] px-2.5 inline-flex items-center gap-1 bg-[#122654] text-white font-bold rounded-[6px]">
+                  <Mail className="w-3.5 h-3.5" /> Email invite
+                </a>
+                <a
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email.trim())}&su=${encodeURIComponent(invite.subject)}&body=${encodeURIComponent(invite.body)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="min-h-[32px] px-2.5 inline-flex items-center border border-[#D3DCEE] bg-white text-[#122654] font-bold rounded-[6px]"
+                >
+                  Send with Gmail
+                </a>
+                <button type="button" onClick={() => navigator.clipboard?.writeText(invite.body).then(() => setCopiedMsg(true))} className="min-h-[32px] px-2.5 font-bold text-[#122654] underline cursor-pointer">
+                  {copiedMsg ? 'Message copied' : 'Copy message'}
+                </button>
+              </div>
+              <p className="text-[11px] text-[#4A5878]">The email opens ready to send to {email.trim()}, with a welcome message and the link. The link is only shown once.</p>
             </div>
           )}
 
