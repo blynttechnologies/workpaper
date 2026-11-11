@@ -354,52 +354,6 @@ export default function PracticeHomePage() {
         </Link>
       </div>
 
-      {/* Engagements by stage (mockup screen 2) */}
-      <div className="blynt-card p-5">
-        <h2 className="text-sm font-bold text-[#122654] mb-4">Engagements by stage</h2>
-        {(() => {
-          const stages = [
-            { key: 'planning', label: 'Planning', color: '#F5B544' },
-            { key: 'fieldwork', label: 'Fieldwork', color: '#FF7A66' },
-            { key: 'review', label: 'Review', color: '#3B82F6' },
-            { key: 'locked', label: 'Sign-off', color: '#0B6B52' },
-          ] as const;
-          const counts = stages.map((st) => db.engagements.filter((e) => e.status === st.key).length);
-          const total = counts.reduce((x, y) => x + y, 0);
-          let acc = 0;
-          const stops = stages.map((st, i) => {
-            const from = total ? (acc / total) * 100 : 0;
-            acc += counts[i];
-            return `${st.color} ${from}% ${total ? (acc / total) * 100 : 0}%`;
-          });
-          return (
-            <div className="flex items-center gap-8">
-              <div
-                className="relative w-28 h-28 rounded-full shrink-0"
-                style={{ background: total ? `conic-gradient(${stops.join(',')})` : '#E3E7EF' }}
-                aria-hidden="true"
-              >
-                <div className="absolute inset-4 rounded-full bg-white flex flex-col items-center justify-center">
-                  <span className="text-2xl font-extrabold font-mono-numbers">{total}</span>
-                  <span className="text-[10px] text-[#4A5878]">Total</span>
-                </div>
-              </div>
-              <ul className="flex flex-col gap-2 text-xs flex-1">
-                {stages.map((st, i) => (
-                  <li key={st.key} className="flex items-center justify-between gap-4">
-                    <span className="flex items-center gap-2 text-[#4A5878]">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: st.color }} />
-                      {st.label}
-                    </span>
-                    <span className="font-bold font-mono-numbers">{counts[i]}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })()}
-      </div>
-
       {/* Active Selected Company Command Center */}
       {activeCompany && companyEng && (
         <div className="blynt-card p-6 bg-gradient-to-r from-white via-white to-[#F5F8FD] border-[#D3DCEE] shadow-sm relative overflow-hidden">
