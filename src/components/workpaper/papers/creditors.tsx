@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Landmark, RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
@@ -11,7 +11,7 @@ import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, SuggestionRow, th, Tiles, useOpen } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
-import { bankMatches, creditorsJournal, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
+import { creditorsJournal, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
 
 const STATUS: Record<ReturnType<typeof supplierView>['status'], [string, 'good' | 'bad' | 'warn' | 'plain' | 'info']> = {
   none: ['No statement', 'plain'],
@@ -54,23 +54,6 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     if (!s) return setNote({ ok: false, text: 'The creditors control account has no ledger transactions yet. Import them from the accounting system, or add suppliers by hand.' });
     save({ suppliers: s, refreshed_at: new Date().toISOString() });
     setNote({ ok: true, text: `${s.length} supplier${s.length === 1 ? '' : 's'} from the ledger at ${peLabel}.` });
-  };
-  const [checking, setChecking] = useState(false);
-  const checkBank = async () => {
-    setChecking(true);
-    try {
-      const res = await fetch('/api/v1/integrations/xero/bank-payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engagementId: result.engagementId, days: windowDays }) });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) return setNote({ ok: false, text: body.error || 'Could not read the Xero bank account.' });
-      const suppliers = (live().suppliers ?? []).map((s: Supplier) => ({ ...s, bank_check: { to: body.to, matches: bankMatches(s, body.payments ?? []) } }));
-      save({ suppliers });
-      const found = suppliers.filter((s: Supplier) => s.bank_check!.matches.length).length;
-      setNote({ ok: true, text: `${body.payments?.length ?? 0} payment${body.payments?.length === 1 ? '' : 's'} out of the Xero bank from ${ukDate(body.from)} to ${ukDate(body.to)}; ${found} of ${suppliers.length} suppliers have a matching payment.` });
-    } catch {
-      setNote({ ok: false, text: 'Could not reach Xero. Try again.' });
-    } finally {
-      setChecking(false);
-    }
   };
   const runSearch = () => {
     const found = searchAfterDate(result.engagementId, pe, windowDays, minimum, live().search?.items ?? []);
@@ -129,9 +112,6 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           <div className="ml-auto flex gap-2">
             <button type="button" onClick={refresh} className={btnAdd}>
               <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
-            </button>
-            <button type="button" onClick={checkBank} disabled={checking || !views.length} className={btnAdd}>
-              <Landmark className="w-3.5 h-3.5" /> {checking ? 'Checking Xero bank…' : 'Check Xero bank'}
             </button>
             <button type="button" onClick={addSupplier} className={btnAdd}>
               + Add supplier
@@ -197,16 +177,6 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                     <td className="p-2 align-top text-right">
                       <div className={`font-mono ${v.ledger > 0n && v.paid === 0n ? 'text-[#B42318]' : v.paid >= v.ledger && v.ledger > 0n ? 'text-[#0B6B52]' : ''}`}>{v.ledger > 0n && v.paid === 0n ? 'Nil' : money(v.paid)}</div>
                       {s.payments_after?.length ? <div className="text-[10px] text-[#4A5878]">{ukDate(s.payments_after[0].date)}</div> : null}
-                      {s.bank_check &&
-                        (s.bank_check.matches.length ? (
-                          <div className="text-[10px] text-[#0B6B52]">
-                            In Xero bank: {formatPence(asPence(s.bank_check.matches[0].amount_p))} on {ukDate(s.bank_check.matches[0].date)}
-                            {s.bank_check.matches[0].reconciled ? '' : ' (not reconciled)'}
-                            {s.bank_check.matches.length > 1 ? ` +${s.bank_check.matches.length - 1} more` : ''}
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-[#B42318]">Not in Xero bank to {ukDate(s.bank_check.to)}</div>
-                        ))}
                     </td>
                     <td className="p-2 align-top text-right">{s.oldest_days ? <Pill tone={s.oldest_days > 90 ? 'warn' : 'plain'}>{s.oldest_days} days</Pill> : '–'}</td>
                     <td className="p-2 align-top">
@@ -362,22 +332,6 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                                   <span className="font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</span>
                                 </div>
                               ))}
-                              {s.bank_check && (
-                                <>
-                                  <div className="font-bold mt-2 mb-1">Xero bank to {ukDate(s.bank_check.to)}</div>
-                                  {!s.bank_check.matches.length && <div className="text-[11px] text-[#7E8DA6]">No payment by this name, or for an open invoice amount, left the bank.</div>}
-                                  {s.bank_check.matches.map((p, k) => (
-                                    <div key={k} className="flex justify-between gap-2 text-[11px] border-t border-[#EEF1F6] py-1">
-                                      <span>{ukDate(p.date)}</span>
-                                      <span className="flex-1">
-                                        {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{p.contact || p.ref}</a> : p.contact || p.ref}
-                                        {p.reconciled ? '' : ' · not reconciled'}
-                                      </span>
-                                      <span className="font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</span>
-                                    </div>
-                                  ))}
-                                </>
-                              )}
                             </div>
                           </div>
                         )}
