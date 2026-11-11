@@ -1,4 +1,5 @@
 import { asPence, formatPence } from '../money';
+import type { BankPayment } from '../server/xero';
 import { addDays, afterDateKnown, byContact, chartCodeOf, journalCheck, ledgerFor, openItems, pair, slug, usualExpenseCode, type JLine, type PaperContext } from './common';
 
 /**
@@ -24,6 +25,19 @@ export interface Supplier {
   reason?: string;
   dispute?: 'ask' | 'not_disputed';
   dispute_reason?: string;
+  bank_check?: { to: string; matches: BankPayment[] }; // Xero bank payments after the period end that look like this supplier's
+}
+
+const plainName = (n: string) => n.toLowerCase().replace(/\b(ltd|limited|plc|llp)\b/g, '').replace(/[^a-z0-9]/g, '');
+
+/** Bank payments that are to this supplier by name, or are for exactly an open invoice or the balance owed. */
+export function bankMatches(s: Supplier, payments: BankPayment[]): BankPayment[] {
+  const name = plainName(s.name);
+  const amounts = new Set([s.ledger_p, ...(s.invoices ?? []).map((i) => i.amount_p)].filter((a) => asPence(a) > 0n).map((a) => asPence(a).toString()));
+  return payments.filter((p) => {
+    const payee = plainName(p.contact);
+    return (!!name && !!payee && (payee.includes(name) || name.includes(payee))) || amounts.has(p.amount_p);
+  });
 }
 
 export type SearchDecision = 'accrue' | 'creditor' | 'not_liability';
@@ -83,7 +97,7 @@ export function suppliersFromLedger(engagementId: string, periodEnd: string, win
       invoices: open.map((o) => ({ ref: o.tx.description, date: o.tx.date, days: o.days, amount_p: o.amount.toString(), ...(o.tx.external_url ? { url: o.tx.external_url } : {}) })),
       payments_after: payments.map((t) => ({ date: t.date, desc: t.description, amount_p: t.amount_p, ...(t.external_url ? { url: t.external_url } : {}) })),
       expense_code: prev?.expense_code ?? usualExpenseCode(engagementId, name) ?? undefined,
-      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute } : {}),
+      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, bank_check: prev.bank_check } : {}),
     });
   }
   return out;

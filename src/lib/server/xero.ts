@@ -317,6 +317,8 @@ interface XeroDoc {
   BankTransferID?: string;
   FromBankAccount?: { Code?: string };
   ToBankAccount?: { Code?: string };
+  Total?: number;
+  IsReconciled?: boolean;
 }
 
 const pence = (n: number | undefined) => BigInt(Math.round((n ?? 0) * 100));
@@ -438,6 +440,46 @@ async function allPages(endpoint: string, key: string, token: string, tenantId: 
     if (items.length < 100 || !fresh.length) break;
   }
   return out;
+}
+
+// ── Money out of the bank after the period end (creditors "paid after" check) ──
+
+export interface BankPayment {
+  date: string;
+  contact: string;
+  ref: string;
+  amount_p: string;
+  reconciled: boolean; // true when Xero has matched it to a bank statement line
+  url?: string;
+}
+
+/** Bill payments and spend-money lines, i.e. what left the bank. Drafts, voids and deletions are skipped. */
+export function parseBankPayments(shortCode: string | null, docs: { payments: XeroDoc[]; bank: XeroDoc[] }): BankPayment[] {
+  const out: BankPayment[] = [];
+  for (const p of docs.payments) {
+    if (p.Status !== 'AUTHORISED' || p.PaymentType !== 'ACCPAYPAYMENT') continue;
+    const id = p.Invoice?.InvoiceID;
+    out.push({ date: docDate(p), contact: p.Invoice?.Contact?.Name ?? '', ref: p.Reference || 'Payment', amount_p: pence(p.Amount).toString(), reconciled: !!p.IsReconciled, ...(id ? { url: xeroDeepLink(shortCode, `/AccountsPayable/View.aspx?InvoiceID=${id}`) } : {}) });
+  }
+  for (const b of docs.bank) {
+    if (!['AUTHORISED', 'PAID'].includes(b.Status ?? '') || b.Type !== 'SPEND' || !b.BankTransactionID) continue;
+    out.push({ date: docDate(b), contact: b.Contact?.Name ?? '', ref: b.Reference || 'Spend money', amount_p: pence(b.Total).toString(), reconciled: !!b.IsReconciled, url: xeroDeepLink(shortCode, `/Bank/ViewTransaction.aspx?bankTransactionID=${b.BankTransactionID}`) });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** What was paid out of the bank in the `days` after the engagement's period end. */
+export async function bankPaymentsAfter(actor: Actor, engagementId: string, days: number): Promise<{ from: string; to: string; payments: BankPayment[] }> {
+  const eng = db.engagements.find((e) => e.id === engagementId);
+  if (!eng) throw new ServiceError('Engagement not found', 404, 'NOT_FOUND');
+  const conn = db.xero_connections.find((c) => c.firm_id === actor.firmId && c.client_id === eng.client_id);
+  if (!conn) throw new ServiceError('This client is not connected to Xero yet.', 409, 'XERO_NOT_CONNECTED');
+  const day = (n: number) => new Date(Date.parse(eng.period_end) + n * 86_400_000).toISOString().slice(0, 10);
+  const from = day(1);
+  const to = day(Math.min(Math.max(Math.round(days) || 60, 1), 366));
+  const token = await accessTokenFor(conn);
+  const [payments, bank] = await Promise.all([allPages('Payments', 'Payments', token, conn.tenant_id, from, to), allPages('BankTransactions', 'BankTransactions', token, conn.tenant_id, from, to)]);
+  return { from, to, payments: parseBankPayments(conn.short_code, { payments, bank }) };
 }
 
 // ── Connections ──
