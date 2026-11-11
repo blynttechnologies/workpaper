@@ -111,7 +111,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   return (
     <aside
       aria-label="Sidebar navigation"
-      className="w-full lg:w-[232px] lg:min-h-screen bg-[#0B1A3B] text-white flex flex-col justify-between shrink-0 select-none pb-4"
+      className="w-full h-full min-h-full bg-[#0B1A3B] text-white flex flex-col justify-between shrink-0 select-none pb-4"
     >
       <div className="flex flex-col">
         {/* Blynt Brand Logo */}

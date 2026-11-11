@@ -14,8 +14,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[#F5F8FD] text-[#122654]">
       {/* Sidebar for Desktop */}
-      <div className="hidden lg:block shrink-0 border-r border-[#E3E7EF]">
-        <AppSidebar />
+      <div className="hidden lg:block shrink-0 w-[232px] bg-[#0B1A3B] border-r border-[#122654]">
+        <div className="sticky top-0 h-screen overflow-y-auto dark-sidebar-scroll">
+          <AppSidebar />
+        </div>
       </div>
 
       {/* Mobile Sidebar Drawer */}
@@ -25,7 +27,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({ children }) => {
           aria-modal="true"
           className="lg:hidden fixed inset-0 z-50 bg-[#0B1A3B]/50 backdrop-blur-xs flex"
         >
-          <div className="w-[232px] bg-[#0B1A3B] h-full shadow-2xl flex flex-col">
+          <div className="w-[232px] bg-[#0B1A3B] h-full shadow-2xl flex flex-col overflow-y-auto dark-sidebar-scroll">
             <AppSidebar onMobileClose={() => setMobileMenuOpen(false)} />
           </div>
           <div

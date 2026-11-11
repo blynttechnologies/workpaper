@@ -94,3 +94,22 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Dark sidebar custom scrollbar */
+.dark-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #1E3A73 #0B1A3B;
+}
+.dark-sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.dark-sidebar-scroll::-webkit-scrollbar-track {
+  background: #0B1A3B;
+}
+.dark-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #1E3A73;
+  border-radius: 9999px;
+}
+.dark-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #2D4C8C;
+}
