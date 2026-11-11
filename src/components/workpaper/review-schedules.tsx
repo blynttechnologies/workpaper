@@ -1,11 +1,12 @@
 'use client';
 
 import { Fragment } from 'react';
-import { formatPence } from '@/lib/money';
+import { asPence, formatPence } from '@/lib/money';
 import { analyticalReview, showsAccounts } from '@/lib/workpapers/analytical';
 import { ukDate } from '@/lib/dates';
 import { MoneyInput, TextInput } from '@/components/workpaper/parts';
 import type { ScheduleProps } from '@/components/workpaper/schedules';
+import { Tiles } from '@/components/workpaper/kit';
 
 const th = 'p-2 text-[10px] font-bold uppercase tracking-wider text-[#4A5878] whitespace-nowrap';
 
@@ -31,9 +32,22 @@ export function AnalyticalSchedule({ data, result, locked, save, live }: Schedul
   const unit = rounding === 'thousands' ? '£000' : '£';
   const figures = 'p-2 text-right font-mono whitespace-nowrap';
   const settingField = 'px-2 py-1.5 border border-[#D3DCEE] rounded-[8px] bg-white';
+  const totalCurrent = review.sections.reduce((acc, s) => acc + s.current, 0n);
+  const totalPrior = review.hasPrior ? review.sections.reduce((acc, s) => acc + (s.prior ?? 0n), 0n) : null;
+  const totalVariance = totalPrior === null ? null : totalCurrent - totalPrior;
+  const allRows = review.sections.flatMap((s) => s.blocks.flatMap((b) => b.rows));
+  const flaggedCount = allRows.filter((r) => r.significant).length;
 
   return (
     <div className="flex flex-col gap-3">
+      <Tiles
+        items={[
+          { label: `${view === 'pl' ? 'P&L Total' : 'Net Assets'} (${ukDate(review.periodEnd)})`, value: shown(totalCurrent, rounding) },
+          { label: `Prior Year (${review.priorEnd ? ukDate(review.priorEnd) : 'Prior'})`, value: shown(totalPrior, rounding) },
+          { label: 'Overall variance', value: shown(totalVariance, rounding), tone: (totalVariance ?? 0n) >= 0n ? 'plain' : 'warn' },
+          { label: 'Flagged variances', value: `${flaggedCount} item${flaggedCount === 1 ? '' : 's'}`, tone: flaggedCount === 0 ? 'good' : 'warn', sub: `Threshold: ${data.threshold_pct ?? 10}% / £${data.threshold_p ? formatPence(asPence(data.threshold_p)) : '1,000'}` },
+        ]}
+      />
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3 p-3 rounded-[12px] bg-[#F5F8FD] border border-[#E3E7EF] text-xs">
         <label className="flex flex-col gap-1">
           <span className="font-semibold">Rounding of accounts</span>

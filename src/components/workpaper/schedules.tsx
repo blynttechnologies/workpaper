@@ -8,6 +8,7 @@ import { db } from '@/lib/server/db';
 import { reconAccounts, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
+import { Tiles, type Tone } from './kit';
 import { ukDate } from '@/lib/dates';
 
 export interface ScheduleProps {
@@ -1126,6 +1127,14 @@ export function AssetsSchedule({ data, result, locked, save, filesFor, attachTo,
 
   return (
     <div className="flex flex-col gap-5">
+      <Tiles
+        items={[
+          { label: 'Net book value (NBV)', value: formatPence(t.nbv ?? 0n), sub: `Cost ${formatPence(t.cost ?? 0n)} · Dep ${formatPence(t.dep ?? 0n)}` },
+          { label: 'TB tie', value: (t.difference ?? 0n) === 0n ? 'Agrees' : 'Differs', tone: (t.difference ?? 0n) === 0n ? 'good' : 'bad', sub: `TB ${formatPence(t.tb ?? 0n)}` },
+          { label: 'Additions this year', value: formatPence(t.additions ?? 0n), sub: `${movements.filter((m) => m.type === 'addition').length} items` },
+          { label: 'Asset classes', value: `${classes.length} classes`, sub: 'Fixed asset register' },
+        ]}
+      />
       <div className="overflow-x-auto">
         <table className="w-full text-xs text-[#122654]">
           <thead className="bg-[#F5F8FD]">
@@ -1506,6 +1515,14 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
 
   return (
     <div className="flex flex-col gap-4">
+      <Tiles
+        items={[
+          { label: 'Schedule total', value: formatPence(result.totals.total ?? 0n) },
+          { label: 'Trial balance tie', value: formatPence(result.totals.tb ?? 0n), tone: totalCheck?.passed ? 'good' : 'bad', sub: totalCheck?.passed ? 'Agrees to ledger' : 'Differs from ledger' },
+          { label: 'Difference', value: formatPence(result.totals.difference ?? 0n), tone: (result.totals.difference ?? 0n) === 0n ? 'good' : 'bad' },
+          { label: 'Schedule lines', value: `${lines.length} line${lines.length === 1 ? '' : 's'}` },
+        ]}
+      />
       {/* S-10 Suspense / Clearing must-be-zero alert (REC-16) */}
       {isSuspense && (
         <div className={`p-4 rounded-[12px] border ${result.totals.total === 0n ? 'bg-[#E6F4EF] border-[#0B6B52]/30' : 'bg-[#FFF1EE] border-[#FF7A66]'}`}>
@@ -1709,6 +1726,14 @@ export function VatSchedule({ data, result, locked, save, filesFor, attachTo, pr
 
   return (
     <div className="flex flex-col gap-4 text-xs">
+      <Tiles
+        items={[
+          { label: 'Calculated VAT liability', value: formatPence(calcLiability), sub: 'Unpaid returns + open period' },
+          { label: 'TB VAT control (2200)', value: formatPence(tbLiability), tone: diff === 0n ? 'good' : 'bad', sub: 'General ledger closing' },
+          { label: 'Reconciliation difference', value: formatPence(diff), tone: diff === 0n ? 'good' : 'bad', sub: diff === 0n ? 'Fully reconciled' : 'Difference requires review' },
+          { label: 'VAT scheme', value: (data.scheme || 'standard').replace('_', ' ').toUpperCase(), sub: data.stagger || 'Quarterly stagger' },
+        ]}
+      />
       {/* VAT Scheme & Stagger Header */}
       <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#E3E7EF] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
@@ -1908,6 +1933,14 @@ export function PayrollSchedule({ data, result, locked, save, filesFor, attachTo
 
   return (
     <div className="flex flex-col gap-4 text-xs">
+      <Tiles
+        items={[
+          { label: 'Wages expense vs P&L', value: formatPence(result.totals.wages_cost ?? 0n), sub: 'TB 7000 / Gross wages' },
+          { label: 'PAYE / NIC liability', value: formatPence(result.totals.paye_nic_liability ?? 0n), sub: 'P32 & HMRC liability' },
+          { label: 'Pension liability', value: formatPence(result.totals.pension_liability ?? 0n), sub: 'Pension provider control' },
+          { label: 'Payroll months', value: `${months.length} of 12 months`, sub: 'Monthly payroll bridge' },
+        ]}
+      />
       <div className="flex items-center justify-between border-b border-[#E3E7EF] pb-2">
         <div className="flex gap-2">
           <button
@@ -2033,6 +2066,14 @@ export function LeasesSchedule({ data, result, locked, save, filesFor, attachTo,
 
   return (
     <div className="flex flex-col gap-4 text-xs">
+      <Tiles
+        items={[
+          { label: 'Total lease liability', value: formatPence(result.totals.liability ?? 0n), sub: 'Closing balance' },
+          { label: 'Due within 1 year', value: formatPence(result.totals.due_1y ?? 0n), sub: 'Current liability' },
+          { label: 'Due 1 to 5 years', value: formatPence(result.totals.due_1to5y ?? 0n), sub: 'Non-current liability' },
+          { label: 'Lease agreements', value: `${leases.length} lease${leases.length === 1 ? '' : 's'}`, sub: data.model === 'right_of_use' ? 'FRS 102 ROU' : 'FRS 105 Operating' },
+        ]}
+      />
       <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#E3E7EF] flex flex-wrap items-center justify-between gap-3">
         <div>
           <span className="text-[10px] uppercase font-bold text-[#4A5878] block">Accounting Standard Model</span>
@@ -2198,6 +2239,14 @@ export function LoansSchedule({ data, result, locked, save, filesFor, attachTo, 
 
   return (
     <div className="flex flex-col gap-4 text-xs">
+      <Tiles
+        items={[
+          { label: 'Principal outstanding', value: formatPence(principal), sub: data.lender || 'Commercial facility' },
+          { label: 'TB loans tie', value: formatPence(result.totals.tb ?? 0n), tone: (result.totals.difference ?? 0n) === 0n ? 'good' : 'bad', sub: (result.totals.difference ?? 0n) === 0n ? 'Agrees to ledger' : 'Difference requires review' },
+          { label: 'Due within 1 year', value: formatPence(asPence(maturity.within_1y_p)), sub: 'Current liability' },
+          { label: 'Due over 1 year', value: formatPence(asPence(maturity.within_1_to_5y_p) + asPence(maturity.over_5y_p)), sub: 'Non-current balance' },
+        ]}
+      />
       <div className="p-4 rounded-[12px] bg-[#F5F8FD] border border-[#E3E7EF] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <label className="flex flex-col gap-1">
           <span className="font-semibold text-[#122654]">Lender / Institution</span>
@@ -2283,8 +2332,21 @@ export function ChecklistSchedule({ data, result, locked, save, filesFor, attach
   const setItem = (id: string, patch: Record<string, any>) =>
     save({ items: (live().items ?? []).map((i: any) => (i.id === id ? { ...i, ...patch } : i)) });
   const t = result.totals;
+  const answered = items.filter((i) => i.answer).length;
+  const exceptions = items.filter((i) => i.answer === 'no').length;
+
   return (
     <div className="flex flex-col gap-4">
+      <Tiles
+        items={[
+          { label: 'Checklist questions', value: `${items.length} procedure${items.length === 1 ? '' : 's'}` },
+          { label: 'Answered', value: `${answered} of ${items.length}`, tone: answered === items.length && items.length > 0 ? 'good' : 'plain' },
+          { label: 'Exceptions / Issues', value: `${exceptions}`, tone: exceptions === 0 ? 'good' : 'warn', sub: exceptions === 0 ? 'No issues identified' : 'Requires review note' },
+          ...(result.template.materiality
+            ? [{ label: 'Overall materiality', value: formatPence(t.materiality ?? 0n), sub: `Performance: ${formatPence(t.performance ?? 0n)}` }]
+            : [{ label: 'Status', value: answered === items.length && items.length > 0 ? 'Complete' : 'In progress', tone: (answered === items.length && items.length > 0 ? 'good' : 'plain') as Tone }]),
+        ]}
+      />
       {result.template.materiality && (
         <div className="p-4 rounded-[12px] bg-[#F5F8FD] border border-[#E3E7EF] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <label className="flex flex-col gap-1">
@@ -2398,6 +2460,14 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
 
     return (
       <div className="flex flex-col gap-4 text-xs">
+        <Tiles
+          items={[
+            { label: 'Deferred tax provision', value: formatPence(provision), sub: 'Computed provision' },
+            { label: 'TB deferred tax (840)', value: formatPence(result.totals.tb ?? 0n), tone: diff === 0n ? 'good' : 'bad' },
+            { label: 'Timing difference', value: formatPence(timingDiff), sub: `NBV ${formatPence(nbv)} - TWDV ${formatPence(twdv)}` },
+            { label: 'Tax rate applied', value: `${ratePct}%`, sub: 'Corporation tax rate' },
+          ]}
+        />
         <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] flex items-center justify-between">
           <div>
             <div className="font-bold text-[#122654]">FRS 102 Timing Differences (Accelerated Capital Allowances)</div>
@@ -2524,6 +2594,14 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
 
   return (
     <div className="flex flex-col gap-4 text-xs">
+      <Tiles
+        items={[
+          { label: 'Current year charge', value: formatPence(cyCharge), sub: 'P&L tax charge' },
+          { label: 'Closing tax liability', value: formatPence(closingLiab), sub: 'Balance sheet liability' },
+          { label: 'TB tax tie (830)', value: formatPence(result.totals.tb ?? 0n), tone: diff === 0n ? 'good' : 'bad', sub: diff === 0n ? 'Agrees to ledger' : 'Differs from ledger' },
+          { label: 'Tax payments made', value: formatPence(paid), sub: 'HMRC payments' },
+        ]}
+      />
       <div className="p-3.5 rounded-[12px] bg-[#F5F8FD] border border-[#D3DCEE] flex items-center justify-between">
         <div>
           <div className="font-bold text-[#122654]">Corporation Tax Provision Bridge</div>

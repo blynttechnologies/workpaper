@@ -226,11 +226,10 @@ export default function WorkpaperPage() {
   const t = result.template;
   const data = workpaper.data_json as Record<string, any>;
   const isLocked = engagement.status === 'locked';
-  // Redesigned papers tick their own checks from the work, so the separate procedures list goes
-  const checksOnly = !!PAPER_SCREENS[t.ref] || t.ref === 'B-10' || t.ref === 'C-10';
-  // The redesigned papers use the simple layout: header card, schedule, conclusion, checks, review panel
-  const activeTab = sideTab ?? (checksOnly ? 'ai_review' : 'comments');
-  const procedures = checksOnly ? [] :db.procedures.filter((p) => p.workpaper_id === workpaper.id);
+  // All papers use the unified modern layout: header card, schedule with summary tiles, conclusion with AI draft, automated checks, and AI review panel
+  const checksOnly = true;
+  const activeTab = sideTab ?? 'ai_review';
+  const procedures = [] as any[];
   const comments = db.comments.filter((c) => c.workpaper_id === workpaper.id);
   const attachments = db.attachments.filter((a) => a.workpaper_id === workpaper.id);
   const signoffs = db.signoffs.filter((s) => s.workpaper_id === workpaper.id);
@@ -1496,12 +1495,12 @@ export default function WorkpaperPage() {
                         type="text"
                         aria-label="Reason not applicable"
                         placeholder="Why is this not applicable?"
-                        value={naDraft.reason}
+                        value={naDraft?.reason ?? ''}
                         onChange={(e) => setNaDraft({ id: p.id, reason: e.target.value })}
                         onKeyDown={(e) => e.key === 'Enter' && markNa()}
                         className="flex-1 px-2 py-1.5 text-xs border border-[#D3DCEE] rounded-[8px]"
                       />
-                      <button type="button" onClick={markNa} disabled={!naDraft.reason.trim()} className="px-3 text-xs font-bold bg-[#122654] text-white rounded-[8px] disabled:opacity-40">
+                      <button type="button" onClick={markNa} disabled={!naDraft?.reason?.trim()} className="px-3 text-xs font-bold bg-[#122654] text-white rounded-[8px] disabled:opacity-40">
                         Save
                       </button>
                       <button type="button" onClick={() => setNaDraft(null)} className="px-2 text-xs text-[#4A5878]">
