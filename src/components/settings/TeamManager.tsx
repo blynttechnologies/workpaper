@@ -5,6 +5,7 @@ import { AlertCircle, Check, Loader2, Mail, Pencil, Trash2, UserPlus, X } from '
 import { db } from '@/lib/server/db';
 import { getCurrentUserId } from '@/lib/session';
 import { ROLES, StaffEditor, StaffRow, cap } from '@/components/settings/StaffManager';
+import { inviteEmail } from '@/lib/invite-email';
 
 interface OpenInvite {
   id: string;
@@ -191,26 +192,6 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
   );
 }
 
-/** The invitation email: a short welcome, what they can do, and the one-time link. */
-export function inviteEmail(name: string, role: string, link: string, firm?: string) {
-  const origin = link ? new URL(link).origin : '';
-  return {
-    subject: `You're invited to Blynt Workpapers${firm ? ` at ${firm}` : ''}`,
-    body: [
-      `Hi ${name},`,
-      '',
-      `You have been given access to Blynt Workpapers${firm ? ` at ${firm}` : ''} as ${/^[aeiou]/i.test(role) ? 'an' : 'a'} ${role}.`,
-      '',
-      'Use this link to set your password and sign in. It works once and expires in 7 days:',
-      link,
-      '',
-      `After that, sign in any time at ${origin}/login with this email address.`,
-      '',
-      'Please do not forward this email.',
-    ].join('\n'),
-  };
-}
-
 function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: string; clientName: string; onClose: () => void; onAdded: (inviteId: string) => void }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -222,6 +203,7 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedMsg, setCopiedMsg] = useState(false);
+  const [emailed, setEmailed] = useState(false);
   const clients = db.clients.filter((c) => !c.archived_at);
   const seesAll = role === 'partner' || role === 'admin';
   const field = 'mt-1 w-full min-h-[38px] px-3 border border-[#D3DCEE] rounded-[8px] disabled:bg-[#F5F8FD]';
@@ -241,6 +223,7 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
       const body = await res.json().catch(() => ({}));
       if (!res.ok) return setError(body.error || 'Could not add them. Try again.');
       setLink(body.link);
+      setEmailed(Boolean(body.emailed));
       onAdded(body.invite.id);
     } catch {
       setError('Could not reach the server. Try again.');
@@ -311,6 +294,10 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
 
           {link && (
             <div className="p-2.5 rounded-[8px] bg-[#F5F8FD] border border-[#E3E7EF] space-y-1.5">
+              <p role="status" className={`font-semibold flex items-center gap-1.5 ${emailed ? 'text-[#0B6B52]' : 'text-[#8A5A00]'}`}>
+                {emailed ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                {emailed ? `Invitation emailed to ${email.trim()}.` : 'The email could not be sent automatically. Send it with a button below.'}
+              </p>
               <label htmlFor="invite-link" className="block font-semibold">Invitation link (valid for 7 days)</label>
               <div className="flex gap-1.5">
                 <input id="invite-link" readOnly value={link} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 min-h-[34px] px-2 border border-[#D3DCEE] rounded-[6px] bg-white font-mono text-[11px]" />
@@ -334,7 +321,7 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
                   {copiedMsg ? 'Message copied' : 'Copy message'}
                 </button>
               </div>
-              <p className="text-[11px] text-[#4A5878]">The email opens ready to send to {email.trim()}, with a welcome message and the link. The link is only shown once.</p>
+              <p className="text-[11px] text-[#4A5878]">{emailed ? 'Send it again yourself if it does not arrive. ' : ''}The link is only shown once.</p>
             </div>
           )}
 

@@ -12,6 +12,7 @@
     "reset-workspace": "node scripts/reset-workspace.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1167.0",
     "@tailwindcss/postcss": "^4.3.3",
     "ag-grid-community": "^36.2.0",
     "ag-grid-react": "^36.2.0",

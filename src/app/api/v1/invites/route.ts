@@ -3,6 +3,8 @@ import { getActorFromRequest, jsonResponse, errorResponse, publicOrigin } from '
 import { db } from '@/lib/server/db';
 import { createInvite } from '@/lib/server/invites';
 import { canSetUpPractice } from '@/lib/server/onboarding';
+import { sendMail } from '@/lib/server/mail';
+import { inviteEmail } from '@/lib/invite-email';
 
 // Open invites for the practice (no token hashes)
 export async function GET(req: Request) {
@@ -21,7 +23,7 @@ export async function GET(req: Request) {
   }
 }
 
-// No mail service yet: the invite link is returned for the inviter to send
+// The invite is emailed when mail is set up; the link is always returned so the inviter can send it by hand
 export async function POST(req: Request) {
   try {
     await syncIn();
@@ -30,7 +32,9 @@ export async function POST(req: Request) {
     const { invite, token } = createInvite(actor, body);
     await syncOut();
     const link = `${publicOrigin(req)}/invite/${token}`;
-    return jsonResponse({ invite, link }, 201);
+    const mail = inviteEmail(invite.name, invite.role, link, db.firms.find((f) => f.id === actor.firmId)?.name);
+    const emailed = await sendMail(invite.email, mail.subject, mail.body);
+    return jsonResponse({ invite, link, emailed }, 201);
   } catch (err) {
     return errorResponse(err);
   }

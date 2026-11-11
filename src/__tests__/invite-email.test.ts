@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { inviteEmail } from '../components/settings/TeamManager';
+import { inviteEmail } from '../lib/invite-email';
 
 describe('invitation email', () => {
   it('greets the person, names the firm and role, and carries the link and sign-in address', () => {
