@@ -145,6 +145,21 @@ export function createPasswordReset(actor: Actor, userId: string): { token: stri
   return { token, expires_at: cred.reset_expires_at };
 }
 
+/** Self-service: mints a reset token for the account with this email, or null if there is none. No actor — the link that carries the token is the only proof. Caller must email it, then never reveal whether an account existed. */
+export function requestPasswordReset(email: string): { token: string; name: string; email: string } | null {
+  const e = email.trim().toLowerCase();
+  if (!e) return null;
+  const user = db.users.find((u) => u.email.toLowerCase() === e);
+  const cred = user && db.credentials.find((c) => c.user_id === user.id);
+  const member = user && db.memberships.find((m) => m.user_id === user.id);
+  if (!user || !cred || !member || member.status === 'deactivated') return null;
+  const token = crypto.randomBytes(32).toString('base64url');
+  cred.reset_token_hash = sha256(token);
+  cred.reset_expires_at = new Date(Date.now() + RESET_TTL_MS).toISOString();
+  db.logAudit(member.firm_id, { id: user.id, name: user.name, role: member.role }, 'REQUEST_PASSWORD_RESET', 'users', user.id, null, { self_service: true, expires_at: cred.reset_expires_at });
+  return { token, name: user.name, email: user.email };
+}
+
 /** Sets a new password from a reset link; the link works once. */
 export function resetPassword(token: string, password: string) {
   const hash = sha256(String(token || ''));

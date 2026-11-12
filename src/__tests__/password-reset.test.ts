@@ -9,7 +9,7 @@ vi.mock('@/lib/server/store', () => ({
 }));
 
 import { db } from '../lib/server/db';
-import { createPasswordReset, resetPassword } from '../lib/server/invites';
+import { createPasswordReset, requestPasswordReset, resetPassword } from '../lib/server/invites';
 import { verifyPassword } from '../lib/server/auth';
 import { ensureCredentials } from '../lib/server/credentials';
 
@@ -45,5 +45,19 @@ describe('admin-issued password reset link', () => {
   it('only an admin or partner of the same practice can create a link', () => {
     expect(() => createPasswordReset(preparer, 'usr_test_reviewer')).toThrow(/admin or partner/);
     expect(() => createPasswordReset({ ...admin, firmId: 'firm_other' }, 'usr_test_preparer')).toThrow();
+  });
+});
+
+describe('self-service password reset request', () => {
+  it('mints a usable one-time token for a known email, case-insensitively', () => {
+    const out = requestPasswordReset('MARCUS.VANCE@blynt.co.uk');
+    expect(out).not.toBeNull();
+    expect(resetPassword(out!.token, NEW_PW).email).toBe('marcus.vance@blynt.co.uk');
+    expect(() => resetPassword(out!.token, NEW_PW)).toThrow(/invalid or has expired/);
+  });
+
+  it('returns null for an unknown email and mints no token', () => {
+    expect(requestPasswordReset('nobody@example.com')).toBeNull();
+    expect(requestPasswordReset('')).toBeNull();
   });
 });
