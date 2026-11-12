@@ -17,3 +17,21 @@ export function inviteEmail(name: string, role: string, link: string, firm?: str
     ].join('\n'),
   };
 }
+
+/** The password-reset email: a one-time link that expires in an hour. */
+export function resetEmail(name: string, link: string) {
+  const origin = link ? new URL(link).origin : '';
+  return {
+    subject: 'Reset your Blynt Workpapers password',
+    body: [
+      `Hi ${name},`,
+      '',
+      'We received a request to reset your Blynt Workpapers password. Use this link to set a new one. It works once and expires in one hour:',
+      link,
+      '',
+      `If you did not ask for this, ignore this email and your password stays the same. You can still sign in at ${origin}/login.`,
+      '',
+      'Please do not forward this email.',
+    ].join('\n'),
+  };
+}
