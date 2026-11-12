@@ -187,6 +187,7 @@ export function StaffEditor({ person, isSelf, onClose, onSaved }: { person: Staf
   const seesAll = role === 'partner' || role === 'admin';
 
   const [resetLink, setResetLink] = useState('');
+  const [resetEmailed, setResetEmailed] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const createResetLink = async () => {
@@ -195,8 +196,10 @@ export function StaffEditor({ person, isSelf, onClose, onSaved }: { person: Staf
     try {
       const res = await fetch(`/api/v1/users/${encodeURIComponent(person.id)}/password-reset`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
-      if (res.ok) setResetLink(body.link);
-      else setError(body.error || 'Could not create a reset link. Try again.');
+      if (res.ok) {
+        setResetLink(body.link);
+        setResetEmailed(Boolean(body.emailed));
+      } else setError(body.error || 'Could not create a reset link. Try again.');
     } catch {
       setError('Could not reach the server. Try again.');
     } finally {
@@ -314,7 +317,12 @@ export function StaffEditor({ person, isSelf, onClose, onSaved }: { person: Staf
                     {copied ? 'Copied' : 'Copy'}
                   </button>
                 </div>
-                <p className="text-[11px] text-[#4A5878]">Send it to {person.name} privately. Their current password keeps working until they use it.</p>
+                <p className="text-[11px] text-[#4A5878]">
+                  {resetEmailed
+                    ? `Emailed to ${person.email}. Copy the link above if it doesn't arrive.`
+                    : `Email isn't set up, so send this to ${person.name} privately.`}{' '}
+                  Their current password keeps working until they use it.
+                </p>
               </div>
             ) : (
               <button
