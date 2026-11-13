@@ -440,6 +440,10 @@ export function RowFiles({
   );
 }
 
+/** Room the working paper page leaves on the right while a preview is docked there (same width as the panel). */
+export const PREVIEW_ROOM = 'lg:mr-[min(46vw,760px)]';
+
+/** A file opened beside the working paper, docked right, so the schedule stays in view and usable. */
 export function PreviewModal({ file, onClose }: { file: Attachment | null; onClose: () => void }) {
   useEffect(() => {
     if (!file) return;
@@ -451,17 +455,13 @@ export function PreviewModal({ file, onClose }: { file: Attachment | null; onClo
   const kind = fileKind(file);
   const inline = kind === 'PDF' || (kind === 'IMG' && !/svg/.test(file.mime)) || /^text\/(plain|csv)$/.test(file.mime);
   return (
-    <div
+    <aside
       role="dialog"
-      aria-modal="true"
+      aria-modal="false"
       aria-label={`Preview ${file.filename}`}
-      className="fixed inset-0 z-50 bg-[#0B1A3B]/60 flex items-center justify-center p-4"
-      onClick={onClose}
+      className="fixed inset-y-0 right-0 z-50 w-full lg:w-[min(46vw,760px)] bg-white border-l border-[#D3DCEE] shadow-[-8px_0_24px_rgba(11,26,59,0.12)]"
     >
-      <div
-        className="bg-white rounded-[14px] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="h-full flex flex-col">
         <div className="flex items-center gap-3 p-3 border-b border-[#E3E7EF]">
           <div className="min-w-0">
             <div className="text-sm font-bold text-[#122654] truncate">{file.filename}</div>
@@ -479,13 +479,13 @@ export function PreviewModal({ file, onClose }: { file: Attachment | null; onClo
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex-1 min-h-[300px] bg-[#F5F8FD] overflow-auto">
+        <div className="flex-1 min-h-0 bg-[#F5F8FD] overflow-auto">
           {inline ? (
             kind === 'IMG' ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={fileUrl(file)} alt={file.filename} className="max-w-full mx-auto" />
             ) : (
-              <iframe src={fileUrl(file)} title={file.filename} className="w-full h-[75vh] bg-white" />
+              <iframe src={fileUrl(file)} title={file.filename} className="w-full h-full bg-white" />
             )
           ) : (
             <div className="p-10 text-center text-sm text-[#4A5878]">
@@ -494,6 +494,6 @@ export function PreviewModal({ file, onClose }: { file: Attachment | null; onClo
           )}
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

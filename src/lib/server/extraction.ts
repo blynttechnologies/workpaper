@@ -558,10 +558,16 @@ export class AiExtractionService {
       const stmtBal = extracted.statement_balance_p?.value;
       const account = Array.isArray(wpData.accounts) ? wpData.accounts.find((a: any) => a.id === accountId) : undefined;
       if (account) {
+        // Every balance read is kept on the row so a wrong one can be swapped for the date before or after
+        const read = stmtBal ? [{ date: extracted.statement_date?.value ?? '', balance_p: String(stmtBal), label: 'Balance at the year end', page: extracted.statement_balance_p.page }] : [];
+        const balances = [...read, ...((extracted.candidates ?? []) as { date: string; balance_p: string; label: string; page?: number }[])];
+        if (balances.length) wpData.accounts = wpData.accounts.map((a: any) => (a.id === account.id ? { ...a, ai_balances: balances } : a));
         // Only fill a blank balance: a figure someone entered is never overwritten by the AI,
         // and a balance the AI could not read stays blank rather than guessing
         if (stmtBal && !account.statement_p) {
-          wpData.accounts = wpData.accounts.map((a: any) => (a.id === account.id ? { ...a, statement_p: String(stmtBal), source: 'upload' } : a));
+          wpData.accounts = wpData.accounts.map((a: any) =>
+            a.id === account.id ? { ...a, statement_p: String(stmtBal), statement_date: extracted.statement_date?.value || undefined, source: 'upload' } : a
+          );
           addGateItem(
             `accounts.${account.id}.statement_p`,
             `${account.code === '*' ? account.name : `${account.code} ${account.name}`} closing balance`,

@@ -4,7 +4,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('@/lib/server/store', () => ({ syncIn: async () => {}, syncOut: async () => {}, currentVersion: () => 1, hasDatabase: () => false }));
 
 import { db } from '../lib/server/db';
-import { evaluatePaper, paperStatus, reconAccounts } from '../lib/workpapers/engine';
+import { evaluatePaper, linkedFiles, paperStatus, reconAccounts } from '../lib/workpapers/engine';
+import { services } from '../lib/server/services';
 import { blankPaperData, templateFor } from '../lib/workpapers/templates';
 
 // A bank paper on an engagement with a mapped trial balance
@@ -88,5 +89,50 @@ describe('status engine (WPS-04)', () => {
     wp.status = 'prepared';
     wp.data_json.statement_p = '1';
     expect(paperStatus(wp)).toBe('prepared');
+  });
+});
+
+describe('attachments: archive and delete', () => {
+  it('an archived or deleted file stops counting as evidence; restoring brings it back', () => {
+    const wp = bankPaper();
+    const admin = { id: 'usr_admin', name: 'Admin', role: 'admin' as const };
+    const att = { id: 'att_t', engagement_id: wp.engagement_id, workpaper_id: wp.id, file_key: 'k', filename: 's.pdf', mime: 'application/pdf', size: 1, sha256: 'x', category: 'Statement' as const, is_permanent: false, uploaded_by: 'usr_admin', uploaded_by_name: 'Admin', uploaded_at: '2026-11-13T00:00:00Z', links: [{ attachment_id: 'att_t', anchor_json: { kind: 'row', table: 'schedule', row: 'acc_6000' } }] };
+    db.attachments.push(att as any);
+    expect(linkedFiles(wp.id, 'acc_6000').map((a) => a.id)).toEqual(['att_t']);
+    services.archiveAttachment('firm_blynt_uk', admin, 'att_t', true);
+    expect(linkedFiles(wp.id, 'acc_6000')).toEqual([]);
+    services.archiveAttachment('firm_blynt_uk', admin, 'att_t', false);
+    expect(linkedFiles(wp.id, 'acc_6000').map((a) => a.id)).toEqual(['att_t']);
+    services.deleteAttachment('firm_blynt_uk', admin, 'att_t');
+    expect(linkedFiles(wp.id, 'acc_6000')).toEqual([]);
+    expect(() => services.archiveAttachment('firm_blynt_uk', admin, 'att_t', true)).toThrow(/not found/);
+  });
+});
+
+describe('statement read by AI', () => {
+  it('fills a blank balance with its date, keeps the other balances to choose from, and never overwrites a typed figure', () => {
+    const wp = bankPaper();
+    const admin = { id: 'usr_admin', name: 'Admin', role: 'admin' as const };
+    const [acc] = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads);
+    wp.data_json = { ...wp.data_json, accounts: [{ ...acc, statement_p: '' }] };
+    const read = {
+      statement_date: { value: '2026-03-31', confidence: 95, page: 2, gate: 'ready', reason: 'r' },
+      statement_balance_p: { value: '8135000', confidence: 95, page: 2, gate: 'ready', reason: 'r' },
+      candidates: [{ date: '2026-03-28', balance_p: '8000000', label: 'Last balance before the year end', page: 2 }],
+    };
+    const mk = (id: string) => db.attachments.push({ id, engagement_id: wp.engagement_id, workpaper_id: wp.id, file_key: id, filename: `${id}.pdf`, mime: 'application/pdf', size: 1, sha256: id, category: 'Statement', is_permanent: false, uploaded_by: 'usr_admin', uploaded_by_name: 'Admin', uploaded_at: '2026-11-13T00:00:00Z', extracted_data: read } as any);
+    mk('att_r1');
+    services.fillScheduleFromDocument('firm_blynt_uk', admin, 'att_r1', wp.id, acc.id);
+    const filled = db.workpapers.find((w) => w.id === wp.id)!.data_json.accounts[0];
+    expect(filled).toMatchObject({ statement_p: '8135000', statement_date: '2026-03-31', source: 'upload' });
+    expect(filled.ai_balances.map((b: any) => b.balance_p)).toEqual(['8135000', '8000000']);
+
+    // A figure someone typed stays; the read is only offered
+    db.workpapers.find((w) => w.id === wp.id)!.data_json.accounts[0] = { ...filled, statement_p: '100', source: 'manual', ai_balances: undefined };
+    mk('att_r2');
+    services.fillScheduleFromDocument('firm_blynt_uk', admin, 'att_r2', wp.id, acc.id);
+    const kept = db.workpapers.find((w) => w.id === wp.id)!.data_json.accounts[0];
+    expect(kept.statement_p).toBe('100');
+    expect(kept.ai_balances).toHaveLength(2);
   });
 });
