@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Upload,
   Sparkles,
   MessageSquare,
@@ -109,6 +111,10 @@ export default function WorkpaperPage() {
   const [fileFilter, setFileFilter] = useState<'all' | 'permanent' | 'archived' | AttachmentCategory>('all');
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [previewLarge, setPreviewLarge] = useState(false);
+  // The review panel folds away while a file is open, unless someone opens it again for that file
+  const [railFor, setRailFor] = useState<{ id: string | null; open: boolean } | null>(null);
+  const railOpen = railFor && railFor.id === (preview?.id ?? null) ? railFor.open : !preview;
+  const setRail = (open: boolean) => setRailFor({ id: preview?.id ?? null, open });
   // Bank and cash: what the AI read off the statement open in the preview, shown above it to pick from
   const [aiRead, setAiRead] = useState<{ attId: string; rowId: string; state: 'reading' | 'done' | 'failed'; bank?: string; options: BalanceOption[] } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -1904,10 +1910,60 @@ export default function WorkpaperPage() {
 
         {/* Right rail: comments and history */}
         {(showComments || checksOnly) && (
-          // The attachment opens under the review panel, so the paper stays in view beside it
+          // An open file sits at the top, above the review panel, so the paper stays in view beside it
           <div className={`flex flex-col gap-4 h-fit ${preview && !previewLarge ? '' : 'xl:sticky xl:top-20'}`}>
-          <aside className="blynt-card p-4 h-fit">
-            <div className="flex items-center justify-between mb-3 border-b border-[#E3E7EF]">
+          <PreviewModal
+            file={preview}
+            expanded={previewLarge}
+            onToggleSize={() => setPreviewLarge((v) => !v)}
+            onClose={() => {
+              setPreview(null);
+              setAiRead(null);
+            }}
+            top={
+              aiRead && preview?.id === aiRead.attId ? (
+                <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
+                    <span className="ml-auto font-normal text-[10px] text-[#4A5878]">for {anchorLabel(aiRead.rowId)}</span>
+                  </div>
+                  {aiRead.state === 'reading' && <p className="mt-1.5 text-[#4A5878]">Reading the statement…</p>}
+                  {aiRead.state === 'failed' && <p className="mt-1.5 text-[#8A5A00]">The AI could not read a balance from this file. Type the balance on the row.</p>}
+                  {aiRead.state === 'done' && (
+                    <ul className="mt-2 flex flex-col gap-1">
+                      {aiRead.options.map((b) => {
+                        const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
+                        const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
+                        return (
+                          <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">
+                            <span className="flex-1 min-w-0">
+                              <span className="font-semibold">{b.label}</span>
+                              <span className="text-[#4A5878]">
+                                {b.date ? ` · ${ukDate(b.date)}` : ''}
+                                {b.page ? ` · page ${b.page}` : ''}
+                              </span>
+                            </span>
+                            <span className="font-mono font-bold">{formatPence(asPence(b.balance_p))}</span>
+                            <button
+                              type="button"
+                              disabled={isLocked || inUse}
+                              onClick={() => applyBalance(aiRead.rowId, b)}
+                              className="min-w-[64px] px-2 py-1 text-[11px] font-bold rounded-[6px] bg-[#122654] text-white disabled:bg-[#E6F4EF] disabled:text-[#0B6B52]"
+                            >
+                              {inUse ? '✓ In use' : 'Use'}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
+                </div>
+              ) : null
+            }
+          />
+          <aside className={`blynt-card p-4 h-fit ${railOpen ? '' : '[&>*:not(:first-child)]:hidden'}`}>
+            <div className={`flex items-center justify-between border-b border-[#E3E7EF] ${railOpen ? 'mb-3' : ''}`}>
               <div role="tablist" className="flex gap-1 overflow-x-auto pb-1">
                 {(checksOnly
                   ? [
@@ -1927,13 +1983,26 @@ export default function WorkpaperPage() {
                     role="tab"
                     type="button"
                     aria-selected={activeTab === tab.id}
-                    onClick={() => setSideTab(tab.id)}
+                    onClick={() => {
+                      setSideTab(tab.id);
+                      if (!railOpen) setRail(true);
+                    }}
                     className={`flex items-center gap-1 px-2.5 py-2 text-xs font-bold border-b-2 -mb-px whitespace-nowrap ${activeTab === tab.id ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}
                   >
                     {!checksOnly && <tab.icon className="w-3.5 h-3.5" />} {tab.label}
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setRail(!railOpen)}
+                aria-expanded={railOpen}
+                aria-label={railOpen ? 'Fold the review panel' : 'Open the review panel'}
+                title={railOpen ? 'Fold' : 'Open'}
+                className="p-1 -mt-1 shrink-0 text-[#7E8DA6] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]"
+              >
+                {railOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
               {!checksOnly && (
               <button
                 type="button"
@@ -2277,56 +2346,6 @@ export default function WorkpaperPage() {
               {result.totals.nbv !== undefined && <div className="mt-1">NBV {formatPence(result.totals.nbv)}</div>}
             </div>
           </aside>
-          <PreviewModal
-            file={preview}
-            expanded={previewLarge}
-            onToggleSize={() => setPreviewLarge((v) => !v)}
-            onClose={() => {
-              setPreview(null);
-              setAiRead(null);
-            }}
-            top={
-              aiRead && preview?.id === aiRead.attId ? (
-                <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
-                    <span className="ml-auto font-normal text-[10px] text-[#4A5878]">for {anchorLabel(aiRead.rowId)}</span>
-                  </div>
-                  {aiRead.state === 'reading' && <p className="mt-1.5 text-[#4A5878]">Reading the statement…</p>}
-                  {aiRead.state === 'failed' && <p className="mt-1.5 text-[#8A5A00]">The AI could not read a balance from this file. Type the balance on the row.</p>}
-                  {aiRead.state === 'done' && (
-                    <ul className="mt-2 flex flex-col gap-1">
-                      {aiRead.options.map((b) => {
-                        const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
-                        const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
-                        return (
-                          <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">
-                            <span className="flex-1 min-w-0">
-                              <span className="font-semibold">{b.label}</span>
-                              <span className="text-[#4A5878]">
-                                {b.date ? ` · ${ukDate(b.date)}` : ''}
-                                {b.page ? ` · page ${b.page}` : ''}
-                              </span>
-                            </span>
-                            <span className="font-mono font-bold">{formatPence(asPence(b.balance_p))}</span>
-                            <button
-                              type="button"
-                              disabled={isLocked || inUse}
-                              onClick={() => applyBalance(aiRead.rowId, b)}
-                              className="min-w-[64px] px-2 py-1 text-[11px] font-bold rounded-[6px] bg-[#122654] text-white disabled:bg-[#E6F4EF] disabled:text-[#0B6B52]"
-                            >
-                              {inUse ? '✓ In use' : 'Use'}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                  <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
-                </div>
-              ) : null
-            }
-          />
           </div>
         )}
       </div>
