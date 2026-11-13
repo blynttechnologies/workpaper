@@ -25,11 +25,11 @@ import {
 } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { services } from '@/lib/server/services';
-import { formatPence } from '@/lib/money';
+import { asPence, formatPence } from '@/lib/money';
 import { getActor } from '@/lib/session';
 import { StatusBadge } from '@/components/ui/StatusPill';
 import { PAPER_SCREENS } from '@/components/workpaper/papers';
-import { evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts } from '@/lib/workpapers/engine';
+import { evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts, type BalanceOption, type ReconAccount } from '@/lib/workpapers/engine';
 import { diffData } from '@/lib/workpapers/diff';
 import { TEMPLATES, templateFor, templateOf } from '@/lib/workpapers/templates';
 import type { Attachment, AttachmentCategory } from '@/lib/types/models';
@@ -108,6 +108,9 @@ export default function WorkpaperPage() {
   const [uploadPermanent, setUploadPermanent] = useState(false);
   const [fileFilter, setFileFilter] = useState<'all' | 'permanent' | 'archived' | AttachmentCategory>('all');
   const [preview, setPreview] = useState<Attachment | null>(null);
+  const [previewLarge, setPreviewLarge] = useState(false);
+  // Bank and cash: what the AI read off the statement open in the preview, shown above it to pick from
+  const [aiRead, setAiRead] = useState<{ attId: string; rowId: string; state: 'reading' | 'done' | 'failed'; bank?: string; options: BalanceOption[] } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const pendingRow = useRef<string | null>(null);
 
@@ -276,29 +279,12 @@ export default function WorkpaperPage() {
             : 'Other'
         : uploadCategory;
     const { added, errors } = await uploadToPaper(workpaper!, files, { category, rowId: linkRow, permanent: uploadPermanent });
-    // Bank and cash: a statement dropped on an account row has its closing balance read when the row has none yet
-    if (t.kind === 'reconciliation' && linkRow && added.length) {
-      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result!.leads) });
-      if (live().accounts.some((a: any) => a.id === linkRow)) {
-        for (const att of added) {
-          try {
-            // The AI reads the statement on the server; with no read, the balance stays blank for someone to type
-            const res = await fetch(`/api/v1/files/${encodeURIComponent(att.file_key)}/read-statement`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ period_end: engagement!.period_end }),
-            });
-            const read = res.ok ? (await res.json()).read : null;
-            if (read) att.extracted_data = read;
-            services.fillScheduleFromDocument(engagement!.firm_id, actor, att.id, workpaper!.id, linkRow);
-          } catch {
-            // Reading the balance is a convenience: the file is attached either way
-          }
-        }
-      }
-    }
     if (added.length) touchPaper();
     setUploading(false);
+    // Bank and cash: a statement dropped on an account row opens beside the paper with what the AI read off it
+    if (t.kind === 'reconciliation' && linkRow && reconAccounts(live(), result!.leads).some((a) => a.id === linkRow)) {
+      for (const [i, att] of added.entries()) await readStatementFor(att, linkRow, i === 0);
+    }
     setMessage(
       errors.length
         ? { kind: 'error', text: errors.join(' ') }
@@ -306,6 +292,48 @@ export default function WorkpaperPage() {
     );
     refresh();
   }
+
+  const saveAccount = (rowId: string, patch: Partial<ReconAccount>) =>
+    saveData({ accounts: reconAccounts(live(), result!.leads).map((a) => (a.id === rowId ? { ...a, ...patch } : a)) });
+
+  /**
+   * The AI reads a statement on the server: the balance at the year end and the balances either side.
+   * They are kept on the row as options and nothing is filled in until someone picks one.
+   */
+  async function readStatementFor(att: Attachment, rowId: string, show: boolean) {
+    if (show) {
+      setPreview(att);
+      setAiRead({ attId: att.id, rowId, state: 'reading', options: [] });
+    }
+    let options: BalanceOption[] = [];
+    let bank: string | undefined;
+    try {
+      const res = await fetch(`/api/v1/files/${encodeURIComponent(att.file_key)}/read-statement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_end: engagement!.period_end }),
+      });
+      const read = res.ok ? (await res.json()).read : null;
+      if (read) {
+        bank = read.bank_name?.value || undefined;
+        const date: string = read.statement_date?.value ?? '';
+        options = [
+          { date, balance_p: read.statement_balance_p.value, label: read.statement_balance_p.reason, page: read.statement_balance_p.page },
+          ...(read.candidates ?? []),
+        ];
+        saveAccount(rowId, { ai_balances: options });
+      }
+    } catch {
+      // Reading is a convenience: the file is attached either way and the balance can be typed
+    }
+    if (show) setAiRead((cur) => (cur?.attId === att.id ? { ...cur, state: options.length ? 'done' : 'failed', bank, options } : cur));
+    refresh();
+  }
+
+  const applyBalance = (rowId: string, b: BalanceOption) => {
+    saveAccount(rowId, { statement_p: b.balance_p, statement_date: b.date || undefined, source: 'upload', synced_at: undefined });
+    setMessage({ kind: 'ok', text: `${anchorLabel(rowId)}: statement balance set to ${formatPence(asPence(b.balance_p))}${b.date ? ` at ${ukDate(b.date)}` : ''}.` });
+  };
 
   const attachTo = (rowId: string) => {
     pendingRow.current = rowId;
@@ -580,6 +608,11 @@ export default function WorkpaperPage() {
     tickFor,
     live,
     dropFiles: (files: File[], rowId: string | null) => void doUpload(files, rowId),
+    // The newest statement on the row, read again and shown beside the paper
+    readStatement: (rowId: string) => {
+      const file = linkedFiles(workpaper.id, rowId).at(-1);
+      if (file) void readStatementFor(file, rowId, true);
+    },
     pullFeed: () => {
       if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result.leads) });
       try {
@@ -702,7 +735,7 @@ export default function WorkpaperPage() {
     );
 
   return (
-    <div className={`flex flex-col gap-4 max-w-[1500px] mx-auto pb-16 ${preview ? PREVIEW_ROOM : ''}`}>
+    <div className={`flex flex-col gap-4 max-w-[1500px] mx-auto pb-16 ${preview && previewLarge ? PREVIEW_ROOM : ''}`}>
       <input
         ref={fileInput}
         type="file"
@@ -717,7 +750,56 @@ export default function WorkpaperPage() {
           if (files.length) void doUpload(files, row);
         }}
       />
-      <PreviewModal file={preview} onClose={() => setPreview(null)} />
+      <PreviewModal
+        file={preview}
+        expanded={previewLarge}
+        onToggleSize={() => setPreviewLarge((v) => !v)}
+        onClose={() => {
+          setPreview(null);
+          setAiRead(null);
+        }}
+        top={
+          aiRead && preview?.id === aiRead.attId ? (
+            <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
+                <span className="ml-auto font-normal text-[10px] text-[#4A5878]">for {anchorLabel(aiRead.rowId)}</span>
+              </div>
+              {aiRead.state === 'reading' && <p className="mt-1.5 text-[#4A5878]">Reading the statement…</p>}
+              {aiRead.state === 'failed' && <p className="mt-1.5 text-[#8A5A00]">The AI could not read a balance from this file. Type the balance on the row.</p>}
+              {aiRead.state === 'done' && (
+                <ul className="mt-2 flex flex-col gap-1">
+                  {aiRead.options.map((b) => {
+                    const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
+                    const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
+                    return (
+                      <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">
+                        <span className="flex-1 min-w-0">
+                          <span className="font-semibold">{b.label}</span>
+                          <span className="text-[#4A5878]">
+                            {b.date ? ` · ${ukDate(b.date)}` : ''}
+                            {b.page ? ` · page ${b.page}` : ''}
+                          </span>
+                        </span>
+                        <span className="font-mono font-bold">{formatPence(asPence(b.balance_p))}</span>
+                        <button
+                          type="button"
+                          disabled={isLocked || inUse}
+                          onClick={() => applyBalance(aiRead.rowId, b)}
+                          className="min-w-[64px] px-2 py-1 text-[11px] font-bold rounded-[6px] bg-[#122654] text-white disabled:bg-[#E6F4EF] disabled:text-[#0B6B52]"
+                        >
+                          {inUse ? '✓ In use' : 'Use'}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
+            </div>
+          ) : null
+        }
+      />
 
       {/* Unreview Modal (REV-02) */}
       {unreviewOpen && (

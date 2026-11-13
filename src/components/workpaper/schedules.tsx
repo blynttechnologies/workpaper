@@ -26,6 +26,8 @@ export interface ScheduleProps {
   dropFiles?: (files: File[], rowId: string | null) => void;
   /** Bank and cash: pull the Open Banking balance onto the schedule. */
   pullFeed?: () => void;
+  /** Bank and cash: read the row's statement with AI and show what it found beside the paper. */
+  readStatement?: (rowId: string) => void;
 }
 
 const newId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -58,7 +60,7 @@ function matchAccount(filename: string, accounts: ReconAccount[]): ReconAccount 
   );
 }
 
-export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, pullFeed }: ScheduleProps) {
+export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, pullFeed, readStatement }: ScheduleProps) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [dragOver, setDragOver] = useState<string | null>(null);
   const uploadInput = React.useRef<HTMLInputElement | null>(null);
@@ -314,6 +316,16 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           <div className="flex items-center gap-2 flex-wrap">
                             {tickFor(a.id, name)}
                             <RowFiles files={files} onPreview={preview} onAttach={() => attachTo(a.id)} disabled={locked} label={name} />
+                            {readStatement && kind !== 'cash' && !locked && (
+                              <button
+                                type="button"
+                                onClick={() => readStatement(a.id)}
+                                aria-label={`Read the statement for ${name} with AI`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#B8432F] border border-[#FF7A66]/40 bg-[#FFF8F6] hover:bg-[#FFF1EE] rounded-[6px]"
+                              >
+                                <Sparkles className="w-3 h-3" /> Read with AI
+                              </button>
+                            )}
                           </div>
                           {ai && (
                             <div className="text-[10px] text-[#0B6B52]">
