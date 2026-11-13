@@ -14,7 +14,9 @@ export function reservesReview(ctx: PaperContext) {
   const { data } = ctx;
   const e10 = db.workpapers.find((w) => w.engagement_id === ctx.engagementId && w.ref === 'E-10');
   const eq = equityReview({ ...ctx, data: e10?.data_json ?? {} });
-  const signed = ctx.priorId ? eq.bf : null;
+  // Opening reserves typed in (from last year's signed accounts) count as last year's figure
+  const entered = data.opening_p != null && data.opening_p !== '' ? asPence(data.opening_p) : null;
+  const signed = entered ?? (ctx.priorId ? eq.bf : null);
   // Retained earnings in the TB at the start of the year: the year's own postings to 8900 taken out
   const postedThisYear = ledgerFor(ctx.engagementId, ['8900'])
     .filter((t) => t.date >= ctx.periodStart && t.date <= ctx.periodEnd)
@@ -29,7 +31,7 @@ export function reservesReview(ctx: PaperContext) {
   const pya = decision === 'prior_year' ? difference : 0n;
   const opening = signed ?? tbOpening;
   const closing = opening + pya + eq.pat - eq.total;
-  return { eq, signed, tbOpening, difference, small, decision, code, lines, pya, opening, closing, distributable: closing };
+  return { eq, entered, reMapped: ctx.tb('8900').mapped, signed, tbOpening, difference, small, decision, code, lines, pya, opening, closing, distributable: closing };
 }
 
 export function reviewReserves(ctx: PaperContext): string {
@@ -40,14 +42,16 @@ export function reviewReserves(ctx: PaperContext): string {
     id: 'opening',
     label: "Opening reserves agree to last year's accounts",
     detail:
-      r.signed === null
+      !r.reMapped
+        ? "Retained earnings (8900) aren't mapped in the trial balance, so the TB shows no opening reserves. Map the client's retained earnings account, or enter the opening figure from last year's accounts."
+        : r.signed === null
         ? 'No prior year on file: the opening reserves come from the trial balance.'
         : r.difference === 0n
           ? `${formatPence(r.signed)} in both.`
           : r.decision
             ? `The trial balance is ${formatPence(r.difference < 0n ? -r.difference : r.difference)} ${r.difference > 0n ? 'higher' : 'lower'}; ${r.decision === 'this_year' ? 'taken into this year' : 'treated as a prior-year adjustment'}.`
             : `The trial balance's opening retained earnings are ${formatPence(r.difference < 0n ? -r.difference : r.difference)} ${r.difference > 0n ? 'higher' : 'lower'} than last year's accounts. Find what was posted into last year after it was finalised, then decide.`,
-    passed: r.signed === null || r.difference === 0n || (!!r.decision && (r.decision !== 'prior_year' || !!data.reason?.trim())),
+    passed: (r.reMapped || r.entered !== null) && (r.signed === null || r.difference === 0n || (!!r.decision && (r.decision !== 'prior_year' || !!data.reason?.trim()))),
   });
   const holdsDividends = (db.workpapers.find((w) => w.engagement_id === ctx.engagementId && w.ref === 'E-10')?.data_json?.dividends ?? []).length > 0 || r.eq.total === 0n;
   checks.push({ id: 'sources', label: 'Profit and dividends taken from their papers', detail: `Profit after tax ${formatPence(r.eq.pat)} · dividends ${formatPence(r.eq.total)} from Share capital and dividends.`, passed: holdsDividends });

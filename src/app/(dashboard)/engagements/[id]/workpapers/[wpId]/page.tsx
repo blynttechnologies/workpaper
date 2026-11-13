@@ -29,7 +29,7 @@ import { asPence, formatPence } from '@/lib/money';
 import { getActor } from '@/lib/session';
 import { StatusBadge } from '@/components/ui/StatusPill';
 import { PAPER_SCREENS } from '@/components/workpaper/papers';
-import { evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts, type BalanceOption, type ReconAccount } from '@/lib/workpapers/engine';
+import { accountKind, evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts, type BalanceOption, type ReconAccount } from '@/lib/workpapers/engine';
 import { diffData } from '@/lib/workpapers/diff';
 import { TEMPLATES, templateFor, templateOf } from '@/lib/workpapers/templates';
 import type { Attachment, AttachmentCategory } from '@/lib/types/models';
@@ -181,6 +181,20 @@ export default function WorkpaperPage() {
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
+  });
+
+  // Bank and cash: a statement attached but never read (or read before the AI was on) is read once when the paper opens
+  const autoRead = useRef(new Set<string>());
+  useEffect(() => {
+    if (!workpaper || !engagement || engagement.status === 'locked' || templateOf(workpaper)?.kind !== 'reconciliation') return;
+    const rows: ReconAccount[] = Array.isArray(workpaper.data_json?.accounts) ? workpaper.data_json.accounts : [];
+    for (const a of rows) {
+      const file = linkedFiles(workpaper.id, a.id).at(-1);
+      if (!file || autoRead.current.has(a.id) || a.ai_balances?.length || accountKind(a.code) === 'cash') continue;
+      if (a.statement_p && asPence(a.statement_p) !== 0n) continue;
+      autoRead.current.add(a.id);
+      void readStatementFor(file, a.id, false);
+    }
   });
 
   const actor = getActor();
@@ -498,8 +512,8 @@ export default function WorkpaperPage() {
   const openChecks = result.checks.filter((c) => !c.passed && !c.explanation);
   const openNotes = comments.filter((c) => c.type === 'review_note' && c.status === 'open');
   const conclusionText: string = data.conclusion?.text || '';
-  // Bank and cash is signed off on the reconciliation itself, so it has no written conclusion
-  const noConclusion = t.kind === 'reconciliation';
+  // Schedule papers are signed off on their checks; only the planning, completion and analytical papers keep a written conclusion
+  const noConclusion = t.kind !== 'checklist' && t.kind !== 'analytical';
   const leadsAgreed = result.leads.length === 0 || result.leads.some((l) => l.mapped);
   const prepLeft = [
     pending.length && `${pending.length} procedure${pending.length === 1 ? '' : 's'}`,

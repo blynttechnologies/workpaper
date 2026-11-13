@@ -2,6 +2,7 @@ import { db } from '../server/db';
 import { asPence, formatPence } from '../money';
 import type { PaperContext } from './common';
 import { dlaSummary } from './dla';
+import type { ChPerson } from '../server/companies-house';
 import { ukDate } from '../dates';
 
 /**
@@ -27,6 +28,26 @@ export interface Officer {
 }
 
 export const fullName = (o: Officer) => [o.first_name, o.surname].filter(Boolean).join(' ');
+
+/**
+ * People read from Companies House folded into the paper: someone already listed keeps their share
+ * count and gets their roles and dates from the register; anyone new is added.
+ */
+export function mergeOfficers(existing: Officer[], people: ChPerson[], makeId: () => string) {
+  const same = (o: Officer, p: ChPerson) => (o.surname ?? '').toLowerCase() === p.surname.toLowerCase() && (!o.first_name || !p.first_name || o.first_name.toLowerCase() === p.first_name.toLowerCase());
+  const out = existing.map((o) => ({ ...o }));
+  let added = 0;
+  for (const p of people) {
+    const roles = { is_director: p.is_director, is_secretary: p.is_secretary, psc: p.psc, appointed: p.appointed, resigned: p.resigned };
+    const o = out.find((x) => same(x, p));
+    if (o) Object.assign(o, roles, { first_name: o.first_name || p.first_name, is_shareholder: o.is_shareholder || p.is_shareholder });
+    else {
+      out.push({ id: makeId(), first_name: p.first_name, surname: p.surname, ...roles, is_shareholder: p.is_shareholder, share_type: 'ORDINARY' });
+      added++;
+    }
+  }
+  return { officers: out, added, updated: people.length - added };
+}
 
 /** Accounts are due at Companies House nine months after the year end (private company). */
 export function accountsDue(periodEnd: string) {

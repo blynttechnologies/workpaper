@@ -3,7 +3,7 @@
 import React from 'react';
 import { formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
-import { TextInput } from '../parts';
+import { MoneyInput, TextInput } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { btnPrimary, btnSecondary, card, CodePicker, contextOf, JournalPanel, money, Pill, SuggestionRow, Tiles } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
@@ -14,8 +14,9 @@ export function ReservesSchedule({ data, result, locked, save }: ScheduleProps) 
   if (!ctx) return null;
   const r = reservesReview(ctx);
   const abs = r.difference < 0n ? -r.difference : r.difference;
-  const rows: { label: string; amount: bigint; source: string; strong?: boolean }[] = [
-    { label: `At ${ukDate(ctx.periodStart)}`, amount: r.opening, source: r.signed !== null ? "Last year's accounts" : 'Trial balance (no prior year on file)' },
+  const openingSource = r.entered !== null ? "Entered from last year's accounts" : r.signed !== null ? "Last year's accounts" : r.reMapped ? 'Trial balance (no prior year on file)' : 'Retained earnings not mapped in the TB: enter the figure';
+  const rows: { label: string; amount: bigint; source: string; strong?: boolean; opening?: boolean }[] = [
+    { label: `At ${ukDate(ctx.periodStart)}`, amount: r.opening, source: openingSource, opening: true },
     ...(r.pya ? [{ label: 'Prior-year adjustment', amount: r.pya, source: data.reason || 'Restated' }] : []),
     { label: 'Profit after tax', amount: r.eq.pat, source: `P&L ${r.eq.taxPosted ? '' : `less the ${formatPence(r.eq.tax)} tax estimate`}` },
     { label: 'Dividends', amount: -r.eq.total, source: 'Share capital and dividends' },
@@ -26,7 +27,7 @@ export function ReservesSchedule({ data, result, locked, save }: ScheduleProps) 
     <div className="flex flex-col gap-4">
       <Tiles
         items={[
-          { label: 'Opening reserves', value: formatPence(r.opening), sub: r.signed !== null ? "from last year's accounts" : 'from the trial balance' },
+          { label: 'Opening reserves', value: formatPence(r.opening), sub: r.entered !== null ? 'entered' : r.signed !== null ? "from last year's accounts" : r.reMapped ? 'from the trial balance' : 'retained earnings not mapped', tone: !r.reMapped && r.entered === null ? 'warn' : 'plain' },
           { label: 'Opening vs TB', value: r.difference === 0n ? 'Agrees' : formatPence(abs), tone: r.difference === 0n ? 'good' : r.decision ? 'plain' : 'bad', sub: r.difference === 0n ? 'trial balance agrees' : `TB ${r.difference > 0n ? 'higher' : 'lower'} than last year's accounts` },
           { label: 'Profit after tax', value: formatPence(r.eq.pat), sub: 'from the P&L' },
           { label: 'Dividends', value: formatPence(r.eq.total), sub: `${r.eq.tested.length} in the year` },
@@ -34,7 +35,7 @@ export function ReservesSchedule({ data, result, locked, save }: ScheduleProps) 
         ]}
       />
 
-      {r.difference !== 0n && r.signed !== null && (
+      {r.difference !== 0n && r.signed !== null && r.reMapped && (
         r.decision ? (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#4A5878]">
             <Pill tone="info">{r.decision === 'this_year' ? 'Taken into this year' : 'Prior-year adjustment'}</Pill>
@@ -84,12 +85,27 @@ export function ReservesSchedule({ data, result, locked, save }: ScheduleProps) 
               <tr key={row.label} className={row.strong ? 'font-bold border-t border-[#D3DCEE]' : 'border-t border-[#EEF1F6]'}>
                 <td className="py-1.5">{row.label}</td>
                 <td className="py-1.5 text-[10px] text-[#4A5878]">{row.source}</td>
-                <td className="py-1.5 text-right font-mono">{money(row.amount)}</td>
+                <td className="py-1.5 text-right font-mono">
+                  {row.opening && !locked ? (
+                    <span className="inline-flex items-center gap-2">
+                      {r.entered !== null && (
+                        <button type="button" className="text-[10px] font-sans text-[#1D4E89] underline" onClick={() => save({ opening_p: '' })}>
+                          Use the TB
+                        </button>
+                      )}
+                      <span className="inline-block w-32">
+                        <MoneyInput label="Opening reserves" disabled={locked} value={(data.opening_p ?? '') as string} placeholder={formatPence(r.opening, { symbol: '' })} onCommit={(p) => save({ opening_p: p })} />
+                      </span>
+                    </span>
+                  ) : (
+                    money(row.amount)
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="mt-1 text-[10px] text-[#4A5878]">Built from the other papers; change a figure there and it updates here.</div>
+        <div className="mt-1 text-[10px] text-[#4A5878]">Built from the other papers; change a figure there and it updates here. Type the opening figure from last year's accounts to override the trial balance.</div>
       </div>
 
       <JournalPanel engagementId={result.engagementId} date={ctx.periodEnd} lines={r.lines} sent={data.journal} narrative="Reserves: difference to last year's accounts taken into this year" source="E-20" locked={locked} save={save} empty="No journal needed." />

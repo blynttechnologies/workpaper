@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
+import { db } from '@/lib/server/db';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
@@ -83,7 +85,19 @@ export function EquitySchedule({ data, result, locked, save, filesFor, attachTo,
             </button>
           )}
           <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-[#4A5878]">Shareholders · from Statutory information</div>
-          {r.holders.length === 0 && <div className="text-[11px] text-[#7E8DA6]">None recorded yet.</div>}
+          {r.holders.length === 0 && (
+            <div className="text-[11px] text-[#7E8DA6]">
+              None recorded yet.{' '}
+              {(() => {
+                const r20 = db.workpapers.find((w) => w.engagement_id === ctx.engagementId && w.ref === 'R-20');
+                return r20 ? (
+                  <Link href={`/engagements/${ctx.engagementId}/workpapers/${r20.id}`} className="text-[#1D4E89] underline">
+                    Pull them from Companies House on Statutory information
+                  </Link>
+                ) : null;
+              })()}
+            </div>
+          )}
           {r.holders.map((o: any) => (
             <div key={o.id} className="flex justify-between text-[11px] py-0.5">
               <span>

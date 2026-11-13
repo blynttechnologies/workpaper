@@ -1,6 +1,6 @@
 import { db } from '../server/db';
 import { asPence, formatPence } from '../money';
-import { chartCodeOf, chartName, journalCheck, ledgerFor, type JLine, type PaperContext } from './common';
+import { addDays, chartCodeOf, chartName, journalCheck, ledgerFor, type JLine, type PaperContext } from './common';
 
 /**
  * Fixed assets (F-10) as a register: one line per asset, its class's method and rate, the
@@ -41,7 +41,7 @@ export interface Asset {
   dep_bf_p: string; // depreciation at the start of the year
   disposed?: string; // date sold or scrapped
   proceeds_p?: string;
-  source?: 'opening' | 'capitalised' | 'manual';
+  source?: 'opening' | 'capitalised' | 'manual' | 'ledger';
   from_tx?: string;
 }
 
@@ -174,6 +174,33 @@ export function findCapitalCosts(ctx: Pick<PaperContext, 'engagementId' | 'perio
     });
 }
 
+/**
+ * The register from the ledger (Xero or QuickBooks): one line per purchase posted to an asset cost
+ * account in the year, and one opening line per class for what was there at the start of the year.
+ * Credits to a cost account are returned apart: they read as disposals, which need the asset picked.
+ */
+export function fromLedger(ctx: Pick<PaperContext, 'engagementId' | 'periodStart' | 'periodEnd' | 'tb'>, existing: Asset[]) {
+  const have = new Set(existing.map((a) => a.from_tx).filter(Boolean));
+  const inYear = (code: string) => ledgerFor(ctx.engagementId, [code]).filter((t) => t.date >= ctx.periodStart && t.date <= ctx.periodEnd);
+  const sum = (ts: { amount_p: string }[]) => ts.reduce((a, t) => a + asPence(t.amount_p), 0n);
+  const assets: Omit<Asset, 'id' | 'ref'>[] = [];
+  const credits: { date: string; desc: string; amount: bigint }[] = [];
+  for (const c of ASSET_CLASSES) {
+    const tx = inYear(c.code);
+    const opening = ctx.tb(c.code).draft - sum(tx);
+    if (opening > 0n && !existing.some((a) => a.class_code === c.code && a.source === 'opening')) {
+      const depOpening = -(ctx.tb(c.dep).draft - sum(inYear(c.dep)));
+      assets.push({ desc: `${c.name} brought forward`, class_code: c.code, acquired: addDays(ctx.periodStart, -1), cost_p: opening.toString(), dep_bf_p: (depOpening > 0n ? depOpening : 0n).toString(), source: 'opening' });
+    }
+    for (const t of tx) {
+      const desc = [t.description, t.contact].filter(Boolean).join(' · ') || c.name;
+      if (asPence(t.amount_p) < 0n) credits.push({ date: t.date, desc, amount: -asPence(t.amount_p) });
+      else if (!have.has(t.id)) assets.push({ desc, class_code: c.code, acquired: t.date, cost_p: t.amount_p, dep_bf_p: '0', source: 'ledger', from_tx: t.id });
+    }
+  }
+  return { assets, credits };
+}
+
 /** Asset sales moved out of turnover on the Revenue paper, still to record as disposals. */
 export function salesFromRevenue(engagementId: string) {
   const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'I-10');
@@ -215,7 +242,7 @@ export function reviewFixedAssets(ctx: PaperContext): string {
   r.rows.forEach((x) => anchors.push({ id: x.a.id, label: `${x.a.ref} ${x.a.desc}` }));
 
   if (!r.rows.length) {
-    checks.push({ id: 'register', label: 'Register built', detail: 'Bring last year’s register forward, build it from the trial balance, or add the assets.', passed: false });
+    checks.push({ id: 'register', label: 'Register built', detail: 'Bring last year’s register forward, pull it from the ledger, or add the assets.', passed: false });
     return '';
   }
   // The register should agree to the TB once this paper's capitalisations and disposals are in
