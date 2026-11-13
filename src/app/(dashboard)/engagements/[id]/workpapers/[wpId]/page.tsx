@@ -317,7 +317,7 @@ export default function WorkpaperPage() {
         bank = read.bank_name?.value || undefined;
         const date: string = read.statement_date?.value ?? '';
         options = [
-          { date, balance_p: read.statement_balance_p.value, label: date === engagement!.period_end ? 'Balance at the year end' : 'Balance read', page: read.statement_balance_p.page },
+          { date, balance_p: read.statement_balance_p.value, label: read.statement_balance_p.reason, page: read.statement_balance_p.page },
           ...(read.candidates ?? []),
         ];
         saveAccount(rowId, { ai_balances: options });
