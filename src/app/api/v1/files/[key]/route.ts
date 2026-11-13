@@ -1,6 +1,5 @@
 import { readFile, syncIn } from '@/lib/server/store';
-import { canAccessEngagement, errorResponse, getActorFromRequest } from '@/lib/server/api-helpers';
-import { db } from '@/lib/server/db';
+import { canAccessFile, errorResponse, getActorFromRequest } from '@/lib/server/api-helpers';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,14 +8,8 @@ export async function GET(req: Request, props: { params: Promise<{ key: string }
   const { key } = await props.params;
   try {
     await syncIn();
-    const actor = getActorFromRequest(req);
     // The uploading practice is the source of truth; an attachment pointing at the key is not enough
-    const upload = db.uploads.find((u) => u.file_key === key);
-    const attached = db.attachments.filter((a) => a.file_key === key);
-    const allowed = upload
-      ? upload.firm_id === actor.firmId && (attached.length === 0 || attached.some((a) => canAccessEngagement(actor, a.engagement_id)))
-      : attached.some((a) => canAccessEngagement(actor, a.engagement_id));
-    if (!allowed) return new Response('File not found', { status: 404 });
+    if (!canAccessFile(getActorFromRequest(req), key)) return new Response('File not found', { status: 404 });
   } catch (err) {
     return errorResponse(err);
   }

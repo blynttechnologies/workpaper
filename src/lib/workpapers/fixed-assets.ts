@@ -11,11 +11,11 @@ import { chartCodeOf, chartName, journalCheck, ledgerFor, type JLine, type Paper
  */
 
 export const ASSET_CLASSES = [
-  { code: '650', dep: '651', name: 'Property' },
-  { code: '660', dep: '661', name: 'Plant and equipment' },
-  { code: '670', dep: '671', name: 'Motor vehicles' },
-  { code: '680', dep: '681', name: 'Computer equipment' },
-  { code: '690', dep: '691', name: 'Fixtures and fittings' },
+  { code: '6500', dep: '6510', name: 'Property' },
+  { code: '6600', dep: '6610', name: 'Plant and equipment' },
+  { code: '6700', dep: '6710', name: 'Motor vehicles' },
+  { code: '6800', dep: '6810', name: 'Computer equipment' },
+  { code: '6900', dep: '6910', name: 'Fixtures and fittings' },
 ] as const;
 export type ClassCode = (typeof ASSET_CLASSES)[number]['code'];
 
@@ -24,11 +24,11 @@ export interface Policy {
   rate: string; // % a year
 }
 export const DEFAULT_POLICIES: Record<ClassCode, Policy> = {
-  '650': { method: 'sl', rate: '2' },
-  '660': { method: 'rb', rate: '18' },
-  '670': { method: 'rb', rate: '25' },
-  '680': { method: 'sl', rate: '33.33' },
-  '690': { method: 'rb', rate: '15' },
+  '6500': { method: 'sl', rate: '2' },
+  '6600': { method: 'rb', rate: '18' },
+  '6700': { method: 'rb', rate: '25' },
+  '6800': { method: 'sl', rate: '33.33' },
+  '6900': { method: 'rb', rate: '15' },
 };
 
 export interface Asset {
@@ -58,7 +58,7 @@ export interface Candidate {
 
 const LOOKS_CAPITAL = /laptop|computer|pc|macbook|server|printer|monitor|machine|machinery|equipment|tool|van|vehicle|car|truck|furniture|desk|chair|fixture|fitting|shelving|install|plant|camera|phone|ipad|tablet/i;
 const classFor = (text: string): ClassCode =>
-  /laptop|computer|pc|macbook|server|printer|monitor|ipad|tablet|phone/i.test(text) ? '680' : /van|vehicle|car|truck/i.test(text) ? '670' : /furniture|desk|chair|fixture|fitting|shelving/i.test(text) ? '690' : '660';
+  /laptop|computer|pc|macbook|server|printer|monitor|ipad|tablet|phone/i.test(text) ? '6800' : /van|vehicle|car|truck/i.test(text) ? '6700' : /furniture|desk|chair|fixture|fitting|shelving/i.test(text) ? '6900' : '6600';
 
 export const policyOf = (data: Record<string, any>, code: ClassCode): Policy => ({ ...DEFAULT_POLICIES[code], ...(data.policies?.[code] ?? {}) });
 const rateBp = (p: Policy) => BigInt(Math.round(Number(p.rate || 0) * 100));
@@ -141,13 +141,13 @@ export function registerReview(ctx: PaperContext) {
   for (const r of rows.filter((x) => x.disposed)) {
     const dep = ASSET_CLASSES.find((c) => c.code === r.a.class_code)!.dep;
     if (r.bf) lines.push({ code: dep, debit: r.bf, credit: 0n, narrative: `${r.a.ref} ${r.a.desc}: depreciation on disposal` });
-    if (r.cost - r.bf) lines.push({ code: '493', debit: r.cost - r.bf, credit: 0n, narrative: `${r.a.ref} ${r.a.desc}: book value written off on disposal` });
+    if (r.cost - r.bf) lines.push({ code: '4930', debit: r.cost - r.bf, credit: 0n, narrative: `${r.a.ref} ${r.a.desc}: book value written off on disposal` });
     lines.push({ code: r.a.class_code, debit: 0n, credit: r.cost, narrative: `${r.a.ref} ${r.a.desc}: cost of the asset disposed of` });
   }
-  const chargeInTb = ctx.tb('492').draft;
+  const chargeInTb = ctx.tb('4920').draft;
   const charge = classes.reduce((acc, c) => acc + c.charge, 0n);
   if (charge - chargeInTb !== 0n) {
-    lines.push({ code: '492', debit: charge - chargeInTb > 0n ? charge - chargeInTb : 0n, credit: charge - chargeInTb < 0n ? chargeInTb - charge : 0n, narrative: 'Depreciation charge for the year' });
+    lines.push({ code: '4920', debit: charge - chargeInTb > 0n ? charge - chargeInTb : 0n, credit: charge - chargeInTb < 0n ? chargeInTb - charge : 0n, narrative: 'Depreciation charge for the year' });
     for (const c of classes) {
       const share = chargeInTb === 0n ? c.charge : (c.charge * (charge - chargeInTb)) / (charge || 1n);
       if (share) lines.push({ code: c.dep, debit: share < 0n ? -share : 0n, credit: share > 0n ? share : 0n, narrative: `${c.name}: depreciation for the year` });
@@ -170,7 +170,7 @@ export function findCapitalCosts(ctx: Pick<PaperContext, 'engagementId' | 'perio
     .map((t) => {
       const prev = existing.find((x) => x.id === t.id);
       const desc = [t.description, t.contact].filter(Boolean).join(' · ');
-      return { id: t.id, date: t.date, desc, amount_p: t.amount_p, code: chartCodeOf(ctx.engagementId, t.account_code) ?? '499', class_code: prev?.class_code ?? classFor(desc), ...(prev?.decision ? { decision: prev.decision, reason: prev.reason } : {}) };
+      return { id: t.id, date: t.date, desc, amount_p: t.amount_p, code: chartCodeOf(ctx.engagementId, t.account_code) ?? '4990', class_code: prev?.class_code ?? classFor(desc), ...(prev?.decision ? { decision: prev.decision, reason: prev.reason } : {}) };
     });
 }
 
@@ -179,7 +179,7 @@ export function salesFromRevenue(engagementId: string) {
   const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'I-10');
   const decisions: Record<string, { decision: string; to?: string }> = wp?.data_json?.nontrading ?? {};
   return Object.entries(decisions)
-    .filter(([, d]) => d.decision === 'remove' && (d.to ?? '493') === '493')
+    .filter(([, d]) => d.decision === 'remove' && (d.to ?? '4930') === '4930')
     .map(([id]) => db.transactions.find((t) => t.id === id))
     .filter((t): t is NonNullable<typeof t> => !!t)
     .map((t) => ({ id: t.id, date: t.date, desc: [t.contact, t.description].filter(Boolean).join(' · '), amount: -asPence(t.amount_p) }));

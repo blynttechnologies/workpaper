@@ -18,6 +18,7 @@ import {
 import { db } from '@/lib/server/db';
 import { Client } from '@/lib/types/models';
 import { useCompany } from '@/context/CompanyContext';
+import { mustKeep, RETENTION_YEARS } from '@/lib/periods';
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -26,6 +27,10 @@ export default function ClientsPage() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  // Latest year end still inside the retention period, which blocks deleting the company
+  const keptYear = deleteTarget
+    ? db.engagements.filter((e) => e.client_id === deleteTarget.id && mustKeep(e.period_end)).map((e) => e.period_end).sort().pop()
+    : undefined;
   const [view, setView] = useState<'active' | 'archived'>('active');
   const [archiveTarget, setArchiveTarget] = useState<Client | null>(null);
   const [archiveReason, setArchiveReason] = useState('');
@@ -484,7 +489,11 @@ export default function ClientsPage() {
 
             <div className="p-3 bg-[#FFF1EE] border border-[#FF7A66]/30 rounded-xl text-[11px] text-[#A23A27] flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>This action cannot be undone. All activity logs and working papers for this entity will be removed.</span>
+              <span>
+                {keptYear
+                  ? `This company cannot be deleted: records for the year ended ${keptYear} must be kept for ${RETENTION_YEARS} years after the year end. Archive it instead; archived companies stay readable.`
+                  : 'This action cannot be undone. All activity logs and working papers for this entity will be removed.'}
+              </span>
             </div>
 
             {!deleteTarget.archived_at && (
@@ -516,11 +525,12 @@ export default function ClientsPage() {
               </button>
               <button
                 type="button"
+                disabled={Boolean(keptYear)}
                 onClick={() => {
                   deleteCompany(deleteTarget.id);
                   setDeleteTarget(null);
                 }}
-                className="min-h-[38px] px-4 text-xs font-bold text-white bg-[#B42318] hover:bg-[#911c13] rounded-xl transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                className="min-h-[38px] px-4 text-xs font-bold text-white bg-[#B42318] hover:bg-[#911c13] disabled:opacity-40 disabled:cursor-not-allowed rounded-xl transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Delete Company</span>

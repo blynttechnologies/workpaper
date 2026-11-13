@@ -2,12 +2,12 @@ import { asPence, formatPence } from '../money';
 import { byContact, daysBetween, journalCheck, ledgerFor, openItems, pair, type JLine, type PaperContext } from './common';
 
 /**
- * Other debtors and sundry balances (C-30): every open item on 720 Other receivables and 749
+ * Other debtors and sundry balances (C-30): every open item on 7200 Other receivables and 7490
  * Other current assets, when it falls due, what was recovered after the period end, and a
  * decision on anything that looks misclassified or stale.
  */
 
-export const OTHER_ACCOUNTS = ['720', '749'] as const;
+export const OTHER_ACCOUNTS = ['7200', '7490'] as const;
 export const ITEM_TYPES = ['Deposit', 'Insurance claim', 'Refund due', 'Staff loan', 'Prepayment', 'Other'] as const;
 
 export interface OtherItem {
@@ -106,9 +106,9 @@ export function otherDebtorsJournal(data: Record<string, any>, periodEnd: string
   const lines: JLine[] = [];
   for (const i of (data.items ?? []) as OtherItem[]) {
     const v = otherItemView(i, periodEnd, 0);
-    if (v.moved) lines.push(...pair('730', i.account, v.moved, `${i.desc}: unexpired part to prepayments`));
-    if (i.decision === 'prepayment' && v.amount - v.moved > 0n) lines.push(...pair(i.expense_code ?? '499', i.account, v.amount - v.moved, `${i.desc}: expired part charged`));
-    if (v.written) lines.push(...pair('499', i.account, v.written, `${i.desc}: written off`));
+    if (v.moved) lines.push(...pair('7300', i.account, v.moved, `${i.desc}: unexpired part to prepayments`));
+    if (i.decision === 'prepayment' && v.amount - v.moved > 0n) lines.push(...pair(i.expense_code ?? '4990', i.account, v.amount - v.moved, `${i.desc}: expired part charged`));
+    if (v.written) lines.push(...pair('4990', i.account, v.written, `${i.desc}: written off`));
   }
   return lines;
 }
@@ -148,7 +148,7 @@ export function reviewOtherDebtors(ctx: PaperContext): string {
   checks.push({
     id: 'listing_tb',
     label: 'Listing agrees to ledger for every account',
-    detail: off.length ? off.map((p) => `${p.a}: listing ${formatPence(p.listing)}, ledger ${formatPence(p.ledger)}`).join('; ') + '.' : `Listing ${formatPence(listing)} agrees to 720 and 749.`,
+    detail: off.length ? off.map((p) => `${p.a}: listing ${formatPence(p.listing)}, ledger ${formatPence(p.ledger)}`).join('; ') + '.' : `Listing ${formatPence(listing)} agrees to 7200 and 7490.`,
     passed: !off.length && per.some((p) => p.mapped),
   });
   const unsupported = views.filter((v) => !v.supported && !v.written && v.amount !== 0n);

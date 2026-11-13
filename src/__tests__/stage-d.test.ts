@@ -242,7 +242,7 @@ describe('Stage D - AI Review, Disclosures and Statutory Accounts (Steps 13–14
     it('STD-05 & AIX-09: Statutory accounts preview and final consistency checks confirm self-balancing', () => {
       // Confirm all mappings so accounts preview is fully mapped and self-balancing
       db.account_mappings.filter((m) => m.engagement_id === engagementId).forEach((m) => {
-        if (!m.blynt_code) m.blynt_code = '400';
+        if (!m.blynt_code) m.blynt_code = '4000';
         m.status = 'confirmed';
       });
 

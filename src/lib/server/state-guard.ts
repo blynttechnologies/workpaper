@@ -1,5 +1,6 @@
 import { UserRole } from '../types/models';
 import { newAccount } from '../coa';
+import { mustKeep, RETENTION_YEARS } from '../periods';
 
 /**
  * Firm isolation and role rules for the whole-workspace sync (/api/v1/state).
@@ -145,6 +146,8 @@ export function checkRules(before: State, after: State, actor: Actor) {
     }
   }
   if (eng.removed.length && !PARTNER_UP.includes(actor.role)) deny('Only a partner or admin can delete an engagement.');
+  const kept = eng.removed.find((e) => mustKeep(e.period_end));
+  if (kept) deny(`Records for the period ended ${kept.period_end} must be kept for ${RETENTION_YEARS} years after the year end. Archive the client instead.`);
   const stillLocked = new Set(
     rows(after, 'engagements').filter((e) => e.status === 'locked' && rows(before, 'engagements').some((b) => b.id === e.id && b.status === 'locked')).map((e) => e.id)
   );

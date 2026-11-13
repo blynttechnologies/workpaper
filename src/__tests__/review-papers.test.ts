@@ -17,11 +17,11 @@ beforeEach(() => {
     { id: PRIOR, client_id: 'cli_harlow', firm_id: 'x', period_start: '2024-04-06', period_end: '2025-04-05', prior_engagement_id: null } as any
   );
   db.account_mappings.push(
-    map(ENG, '100', -2000000), // sales £20,000
-    map(PRIOR, '100', -1000000), // £10,000 last year: up 100%
-    map(ENG, '470', 105000), // insurance £1,050
-    map(PRIOR, '470', 100000), // £1,000 last year: up 5%, below threshold
-    map(ENG, '482', 200000) // legal £2,000, nil last year
+    map(ENG, '1000', -2000000), // sales £20,000
+    map(PRIOR, '1000', -1000000), // £10,000 last year: up 100%
+    map(ENG, '4700', 105000), // insurance £1,050
+    map(PRIOR, '4700', 100000), // £1,000 last year: up 5%, below threshold
+    map(ENG, '4820', 200000) // legal £2,000, nil last year
   );
 });
 
@@ -30,23 +30,23 @@ const row = (view: 'pl' | 'bs', code: string, data = {}) =>
 
 describe('analytical reviews', () => {
   it('compares each account with the prior year and flags significant movements', () => {
-    expect(row('pl', '100')).toMatchObject({ current: 2000000n, prior: 1000000n, variance: 1000000n, percent: 100, significant: true });
-    expect(row('pl', '470').significant).toBe(false); // 5% is under 10%
-    expect(row('pl', '482')).toMatchObject({ prior: 0n, percent: null, significant: true }); // nil last year needs only the amount
-    expect(row('pl', '470', { threshold_pct: 1, threshold_p: '1000' }).significant).toBe(true);
+    expect(row('pl', '1000')).toMatchObject({ current: 2000000n, prior: 1000000n, variance: 1000000n, percent: 100, significant: true });
+    expect(row('pl', '4700').significant).toBe(false); // 5% is under 10%
+    expect(row('pl', '4820')).toMatchObject({ prior: 0n, percent: null, significant: true }); // nil last year needs only the amount
+    expect(row('pl', '4700', { threshold_pct: 1, threshold_p: '1000' }).significant).toBe(true);
   });
 
   it('needs every significant movement explained before the paper passes', () => {
     const wp = db.addWorkpaper(ENG, 'Z-30')!;
     const check = () => evaluatePaper(wp)!.checks.find((c) => c.id === 'movements')!;
     expect(check().passed).toBe(false);
-    wp.data_json.comments = { '100': 'New contract won', '482': 'One-off dispute' };
+    wp.data_json.comments = { '1000': 'New contract won', '4820': 'One-off dispute' };
     expect(check().passed).toBe(true);
     expect(evaluatePaper(wp)!.draftConclusion).toContain('are explained');
   });
 
   it('shows categories instead of accounts when asked, under main headings, with their own flags', () => {
-    db.account_mappings.push(map(ENG, '600', 500000), map(PRIOR, '600', 900000), map(ENG, '750', -100000), map(PRIOR, '750', -100000));
+    db.account_mappings.push(map(ENG, '6000', 500000), map(PRIOR, '6000', 900000), map(ENG, '7500', -100000), map(PRIOR, '7500', -100000));
     const bs = analyticalReview(ENG, 'bs', {});
     expect(bs.sections.map((s) => s.heading)).toEqual(['Assets', 'Liabilities']);
     expect(bs.sections[0]).toMatchObject({ current: 500000n, prior: 900000n });
@@ -57,7 +57,7 @@ describe('analytical reviews', () => {
 
     const byAccount = analyticalReview(ENG, 'bs', { show_accounts: true });
     expect(byAccount.sections[0].blocks[0]).toMatchObject({ heading: 'Cash at bank and in hand' });
-    expect(byAccount.sections[0].blocks[0].rows[0].key).toBe('600');
+    expect(byAccount.sections[0].blocks[0].rows[0].key).toBe('6000');
   });
 });
 

@@ -19,14 +19,14 @@ export default function ChartOfAccountsPage() {
   const accounts = db.blynt_accounts;
 
   const groups = [
-    { id: 'all', label: 'All Accounts', range: '100–999' },
-    { id: 'Asset', label: 'Assets (600–749)', range: '600–749' },
-    { id: 'Liability', label: 'Liabilities (750–849)', range: '750–849' },
-    { id: 'Equity', label: 'Equity & Reserves (850–899)', range: '850–899' },
-    { id: 'Revenue', label: 'Revenue (100–199)', range: '100–199' },
-    { id: 'Cost of Sales', label: 'Cost of Sales (200–299)', range: '200–299' },
-    { id: 'Overhead', label: 'Payroll, Admin, Finance & Tax (300–599)', range: '300–599' },
-    { id: 'System', label: 'System & Clearing (900–999)', range: '900–999' },
+    { id: 'all', label: 'All Accounts', range: '1000–9999' },
+    { id: 'Asset', label: 'Assets (6000–7499)', range: '6000–7499' },
+    { id: 'Liability', label: 'Liabilities and provisions (7500–8499)', range: '7500–8499' },
+    { id: 'Equity', label: 'Equity & Reserves (8500–8999)', range: '8500–8999' },
+    { id: 'Revenue', label: 'Revenue and other income (1000–1999)', range: '1000–1999' },
+    { id: 'Cost of Sales', label: 'Cost of Sales (2000–2999)', range: '2000–2999' },
+    { id: 'Overhead', label: 'Payroll, Admin, Finance & Tax (3000–5999)', range: '3000–5999' },
+    { id: 'System', label: 'System & Clearing (9000–9999)', range: '9000–9999' },
   ];
 
   const filteredAccounts = accounts.filter((acc) => {
@@ -120,6 +120,7 @@ export default function ChartOfAccountsPage() {
                 <th scope="col" className="p-3">Category</th>
                 <th scope="col" className="p-3">Normal Balance</th>
                 <th scope="col" className="p-3">Lead Schedule</th>
+                <th scope="col" className="p-3">Tax treatment</th>
                 <th scope="col" className="p-3">Used by Clients</th>
                 <th scope="col" className="p-3 pr-6 text-right">System / Firm</th>
               </tr>
@@ -154,6 +155,9 @@ export default function ChartOfAccountsPage() {
                         Schedule {acc.lead_letter}
                       </span>
                     </div>
+                  </td>
+                  <td className="p-3 text-[#4A5878] text-[11px]" title={acc.tax_treatment ? 'Default corporation tax treatment the AI starts from' : undefined}>
+                    {acc.tax_treatment ?? '–'}
                   </td>
                   <td className="p-3 font-mono-numbers text-[#4A5878]">
                     {acc.used_by_count ?? 12} clients

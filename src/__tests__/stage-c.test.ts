@@ -78,6 +78,17 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
       expect(bankExtraction.data.statement_balance_p.confidence).toBeGreaterThanOrEqual(90);
       expect(bankExtraction.data.statement_balance_p.gate).toBe('ready');
 
+      // A statement with no readable text (a PDF or scan the AI has not read) gives no balance, never a made-up one
+      const scan = services.uploadAttachment(firmId, preparer, engagementId, null, {
+        filename: 'Barclays_Statement_Mar2026.pdf',
+        mime: 'application/pdf',
+        size: 1000,
+        content: Buffer.from([0x25, 0x50, 0x44, 0x46]),
+        category: 'Bank statement',
+        folder: 'current',
+      });
+      expect(services.extractDocument(firmId, preparer, scan.id, 'Bank statement').data.statement_balance_p.value).toBe('');
+
       // 2. Lease agreement produces summary with clause references
       const leaseDoc = services.uploadAttachment(firmId, preparer, engagementId, null, {
         filename: 'Industrial_Unit_4_Lease.pdf',
@@ -450,7 +461,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         source_name: 'Corporation Tax Liability',
         source_type: 'Current Liability',
         balance_p: '-1420000',
-        blynt_code: '795',
+        blynt_code: '7950',
         status: 'confirmed',
         confidence: 100,
         method: 'rule',
@@ -478,7 +489,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         source_name: 'Deferred Tax Provision',
         source_type: 'Provision',
         balance_p: '-1500000',
-        blynt_code: '840',
+        blynt_code: '8400',
         status: 'confirmed',
         confidence: 100,
         method: 'rule',
@@ -584,7 +595,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
       expect(candidates.length).toBeGreaterThan(0);
       const laptop = candidates.find((c) => c.description.toLowerCase().includes('macbook'));
       expect(laptop).toBeDefined();
-      expect(laptop?.account_code).toBe('420'); // Office & IT Consumables
+      expect(laptop?.account_code).toBe('4200'); // Office & IT Consumables
 
       // Capitalise expense transaction proposes reclassification journal
       const reclass = services.capitaliseExpenseItem(

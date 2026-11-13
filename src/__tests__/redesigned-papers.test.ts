@@ -24,9 +24,9 @@ describe('shared pieces', () => {
   });
 
   it('a sent journal stops passing when the decisions change, and a sent one with nothing needed fails too', () => {
-    const lines = pair('730', '470', 38926n, 'x');
-    expect(lines).toEqual([expect.objectContaining({ code: '730', debit: 38926n }), expect.objectContaining({ code: '470', credit: 38926n })]);
-    expect(pair('730', '470', -5n, 'x')[0]).toMatchObject({ code: '470', debit: 5n });
+    const lines = pair('7300', '4700', 38926n, 'x');
+    expect(lines).toEqual([expect.objectContaining({ code: '7300', debit: 38926n }), expect.objectContaining({ code: '4700', credit: 38926n })]);
+    expect(pair('7300', '4700', -5n, 'x')[0]).toMatchObject({ code: '4700', debit: 5n });
     expect(journalCheck(undefined, []).passed).toBe(true);
     expect(journalCheck(undefined, lines).passed).toBe(false);
     expect(journalCheck({ ref: 'AJE-1', sig: journalSig(lines) }, lines).passed).toBe(true);
@@ -42,35 +42,35 @@ describe('trade creditors', () => {
     expect(supplierView({ id: 's', name: 'GP', ledger_p: '22732', statement_p: '22732', paid_after_p: '0', oldest_days: 125 }).status).toBe('dispute');
     const lines = creditorsJournal({
       suppliers: [
-        { id: 'a', name: 'NF', ledger_p: '31250', statement_p: '55250', paid_after_p: '0', decision: 'missing_invoice', expense_code: '430', vat_p: '4000' },
+        { id: 'a', name: 'NF', ledger_p: '31250', statement_p: '55250', paid_after_p: '0', decision: 'missing_invoice', expense_code: '4300', vat_p: '4000' },
         { id: 'b', name: 'PT', ledger_p: '-15000', statement_p: '', paid_after_p: '0', decision: 'debtors' },
       ],
-      search: { items: [{ id: 'x', date: '2026-04-18', contact: 'British Gas', desc: 'electricity', amount_p: '45000', code: '410', decision: 'accrue' }] },
+      search: { items: [{ id: 'x', date: '2026-04-18', contact: 'British Gas', desc: 'electricity', amount_p: '45000', code: '4100', decision: 'accrue' }] },
     });
     expect(lines.map((l) => [l.code, l.debit, l.credit])).toEqual([
-      ['430', 20000n, 0n],
-      ['780', 4000n, 0n],
-      ['750', 0n, 24000n],
-      ['720', 15000n, 0n],
-      ['750', 0n, 15000n],
-      ['410', 45000n, 0n],
-      ['760', 0n, 45000n],
+      ['4300', 20000n, 0n],
+      ['7800', 4000n, 0n],
+      ['7500', 0n, 24000n],
+      ['7200', 15000n, 0n],
+      ['7500', 0n, 15000n],
+      ['4100', 45000n, 0n],
+      ['7600', 0n, 45000n],
     ]);
   });
 });
 
 describe('other debtors', () => {
   it('flags prepayments by description and stale unsupported balances', () => {
-    expect(otherItemView({ id: 'a', account: '749', desc: 'Annual software licence', date: '2026-01-01', amount_p: '96000' }, '2026-03-31', 0).suggestion?.kind).toBe('prepayment');
-    expect(otherItemView({ id: 'b', account: '749', desc: 'Balance brought forward', date: '2023-03-31', amount_p: '31000' }, '2026-03-31', 0).suggestion?.kind).toBe('write_off');
-    expect(otherItemView({ id: 'b', account: '749', desc: 'Balance brought forward', date: '2023-03-31', amount_p: '31000' }, '2026-03-31', 1).suggestion).toBeNull();
-    expect(otherItemView({ id: 'c', account: '720', desc: 'Insurance claim', date: '2026-02-14', amount_p: '125000', recovered_p: '125000', due: 'within' }, '2026-03-31', 0).supported).toBe(true);
+    expect(otherItemView({ id: 'a', account: '7490', desc: 'Annual software licence', date: '2026-01-01', amount_p: '96000' }, '2026-03-31', 0).suggestion?.kind).toBe('prepayment');
+    expect(otherItemView({ id: 'b', account: '7490', desc: 'Balance brought forward', date: '2023-03-31', amount_p: '31000' }, '2026-03-31', 0).suggestion?.kind).toBe('write_off');
+    expect(otherItemView({ id: 'b', account: '7490', desc: 'Balance brought forward', date: '2023-03-31', amount_p: '31000' }, '2026-03-31', 1).suggestion).toBeNull();
+    expect(otherItemView({ id: 'c', account: '7200', desc: 'Insurance claim', date: '2026-02-14', amount_p: '125000', recovered_p: '125000', due: 'within' }, '2026-03-31', 0).supported).toBe(true);
   });
 });
 
 describe('prepayments', () => {
   it('works out the prepaid part by days, by months and in full', () => {
-    const l = { id: 'x', desc: '', code: '470', net_p: '192000' };
+    const l = { id: 'x', desc: '', code: '4700', net_p: '192000' };
     expect(prepaidPart({ ...l, method: 'days', start: '2025-06-14', end: '2026-06-13' }, '2026-03-31')).toBe((192000n * 74n + 182n) / 365n);
     expect(prepaidPart({ ...l, net_p: '240000', method: 'months', start: '2026-03-01', end: '2026-05-31' }, '2026-03-31')).toBe(160000n);
     expect(prepaidPart({ ...l, net_p: '26400', method: 'months', start: '2025-10-01', end: '2026-09-30' }, '2026-03-31')).toBe(13200n);
@@ -132,12 +132,12 @@ import { matchBlyntAccount } from '../lib/mapping/auto-mapper';
 describe('mapping confidence (review point 1)', () => {
   it('comes from the evidence, never 100% for a name match', () => {
     const sales = matchBlyntAccount('Sales', 'Revenue');
-    expect(sales).toMatchObject({ blynt_code: '100' });
+    expect(sales).toMatchObject({ blynt_code: '1000' });
     expect(sales!.confidence).toBeGreaterThanOrEqual(90);
     expect(sales!.confidence).toBeLessThan(100);
     // A catch-all target is worth a look, however the name reads
     const cleaning = matchBlyntAccount('Entertainment', 'Expense');
-    expect(cleaning!.blynt_code).toBe('499');
+    expect(cleaning!.blynt_code).toBe('4990');
     expect(cleaning!.confidence).toBeLessThan(90);
     // The account type contradicting the match drags it down to an exception
     expect(matchBlyntAccount('Insurance', 'Current Liability')!.confidence).toBeLessThan(70);
@@ -149,7 +149,7 @@ import { assetYear } from '../lib/workpapers/fixed-assets';
 import { groupOf, taxYearOf } from '../lib/workpapers/dla';
 
 describe('fixed assets register (review point 7)', () => {
-  const base = { id: 'a', ref: 'FA001', desc: 'Van', class_code: '670' as const, acquired: '2023-05-01', cost_p: '1000000', dep_bf_p: '400000' };
+  const base = { id: 'a', ref: 'FA001', desc: 'Van', class_code: '6700' as const, acquired: '2023-05-01', cost_p: '1000000', dep_bf_p: '400000' };
   it('charges straight line on cost and reducing balance on book value, never below nil', () => {
     expect(assetYear(base, { method: 'rb', rate: '25' }, '2025-04-01', '2026-03-31').charge).toBe(150000n);
     expect(assetYear(base, { method: 'sl', rate: '25' }, '2025-04-01', '2026-03-31').charge).toBe(250000n);

@@ -15,6 +15,7 @@ vi.mock('@/lib/server/store', () => ({
 import { db } from '../lib/server/db';
 import { createSessionToken, hashPassword, SESSION_COOKIE, MFA_COOKIE } from '../lib/server/auth';
 import { firmSlice, mergeFirmState, GuardError, State, Actor } from '../lib/server/state-guard';
+import { mustKeep } from '../lib/periods';
 import { services } from '../lib/server/services';
 import { totpCode } from '../lib/server/totp';
 import { GET as getWorkpaper, PATCH as patchWorkpaper } from '../app/api/v1/workpapers/[id]/route';
@@ -250,5 +251,25 @@ describe('G · an MFA code works once', () => {
     const r2 = await login(req('/x', 'POST', undefined, { email: 'admin@blynt.co.uk', password: 'Seed-Password-1!' }));
     const challenge2 = (r2.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).find((c) => c.startsWith(MFA_COOKIE))!;
     expect((await mfaVerify(req('/x', 'POST', challenge2, { code }))).status).toBe(401);
+  });
+});
+
+describe('F · records are kept for 6 years after the year end', () => {
+  it('mustKeep counts 6 years from the period end', () => {
+    expect(mustKeep('2020-03-31', '2026-03-30')).toBe(true);
+    expect(mustKeep('2020-03-31', '2026-03-31')).toBe(false);
+  });
+
+  it('a financial year inside the retention period cannot be deleted from the browser; an older one can', () => {
+    const s = db.exportState() as State;
+    const without = (id: string) => {
+      const v = JSON.parse(JSON.stringify(firmSlice(s, FIRM, admin.id)));
+      v.engagements = v.engagements.filter((e: any) => e.id !== id);
+      return v;
+    };
+    expect(() => mergeFirmState(s, without(ENG), admin)).toThrow(/kept for 6 years/);
+    const old = { ...db.engagements.find((e) => e.id === ENG)!, id: 'eng_old', period_start: '2018-04-01', period_end: '2019-03-31' };
+    s.engagements = [...s.engagements, old];
+    expect(() => mergeFirmState(s, without('eng_old'), admin)).not.toThrow();
   });
 });

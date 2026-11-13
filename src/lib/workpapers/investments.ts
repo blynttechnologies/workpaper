@@ -48,7 +48,7 @@ export function investmentsReview(ctx: PaperContext) {
   const { data } = ctx;
   const frs105 = isFrs105(ctx.engagementId);
   const decisions: Record<string, Record<string, string>> = data.decisions ?? {};
-  const fees = ledgerFor(ctx.engagementId, ['480', '482', '499']);
+  const fees = ledgerFor(ctx.engagementId, ['4800', '4820', '4990']);
   const props = ((data.properties ?? []) as Property[]).map((p) => {
     const d = decisions[p.id] ?? {};
     const cost = asPence(p.cost_p);
@@ -78,7 +78,7 @@ export function investmentsReview(ctx: PaperContext) {
       ...(noValuation && !d.valuation ? [{ kind: 'valuation' as const, why: p.valuer === 'directors' ? 'Valued by the directors, not independently. Confirm the basis they used and keep it on file.' : 'No independent valuation at the year end. Fair value needs a valuation, or the directors confirming their basis.' }] : []),
       ...(shortfall && !d.rent ? [{ kind: 'rent' as const, why: `${formatPence(received)} received against ${formatPence(expected)} due under the tenancy for ${Math.min(12, months)} months: ${formatPence(shortfall)} short.` }] : []),
     ];
-    return { p, d, cost, feeTx, feeTotal, capitalised, fullCost, addedThisYear, depBf, charge, value, base, gain, carrying, expected, received, shortfall, noValuation, flags, code: p.code || '650' };
+    return { p, d, cost, feeTx, feeTotal, capitalised, fullCost, addedThisYear, depBf, charge, value, base, gain, carrying, expected, received, shortfall, noValuation, flags, code: p.code || '6500' };
   });
   const invs = ((data.investments ?? []) as Investment[]).map((i) => {
     const cost = asPence(i.cost_p);
@@ -91,13 +91,13 @@ export function investmentsReview(ctx: PaperContext) {
   const dtRate = BigInt(CENTRAL_TAX_RATES.corporation_tax.main_rate_pct);
   const lines: JLine[] = [];
   for (const x of props) {
-    const dep = String(Number(x.code) + 1);
-    if (x.capitalised) for (const t of x.feeTx) lines.push(...pair(x.code, chartCodeOf(ctx.engagementId, t.account_code) ?? '482', asPence(t.amount_p), `${x.p.address}: purchase fees added to cost`));
-    if (x.d.rent === 'debtor' && x.shortfall) lines.push(...pair('720', '140', x.shortfall, `${x.p.address}: rent due under the tenancy`));
-    if (frs105 && x.charge) lines.push(...pair('492', dep, x.charge, `${x.p.address}: depreciation on the building`));
+    const dep = String(Number(x.code) + 10); // v3: each cost account's depreciation sits ten above it (6500 → 6510)
+    if (x.capitalised) for (const t of x.feeTx) lines.push(...pair(x.code, chartCodeOf(ctx.engagementId, t.account_code) ?? '4820', asPence(t.amount_p), `${x.p.address}: purchase fees added to cost`));
+    if (x.d.rent === 'debtor' && x.shortfall) lines.push(...pair('7200', '1400', x.shortfall, `${x.p.address}: rent due under the tenancy`));
+    if (frs105 && x.charge) lines.push(...pair('4920', dep, x.charge, `${x.p.address}: depreciation on the building`));
     if (!frs105 && x.gain) {
-      lines.push(...pair(x.code, '140', x.gain, `${x.p.address}: fair value ${x.gain > 0n ? 'gain' : 'loss'}`));
-      lines.push(...pair('560', '840', (x.gain * dtRate) / 100n, `${x.p.address}: deferred tax on the fair value movement`));
+      lines.push(...pair(x.code, '1400', x.gain, `${x.p.address}: fair value ${x.gain > 0n ? 'gain' : 'loss'}`));
+      lines.push(...pair('5600', '8400', (x.gain * dtRate) / 100n, `${x.p.address}: deferred tax on the fair value movement`));
     }
   }
   const gains = props.reduce((a, x) => a + x.gain, 0n);

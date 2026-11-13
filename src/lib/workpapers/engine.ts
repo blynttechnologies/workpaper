@@ -117,7 +117,7 @@ export interface ReconAccount {
   add: ReconItem[];
 }
 
-export const accountKind = (code: string): 'bank' | 'cash' | 'card' => (code === '620' || code === '645' ? 'cash' : code === '630' ? 'card' : 'bank');
+export const accountKind = (code: string): 'bank' | 'cash' | 'card' => (code === '6200' || code === '6450' ? 'cash' : code === '6300' ? 'card' : 'bank');
 export const accountName = (a: ReconAccount) => (a.code === '*' ? a.name : `${a.code} ${a.name}`);
 export const statementEntered = (a: ReconAccount) => a.statement_p !== '' && a.statement_p != null;
 
@@ -126,12 +126,19 @@ export const statementEntered = (a: ReconAccount) => a.statement_p !== '' && a.s
  * single statement as one row covering every account; untouched papers start with one row
  * per bank, card and cash account in the trial balance.
  */
+/** One list of reconciling items: a deposit in transit is a negative unpresented payment, so older 'add' rows fold in with the sign flipped and the totals stay the same. */
+function foldAdd(a: any): ReconAccount {
+  if (!(a.add ?? []).length) return { ...a, add: [] };
+  const flipped = a.add.map((r: any) => ({ ...r, amount_p: String(-asPence(r.amount_p)) }));
+  return { ...a, less: [...(a.less ?? []), ...flipped], add: [] };
+}
+
 export function reconAccounts(data: Record<string, any>, leads: LeadFigure[]): ReconAccount[] {
-  if (Array.isArray(data.accounts)) return data.accounts;
+  if (Array.isArray(data.accounts)) return data.accounts.map(foldAdd);
   const sections: any[] = data.sections ?? [];
   const rowsOf = (neg: boolean) => sections.filter((s) => Number(s.sign) < 0 === neg).flatMap((s) => s.rows ?? []);
   if (asPence(data.statement_p) !== 0n || sections.some((s) => s.rows?.length)) {
-    return [{ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) }];
+    return [foldAdd({ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) })];
   }
   return leads
     .filter((l) => l.mapped || l.final !== 0n)
@@ -154,7 +161,7 @@ function debtorDays(engagementId: string, adjusted: boolean): bigint | null {
   if (!eng) return null;
   const pick = (code: string) => (adjusted ? tbFor(engagementId, code).final : tbFor(engagementId, code).draft);
   const revenue = -db.blynt_accounts.filter((a) => a.type === 'Revenue').reduce((acc, a) => acc + pick(a.code), 0n);
-  const control = pick('710');
+  const control = pick('7100');
   const days = BigInt(Math.round((Date.parse(eng.period_end) - Date.parse(eng.period_start)) / 86_400_000) + 1);
   return revenue > 0n && control > 0n ? (control * days + revenue / 2n) / revenue : null;
 }
@@ -167,10 +174,10 @@ export function debtorsJournal(totals: Record<string, bigint>) {
 /** C-10 checks and totals; returns the conclusion draft. */
 function reviewDebtors(engagementId: string, data: Record<string, any>, leads: LeadFigure[], total: bigint, totals: Record<string, bigint>, checks: PaperCheck[]): string {
   const views = ((data.lines ?? []) as DebtorLine[]).map(debtorView);
-  const control = leads.find((l) => l.code === '710');
+  const control = leads.find((l) => l.code === '7100');
   // The aged report comes from the client's ledger, so it agrees to the control before any of our journals
   const controlDraft = control?.draft ?? 0n;
-  const provisionInTb = -(leads.find((l) => l.code === '711')?.draft ?? 0n);
+  const provisionInTb = -(leads.find((l) => l.code === '7110')?.draft ?? 0n);
   const sum = (f: (v: ReturnType<typeof debtorView>) => bigint) => views.reduce((acc, v) => acc + f(v), 0n);
   const positive = sum((v) => (v.total > 0n ? v.total : 0n));
   const collected = sum((v) => (v.total > 0n ? (v.after < v.total ? v.after : v.total) : 0n));
@@ -195,7 +202,7 @@ function reviewDebtors(engagementId: string, data: Record<string, any>, leads: L
     ...(daysPy !== null ? { debtor_days_py: daysPy } : {}),
   });
 
-  checks.push(tie('control_tb', 'Aged report agrees to control account', total, control?.mapped ? controlDraft : null, 'TB 710 before adjustments'));
+  checks.push(tie('control_tb', 'Aged report agrees to control account', total, control?.mapped ? controlDraft : null, 'TB 7100 before adjustments'));
   const unchecked = views.filter((v) => v.total > 0n && v.after === 0n && !v.line.decision);
   checks.push({
     id: 'receipts',
@@ -391,11 +398,11 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
       const ls = leads.filter((x) => codes.includes(x.code) && x.mapped);
       return ls.length ? ls.reduce((acc, x) => acc + x.final, 0n) : null;
     };
-    const costTb = sumLeads(['650', '660', '670', '680', '690']);
-    checks.push(tie('cost_tb', 'Closing cost agrees to trial balance', cost, costTb, 'TB 650-690 cost'));
-    const depTb = sumLeads(['651', '661', '671', '681', '691', '696']);
-    checks.push(tie('dep_tb', 'Closing depreciation agrees to trial balance', dep, depTb === null ? null : -depTb, 'TB 651-696 depreciation'));
-    checks.push(tie('charge_tb', 'Charge agrees to trial balance', charge, sumLeads(['492']), 'TB 492'));
+    const costTb = sumLeads(['6500', '6600', '6700', '6800', '6900']);
+    checks.push(tie('cost_tb', 'Closing cost agrees to trial balance', cost, costTb, 'TB 6500-6900 cost'));
+    const depTb = sumLeads(['6510', '6610', '6710', '6810', '6910', '6960']);
+    checks.push(tie('dep_tb', 'Closing depreciation agrees to trial balance', dep, depTb === null ? null : -depTb, 'TB 6510-6960 depreciation'));
+    checks.push(tie('charge_tb', 'Charge agrees to trial balance', charge, sumLeads(['4920']), 'TB 4920'));
     checks.push({
       id: 'proof',
       label: 'Proof in total of depreciation',
@@ -403,9 +410,9 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
       passed: (charge - expected <= 100n && expected - charge <= 100n),
     });
     const disposals = movements.filter((m) => m.type === 'disposal');
-    if (disposals.length || sumLeads(['493']) !== null) {
-      const plTb = sumLeads(['493']);
-      checks.push(tie('pl_tb', 'Disposal loss or profit agrees to trial balance', -pl, plTb, 'TB 493'));
+    if (disposals.length || sumLeads(['4930']) !== null) {
+      const plTb = sumLeads(['4930']);
+      checks.push(tie('pl_tb', 'Disposal loss or profit agrees to trial balance', -pl, plTb, 'TB 4930'));
     }
     const unvouched = movements.filter(
       (m) => (m.type === 'disposal' || asPence(m.cost_p) > 100000n) && linkedFiles(wp.id, m.id).length === 0
@@ -481,7 +488,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     totals.liability = calculatedLiability;
     totals.difference = calculatedLiability - (tbShown ?? 0n);
 
-    checks.push(tie('vat_tb', 'Calculated VAT liability agrees to VAT control account', calculatedLiability, tbShown, 'VAT control (TB 780)'));
+    checks.push(tie('vat_tb', 'Calculated VAT liability agrees to VAT control account', calculatedLiability, tbShown, 'VAT control (TB 7800)'));
     const unmatched = returns.filter((r) => !r.matched && asPence(r.paid_amount_p ?? '0') > 0n);
     checks.push({
       id: 'vat_payments_matched',
@@ -572,7 +579,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     totals.lease_liability = totalLiability;
     totals.difference = totalLiability - (tbShown ?? 0n);
 
-    checks.push(tie('lease_tb', 'Lease liability agrees to trial balance', totalLiability, tbShown, 'Lease liabilities (TB 820)'));
+    checks.push(tie('lease_tb', 'Lease liability agrees to trial balance', totalLiability, tbShown, 'Lease liabilities (TB 8200)'));
     checks.push({
       id: 'commitments_split',
       label: 'Commitments maturity split completed',
@@ -612,7 +619,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     totals.s455_tax = totalS455;
     totals.difference = netDla - (tbShown ?? 0n);
 
-    checks.push(tie('dla_tb', "Directors' loan balance agrees to trial balance", netDla, tbShown, 'DLA (TB 798)'));
+    checks.push(tie('dla_tb', "Directors' loan balance agrees to trial balance", netDla, tbShown, 'DLA (TB 7980)'));
     checks.push({
       id: 'dla_overdrawn_check',
       label: "s455 tax check on overdrawn loan accounts",
@@ -643,7 +650,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     anchors.push({ id: 'principal', label: `${data.lender || 'Loan'} · Principal` });
     anchors.push({ id: 'maturity', label: `${data.lender || 'Loan'} · Maturity Split` });
 
-    checks.push(tie('loan_tb', 'Loan principal agrees to trial balance', principal, tbShown, 'Bank loans (TB 799/800)'));
+    checks.push(tie('loan_tb', 'Loan principal agrees to trial balance', principal, tbShown, 'Bank loans (TB 7990/8000)'));
     checks.push({
       id: 'loan_maturity_tie',
       label: 'Maturity analysis agrees to total principal',
@@ -673,7 +680,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
       anchors.push({ id: 'timing_diff', label: 'Timing differences on fixed assets' });
       anchors.push({ id: 'provision', label: 'Deferred tax provision c/f' });
 
-      checks.push(tie('deferred_tax_tb', 'Deferred tax provision agrees to trial balance', provision, tbShown, 'Deferred tax (TB 840)'));
+      checks.push(tie('deferred_tax_tb', 'Deferred tax provision agrees to trial balance', provision, tbShown, 'Deferred tax (TB 8400)'));
       draft = `Deferred tax provision of ${formatPence(provision)} calculated at ${ratePct}% on net timing differences of ${formatPence(timingDiff)} ${
         provision === (tbShown ?? 0n) ? 'agrees to the trial balance.' : 'differs from the trial balance.'
       }`;
@@ -695,7 +702,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
       anchors.push({ id: 'current_year_charge', label: 'Corporation tax charge for year' });
       anchors.push({ id: 'closing_liability', label: 'Corporation tax liability c/f' });
 
-      checks.push(tie('ct_liability_tb', 'Corporation tax liability agrees to trial balance', closingLiab, tbShown, 'CT liability (TB 795)'));
+      checks.push(tie('ct_liability_tb', 'Corporation tax liability agrees to trial balance', closingLiab, tbShown, 'CT liability (TB 7950)'));
       if (data.charge_source === 'estimate') {
         checks.push({
           id: 'ct_estimate',

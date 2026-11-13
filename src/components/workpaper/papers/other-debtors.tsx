@@ -31,7 +31,7 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
     };
     const items = otherItemsFromLedger({ engagementId: eng.id, periodStart: eng.period_start, periodEnd: pe, tb: tbOf }, live().items ?? []);
     save({ items, refreshed_at: new Date().toISOString() });
-    setNote(`${items.length} open item${items.length === 1 ? '' : 's'} on 720 and 749 at ${ukDate(pe)}.`);
+    setNote(`${items.length} open item${items.length === 1 ? '' : 's'} on 7200 and 7490 at ${ukDate(pe)}.`);
   };
   const addItem = (account: string) => {
     const id = newId('oth');
@@ -208,7 +208,7 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
                                     {v.amount - v.moved > 0n && (
                                       <>
                                         rest ({formatPence(v.amount - v.moved)}) charged to
-                                        <CodePicker label={`Charge the expired part of ${name} to`} value={i.expense_code ?? '499'} codes={codes} disabled={locked} onChange={(c) => setItem(i.id, { expense_code: c })} />
+                                        <CodePicker label={`Charge the expired part of ${name} to`} value={i.expense_code ?? '4990'} codes={codes} disabled={locked} onChange={(c) => setItem(i.id, { expense_code: c })} />
                                       </>
                                     )}
                                   </>
@@ -218,7 +218,7 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
                                     <TextInput label={`Why ${name} stays`} value={i.reason} disabled={locked} placeholder="Why it stays (required)" onCommit={(r) => setItem(i.id, { reason: r })} />
                                   </span>
                                 )}
-                                {i.decision === 'write_off' && <span>Written off to 499 Other administrative expenses.</span>}
+                                {i.decision === 'write_off' && <span>Written off to 4990 Other administrative expenses.</span>}
                                 {!locked && (
                                   <button type="button" className="text-[10px] text-[#1D4E89] underline" onClick={() => setItem(i.id, { decision: undefined, move_p: undefined })}>
                                     Undo

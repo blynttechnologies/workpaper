@@ -75,6 +75,15 @@ export function requireAttachmentAccess(req: Request, attachmentId: string) {
   return actor;
 }
 
+/** An uploaded file is readable by its uploading practice, and only through engagements the user can open. */
+export function canAccessFile(actor: RequestActor, key: string): boolean {
+  const upload = db.uploads.find((u) => u.file_key === key);
+  const attached = db.attachments.filter((a) => a.file_key === key);
+  return upload
+    ? upload.firm_id === actor.firmId && (attached.length === 0 || attached.some((a) => canAccessEngagement(actor, a.engagement_id)))
+    : attached.some((a) => canAccessEngagement(actor, a.engagement_id));
+}
+
 export function jsonResponse(data: any, status = 200, headers?: Record<string, string>) {
   // Stringify with bigint support if any
   const body = JSON.stringify(data, (_, v) => (typeof v === 'bigint' ? v.toString() : v));

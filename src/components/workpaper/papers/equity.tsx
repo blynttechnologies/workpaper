@@ -25,7 +25,7 @@ export function EquitySchedule({ data, result, locked, save, filesFor, attachTo,
     <div className="flex flex-col gap-4">
       <Tiles
         items={[
-          { label: 'Share capital', value: formatPence(r.capital), sub: capitalOk ? 'Agrees to TB 850' : `TB ${formatPence(r.capitalTb)}`, tone: capitalOk ? 'plain' : 'bad' },
+          { label: 'Share capital', value: formatPence(r.capital), sub: capitalOk ? 'Agrees to TB 8500' : `TB ${formatPence(r.capitalTb)}`, tone: capitalOk ? 'plain' : 'bad' },
           { label: 'Dividends in the year', value: formatPence(r.total), sub: `${r.tested.length} dividend${r.tested.length === 1 ? '' : 's'}` },
           {
             label: 'Lowest reserves cover',
@@ -41,7 +41,7 @@ export function EquitySchedule({ data, result, locked, save, filesFor, attachTo,
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className={card}>
           <div className="flex items-center justify-between font-bold mb-2">
-            Share capital <Pill tone={capitalOk ? 'good' : 'bad'}>{capitalOk ? 'Agrees to TB 850' : 'Differs from TB 850'}</Pill>
+            Share capital <Pill tone={capitalOk ? 'good' : 'bad'}>{capitalOk ? 'Agrees to TB 8500' : 'Differs from TB 8500'}</Pill>
           </div>
           <table className="w-full text-[11px]">
             <thead>

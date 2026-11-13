@@ -279,6 +279,10 @@ export default function WorkpaperPage() {
       if (live().accounts.some((a: any) => a.id === linkRow)) {
         for (const att of added) {
           try {
+            // The AI reads the statement on the server; with no read, the balance stays blank for someone to type
+            const res = await fetch(`/api/v1/files/${encodeURIComponent(att.file_key)}/read-statement`, { method: 'POST' });
+            const read = res.ok ? (await res.json()).read : null;
+            if (read) att.extracted_data = read;
             services.fillScheduleFromDocument(engagement!.firm_id, actor, att.id, workpaper!.id, linkRow);
           } catch {
             // Reading the balance is a convenience: the file is attached either way
@@ -823,7 +827,6 @@ export default function WorkpaperPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-extrabold text-[#122654] tracking-tight">
                   {t.title}
-                  {data.bank_name ? ` · ${data.bank_name}` : ''}
                 </h1>
                 {openChecks.length > 0 ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#FFF4DB] text-[#8A5A00]">
@@ -885,6 +888,16 @@ export default function WorkpaperPage() {
                 );
               })}
             </div>
+            {/* Say why the next sign-off is blocked here: the message banner sits too far up the page to notice */}
+            {(() => {
+              const next = ROLE_ORDER.slice(0, levelsFor(workpaper)).find((r) => !latestSignoff(r));
+              const why = next ? canSign(next) : null;
+              return why ? (
+                <p className="text-[11px] text-[#A23A27] mt-1.5">
+                  {SIGN_BUTTON[next!][0]}: {why}
+                </p>
+              ) : null;
+            })()}
           </div>
           {banners}
         </div>

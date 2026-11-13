@@ -56,13 +56,13 @@ function balances(engagementId: string) {
 type Section = keyof Accounts['bs'] | 'pl';
 function sectionOf(code: string, line: string): Section {
   const n = Number(code);
-  if (n < 600) return 'pl';
-  if (n >= 900) return 'suspense';
-  if (n >= 850) return 'equity';
+  if (n < 6000) return 'pl';
+  if (n >= 9000) return 'suspense';
+  if (n >= 8500) return 'equity';
   if (line === 'Creditors: amounts due after one year') return 'creditorsLong';
   if (line === 'Provisions for liabilities') return 'provisions';
   if (SHORT_CREDITORS.has(line)) return 'creditorsShort';
-  if (n >= 650 && n < 700) return 'fixed';
+  if (n >= 6500 && n < 7000) return 'fixed';
   return 'current';
 }
 

@@ -13,6 +13,8 @@ export default function ForgotPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [devLink, setDevLink] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,8 +27,11 @@ export default function ForgotPasswordPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      if (res.ok) setSent(true);
-      else setError('Could not send the link. Try again.');
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setDevLink(body.devLink || '');
+        setSent(true);
+      } else setError('Could not send the link. Try again.');
     } catch {
       setError('Could not reach the server. Try again.');
     } finally {
@@ -50,6 +55,29 @@ export default function ForgotPasswordPage() {
                 If an account exists for that address, we&apos;ve sent a link to set a new password. It works once and
                 expires in one hour.
               </p>
+              {devLink && (
+                <div className="mt-4 p-2.5 rounded-[8px] bg-[#FFF8E6] border border-[#E0B64A] space-y-1.5 text-xs">
+                  <label htmlFor="dev-link" className="block font-semibold text-[#6B4700]">
+                    Development only — never shown on the live site
+                  </label>
+                  <div className="flex gap-1.5">
+                    <input
+                      id="dev-link"
+                      readOnly
+                      value={devLink}
+                      onFocus={(e) => e.target.select()}
+                      className="flex-1 min-w-0 min-h-[34px] px-2 border border-[#D3DCEE] rounded-[6px] bg-white font-mono text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard?.writeText(devLink).then(() => setCopied(true))}
+                      className="min-h-[34px] px-2.5 bg-[#122654] text-white font-bold rounded-[6px] cursor-pointer"
+                    >
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <>

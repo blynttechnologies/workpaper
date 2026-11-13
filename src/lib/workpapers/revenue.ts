@@ -8,7 +8,7 @@ import { addDays, chartCodeOf, chartName, journalCheck, ledgerFor, pair, type JL
  * either side of the period end. Decisions build one journal.
  */
 
-export const REVENUE_CODES = ['100', '110', '120', '140', '190'];
+export const REVENUE_CODES = ['1000', '1100', '1200', '1400', '1900'];
 export const MICRO_TURNOVER = 100_000_000n; // micro-entity turnover limit, £1m
 export const VAT_THRESHOLD = 9_000_000n; // VAT registration threshold, £90,000
 
@@ -37,8 +37,8 @@ export function nonTrading(ctx: Pick<PaperContext, 'engagementId' | 'periodStart
       contact: t.contact,
       desc: t.description,
       amount: -asPence(t.amount_p),
-      code: chartCodeOf(ctx.engagementId, t.account_code) ?? '100',
-      to: /grant|insurance|compensation|claim/i.test(`${t.description} ${t.contact}`) ? '140' : /loan|capital|director/i.test(`${t.description} ${t.contact}`) ? '798' : '493',
+      code: chartCodeOf(ctx.engagementId, t.account_code) ?? '1000',
+      to: /grant|insurance|compensation|claim/i.test(`${t.description} ${t.contact}`) ? '1400' : /loan|capital|director/i.test(`${t.description} ${t.contact}`) ? '7980' : '4930',
       url: t.external_url,
     }));
 }
@@ -50,7 +50,7 @@ export function cutoffWindow(ctx: Pick<PaperContext, 'engagementId' | 'periodEnd
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((t) => {
       const prev = existing.find((x) => x.id === t.id);
-      return { id: t.id, date: t.date, contact: t.contact, desc: t.description, amount_p: (-asPence(t.amount_p)).toString(), code: chartCodeOf(ctx.engagementId, t.account_code) ?? '100', ...(prev?.decision ? { decision: prev.decision } : {}) };
+      return { id: t.id, date: t.date, contact: t.contact, desc: t.description, amount_p: (-asPence(t.amount_p)).toString(), code: chartCodeOf(ctx.engagementId, t.account_code) ?? '1000', ...(prev?.decision ? { decision: prev.decision } : {}) };
     });
 }
 
@@ -98,8 +98,8 @@ export function revenueReview(ctx: PaperContext) {
   const cutoff: CutoffItem[] = data.cutoff?.items ?? [];
   const lines: JLine[] = [
     ...odd.filter((n) => n.decided === 'remove').flatMap((n) => pair(n.code, n.to, n.amount, `${n.contact || n.desc}: not turnover`)),
-    ...cutoff.filter((i) => i.decision === 'accrue').flatMap((i) => pair('730', i.code, asPence(i.amount_p), `${i.contact || i.desc}: work done before the year end, invoiced ${i.date}`)),
-    ...cutoff.filter((i) => i.decision === 'defer').flatMap((i) => pair(i.code, '760', asPence(i.amount_p), `${i.contact || i.desc}: invoiced ${i.date} for work after the year end`)),
+    ...cutoff.filter((i) => i.decision === 'accrue').flatMap((i) => pair('7300', i.code, asPence(i.amount_p), `${i.contact || i.desc}: work done before the year end, invoiced ${i.date}`)),
+    ...cutoff.filter((i) => i.decision === 'defer').flatMap((i) => pair(i.code, '7600', asPence(i.amount_p), `${i.contact || i.desc}: invoiced ${i.date} for work after the year end`)),
   ];
   const adjustment = lines.filter((l) => REVENUE_CODES.includes(l.code)).reduce((a, l) => a + l.credit - l.debit, 0n);
   const vat = data.vat_box6_p != null && data.vat_box6_p !== '' ? asPence(data.vat_box6_p) : null;

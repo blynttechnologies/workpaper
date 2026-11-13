@@ -28,7 +28,7 @@ describe('trade debtors (REC-07)', () => {
     const eng = db.engagements[0];
     const pe = eng.period_end;
     const day = (n: number) => new Date(Date.parse(pe) + n * 86_400_000).toISOString().slice(0, 10);
-    db.account_mappings.push({ id: 'm_deb', engagement_id: eng.id, source_code: 'DEB', source_name: 'Debtors', source_type: 'Current Asset', balance_p: '0', blynt_code: '710', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null });
+    db.account_mappings.push({ id: 'm_deb', engagement_id: eng.id, source_code: 'DEB', source_name: 'Debtors', source_type: 'Current Asset', balance_p: '0', blynt_code: '7100', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null });
     const tx = (id: string, contact: string, date: string, amount_p: string, description = id) =>
       db.transactions.push({ id, engagement_id: eng.id, account_code: 'DEB', account_name: 'Debtors', date, contact, description, amount_p, vat_p: '0', gross_p: amount_p, source: 'Xero' });
     tx('INV-1', 'Northgate', day(-145), '240000');

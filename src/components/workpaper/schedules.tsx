@@ -334,11 +334,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                     <tr className="bg-[#FAFBFD]">
                       <td />
                       <td colSpan={7} className="p-3">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 max-w-2xl">
                           {(
                             [
+                              // One list: a deposit in transit is entered as a negative payment
                               ['less', 'Less: unpresented payments', less, 'payment'],
-                              ['add', 'Add: deposits in transit', add, 'deposit'],
                             ] as const
                           ).map(([side, title, total, noun]) => (
                             <div key={side} className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
@@ -361,14 +361,14 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                                     label={`Description of ${noun}`}
                                     value={r.desc}
                                     disabled={locked}
-                                    placeholder={side === 'less' ? 'e.g. Cheque 001042' : 'e.g. Customer receipt'}
+                                    placeholder="e.g. Cheque 001042, or a deposit as a minus"
                                     onCommit={(v) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, desc: v } : x)))}
                                   />
                                   <MoneyInput
                                     label={`${r.desc || noun} amount`}
                                     value={r.amount_p}
                                     disabled={locked}
-                                    allowNegative={false}
+                                    allowNegative
                                     onCommit={(p) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, amount_p: p } : x)))}
                                   />
                                   <div className="flex items-center gap-1">
@@ -388,11 +388,6 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                               )}
                             </div>
                           ))}
-                        </div>
-                        <div className="mt-2 text-[11px] text-[#4A5878] font-mono">
-                          {kind === 'cash' ? 'Count' : 'Statement'} {entered ? formatPence(asPence(a.statement_p)) : '—'} − payments {formatPence(less)} + deposits {formatPence(add)} = adjusted{' '}
-                          {formatPence(tot(`${a.id}_adjusted`))} · ledger {formatPence(ledger.final)} · difference{' '}
-                          <span className={abs(diff) > tolerance ? 'text-[#B42318] font-bold' : 'text-[#0B6B52] font-bold'}>{formatPence(diff)}</span>
                         </div>
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl text-xs">
                           <label className="flex flex-col gap-1">
@@ -491,11 +486,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const journalLines = [
     ...(need.provision !== 0n
       ? need.provision > 0n
-        ? [{ blynt_code: '491', debit: need.provision, narrative: 'Specific bad debt provision' }, { blynt_code: '711', credit: need.provision, narrative: 'Bad debt provision' }]
-        : [{ blynt_code: '711', debit: -need.provision, narrative: 'Release of bad debt provision' }, { blynt_code: '491', credit: -need.provision, narrative: 'Bad debt provision released' }]
+        ? [{ blynt_code: '4910', debit: need.provision, narrative: 'Specific bad debt provision' }, { blynt_code: '7110', credit: need.provision, narrative: 'Bad debt provision' }]
+        : [{ blynt_code: '7110', debit: -need.provision, narrative: 'Release of bad debt provision' }, { blynt_code: '4910', credit: -need.provision, narrative: 'Bad debt provision released' }]
       : []),
     ...(need.creditors > 0n
-      ? [{ blynt_code: '710', debit: need.creditors, narrative: 'Customer credit balances' }, { blynt_code: '750', credit: need.creditors, narrative: 'Customer credit balances shown in creditors' }]
+      ? [{ blynt_code: '7100', debit: need.creditors, narrative: 'Customer credit balances' }, { blynt_code: '7500', credit: need.creditors, narrative: 'Customer credit balances shown in creditors' }]
       : []),
   ] as { blynt_code: string; debit?: bigint; credit?: bigint; narrative: string }[];
   const journalCheck = result.checks.find((c) => c.id === 'journal_sent');
@@ -2539,7 +2534,7 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
         <div className="p-3.5 rounded-[12px] bg-white border border-[#E3E7EF] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <div className="text-[11px] font-bold text-[#122654]">Trial Balance Tie Check (TB 840)</div>
+              <div className="text-[11px] font-bold text-[#122654]">Trial Balance Tie Check (TB 8400)</div>
               <div className="text-[10px] text-[#4A5878]">
                 Difference: <span className="font-mono font-bold">{formatPence(diff)}</span>
               </div>
@@ -2681,7 +2676,7 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
         </div>
 
         <div className="p-3 bg-white rounded-[8px] border border-[#E3E7EF]">
-          <div className="text-[10px] uppercase font-bold text-[#4A5878]">Trial Balance CT Liability (TB 795)</div>
+          <div className="text-[10px] uppercase font-bold text-[#4A5878]">Trial Balance CT Liability (TB 7950)</div>
           <div className="font-mono font-bold text-base text-[#122654] mt-1">{formatPence(result.totals.tb ?? 0n)}</div>
           <div className="text-[10px] text-[#4A5878] mt-0.5">Control account in ledger</div>
         </div>

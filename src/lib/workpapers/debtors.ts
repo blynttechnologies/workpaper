@@ -83,7 +83,7 @@ export function agedDebtorsFromLedger(engagementId: string, existing: DebtorLine
   if (!eng) return null;
   const pe = eng.period_end;
   const codes = new Set(
-    db.account_mappings.filter((m) => m.engagement_id === engagementId && m.blynt_code?.startsWith('710')).map((m) => m.source_code)
+    db.account_mappings.filter((m) => m.engagement_id === engagementId && m.blynt_code?.startsWith('7100')).map((m) => m.source_code)
   );
   const tx = db.transactions.filter((t) => t.engagement_id === engagementId && codes.has(t.account_code));
   if (!tx.length) return null;

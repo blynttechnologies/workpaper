@@ -123,7 +123,7 @@ export class SchedulesService {
         {
           id: `line_${jnlId}_1`,
           adjustment_id: jnlId,
-          blynt_code: '490', // Bad debts expense
+          blynt_code: '4900', // Bad debts expense
           debit_p: String(provisionAmountPence),
           credit_p: '0',
           narrative: 'Bad debt provision charge',
@@ -131,7 +131,7 @@ export class SchedulesService {
         {
           id: `line_${jnlId}_2`,
           adjustment_id: jnlId,
-          blynt_code: '711', // Bad debt provision (contra asset)
+          blynt_code: '7110', // Bad debt provision (contra asset)
           debit_p: '0',
           credit_p: String(provisionAmountPence),
           narrative: 'Bad debt allowance c/f',
@@ -308,8 +308,8 @@ export class SchedulesService {
 
     // Prepayment: DR Prepayments 730, CR Expense 400
     // Accrual: DR Expense 400, CR Accruals 760
-    const assetLiabCode = isPrepayment ? '730' : '760';
-    const defaultExpenseCode = isPrepayment ? '410' : '420';
+    const assetLiabCode = isPrepayment ? '7300' : '7600';
+    const defaultExpenseCode = isPrepayment ? '4100' : '4200';
 
     const lines = isPrepayment
       ? [
@@ -431,12 +431,12 @@ export class SchedulesService {
 
     const lines = isSurplus
       ? [
-          { id: `line_${jnlId}_1`, adjustment_id: jnlId, blynt_code: '780', debit_p: String(amt), credit_p: '0', narrative: 'Transfer flat rate surplus' },
-          { id: `line_${jnlId}_2`, adjustment_id: jnlId, blynt_code: '140', debit_p: '0', credit_p: String(amt), narrative: 'Flat rate VAT surplus income' },
+          { id: `line_${jnlId}_1`, adjustment_id: jnlId, blynt_code: '7800', debit_p: String(amt), credit_p: '0', narrative: 'Transfer flat rate surplus' },
+          { id: `line_${jnlId}_2`, adjustment_id: jnlId, blynt_code: '1400', debit_p: '0', credit_p: String(amt), narrative: 'Flat rate VAT surplus income' },
         ]
       : [
-          { id: `line_${jnlId}_1`, adjustment_id: jnlId, blynt_code: '490', debit_p: String(amt), credit_p: '0', narrative: 'Flat rate VAT deficit expense' },
-          { id: `line_${jnlId}_2`, adjustment_id: jnlId, blynt_code: '780', debit_p: '0', credit_p: String(amt), narrative: 'Clear flat rate deficit from VAT control' },
+          { id: `line_${jnlId}_1`, adjustment_id: jnlId, blynt_code: '4900', debit_p: String(amt), credit_p: '0', narrative: 'Flat rate VAT deficit expense' },
+          { id: `line_${jnlId}_2`, adjustment_id: jnlId, blynt_code: '7800', debit_p: '0', credit_p: String(amt), narrative: 'Clear flat rate deficit from VAT control' },
         ];
 
     const journal: Adjustment = {
@@ -490,7 +490,7 @@ export class SchedulesService {
       {
         id: `line_${jnlId}_dr`,
         adjustment_id: jnlId,
-        blynt_code: '492', // Depreciation expense
+        blynt_code: '4920', // Depreciation expense
         debit_p: String(totalCharge),
         credit_p: '0',
         narrative: 'Depreciation charge for the year per asset register',
@@ -501,7 +501,7 @@ export class SchedulesService {
       const charge = asPence(c.deprec_charge_p || c.charge_p || '0');
       if (charge > 0n) {
         // 681 computer deprec, 691 fixtures deprec
-        const code = c.name.toLowerCase().includes('computer') ? '681' : '691';
+        const code = c.name.toLowerCase().includes('computer') ? '6810' : '6910';
         lines.push({
           id: `line_${jnlId}_cr_${idx}`,
           adjustment_id: jnlId,
@@ -570,8 +570,8 @@ export class SchedulesService {
       approved_by: null,
       created_at: new Date().toISOString(),
       lines: [
-        { id: `line_${ctJnlId}_1`, adjustment_id: ctJnlId, blynt_code: '500', debit_p: String(options.ctChargePence), credit_p: '0', narrative: 'Corporation tax P&L charge' },
-        { id: `line_${ctJnlId}_2`, adjustment_id: ctJnlId, blynt_code: '795', debit_p: '0', credit_p: String(options.ctChargePence), narrative: 'Corporation tax liability c/f' },
+        { id: `line_${ctJnlId}_1`, adjustment_id: ctJnlId, blynt_code: '5000', debit_p: String(options.ctChargePence), credit_p: '0', narrative: 'Corporation tax P&L charge' },
+        { id: `line_${ctJnlId}_2`, adjustment_id: ctJnlId, blynt_code: '7950', debit_p: '0', credit_p: String(options.ctChargePence), narrative: 'Corporation tax liability c/f' },
       ],
     };
     db.adjustments.push(ctJournal);
@@ -597,8 +597,8 @@ export class SchedulesService {
         approved_by: null,
         created_at: new Date().toISOString(),
         lines: [
-          { id: `line_${dtJnlId}_1`, adjustment_id: dtJnlId, blynt_code: '500', debit_p: String(dtAmt), credit_p: '0', narrative: 'Deferred tax charge in P&L' },
-          { id: `line_${dtJnlId}_2`, adjustment_id: dtJnlId, blynt_code: '840', debit_p: '0', credit_p: String(dtAmt), narrative: 'Deferred tax provision liability' },
+          { id: `line_${dtJnlId}_1`, adjustment_id: dtJnlId, blynt_code: '5000', debit_p: String(dtAmt), credit_p: '0', narrative: 'Deferred tax charge in P&L' },
+          { id: `line_${dtJnlId}_2`, adjustment_id: dtJnlId, blynt_code: '8400', debit_p: '0', credit_p: String(dtAmt), narrative: 'Deferred tax provision liability' },
         ],
       };
       db.adjustments.push(dtJournal);

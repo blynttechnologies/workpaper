@@ -57,7 +57,7 @@ describe('status engine (WPS-04)', () => {
     expect(paperStatus(wp)).toBe('reconciled');
     expect(evaluatePaper(wp)!.checks.find((c) => c.id === 'differences')!.passed).toBe(true);
     // Two accounts out by opposite amounts never cancel each other out
-    const two = [...wp.data_json.accounts, { id: 'x', code: '649', name: 'Other', statement_p: '1000', less: [], add: [] }];
+    const two = [...wp.data_json.accounts, { id: 'x', code: '6490', name: 'Other', statement_p: '1000', less: [], add: [] }];
     two[0] = { ...two[0], statement_p: (BigInt(two[0].statement_p) - 1000n).toString() };
     wp.data_json = { ...wp.data_json, accounts: two };
     const out = evaluatePaper(wp)!;
@@ -71,6 +71,16 @@ describe('status engine (WPS-04)', () => {
     wp.data_json.statement_p = '1';
     const accounts = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads);
     expect(accounts).toEqual([expect.objectContaining({ id: 'statement', code: '*', statement_p: '1' })]);
+  });
+
+  it('bank and cash: an old deposit in transit folds into the one list as a minus, totals unchanged', () => {
+    const wp = bankPaper();
+    const [a] = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads);
+    wp.data_json = { ...wp.data_json, accounts: [{ ...a, statement_p: '10000', less: [{ id: 'p', amount_p: '3000' }], add: [{ id: 'd', amount_p: '1000' }] }] };
+    const [folded] = reconAccounts(wp.data_json, []);
+    expect(folded.add).toEqual([]);
+    expect(folded.less.map((r) => r.amount_p)).toEqual(['3000', '-1000']);
+    expect(evaluatePaper(wp)!.totals[`${a.id}_adjusted`]).toBe(8000n); // 10000 - 3000 + 1000
   });
 
   it('never overrides a sign-off status', () => {

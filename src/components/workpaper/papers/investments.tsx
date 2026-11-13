@@ -60,7 +60,7 @@ export function InvestmentsSchedule({ data, result, locked, save, filesFor, atta
         <div className="flex items-center justify-between mb-2">
           <span className="font-bold">Investment property register</span>
           {!locked && (
-            <button type="button" className={btnAdd} onClick={() => save({ properties: [...(live().properties ?? []), { id: newId('prop'), address: '', acquired: ctx.periodEnd, cost_p: '0', code: '650' }] })}>
+            <button type="button" className={btnAdd} onClick={() => save({ properties: [...(live().properties ?? []), { id: newId('prop'), address: '', acquired: ctx.periodEnd, cost_p: '0', code: '6500' }] })}>
               <Plus className="w-3.5 h-3.5" /> Add property
             </button>
           )}
@@ -167,7 +167,7 @@ export function InvestmentsSchedule({ data, result, locked, save, filesFor, atta
                               <div className="font-bold text-[11px]">Ownership</div>
                               {field('Land Registry title', <TextInput label={`Title number for ${name}`} value={p.title} disabled={locked} onCommit={(v) => setProp(p.id, { title: v })} />)}
                               {field('Type', <TextInput label={`Type of ${name}`} value={p.type} disabled={locked} placeholder="e.g. Residential flat" onCommit={(v) => setProp(p.id, { type: v })} />)}
-                              {field('In the TB under', <TextInput label={`Chart account for ${name}`} value={p.code ?? '650'} disabled={locked} onCommit={(v) => setProp(p.id, { code: v.replace(/\D/g, '') || '650' })} />)}
+                              {field('In the TB under', <TextInput label={`Chart account for ${name}`} value={p.code ?? '6500'} disabled={locked} onCommit={(v) => setProp(p.id, { code: v.replace(/\D/g, '') || '6500' })} />)}
                             </div>
                             <div className="flex flex-col gap-1.5">
                               <div className="font-bold text-[11px]">Valuation</div>

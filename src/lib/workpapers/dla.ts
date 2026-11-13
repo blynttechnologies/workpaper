@@ -5,7 +5,7 @@ import { addDays, daysBetween, journalCheck, ledgerFor, pair, type JLine, type P
 import { ukDate } from '../dates';
 
 /**
- * Director's loan account (D-20) from the ledger: every transaction on 740 and 798 grouped by
+ * Director's loan account (D-20) from the ledger: every transaction on 7400 and 7980 grouped by
  * what it is, the balance at each month end, s455 on an overdrawn balance not repaid within nine
  * months, the beneficial loan test for the tax year, and the advances note. Balances are
  * debit-positive: positive means the director owes the company.
@@ -46,10 +46,10 @@ export function dlaReview(ctx: PaperContext) {
   const { data } = ctx;
   const directors: DlaDirector[] = (data.directors ?? []).map((d: any) => ({ id: d.id, name: d.name }));
   const decisions: Record<string, 'personal' | 'business'> = data.tx_decisions ?? {};
-  const all = ledgerFor(ctx.engagementId, ['740', '798']).sort((a, b) => a.date.localeCompare(b.date));
+  const all = ledgerFor(ctx.engagementId, ['7400', '7980']).sort((a, b) => a.date.localeCompare(b.date));
   const inYear = all.filter((t) => t.date >= ctx.periodStart && t.date <= ctx.periodEnd);
   const after = all.filter((t) => t.date > ctx.periodEnd);
-  const tbClose = ctx.tb('740').draft + ctx.tb('798').draft;
+  const tbClose = ctx.tb('7400').draft + ctx.tb('7980').draft;
   const hasLedger = inYear.length > 0;
   const opening = hasLedger ? tbClose - inYear.reduce((a, t) => a + asPence(t.amount_p), 0n) : asPence(data.opening_p ?? '0');
   const who = (contact: string) => directors.find((d) => d.name && contact && contact.toLowerCase().includes(d.name.split(' ').pop()!.toLowerCase())) ?? directors[0];
@@ -65,7 +65,7 @@ export function dlaReview(ctx: PaperContext) {
     return { key, label, items, total: items.reduce((a, x) => a + x.amount, 0n) };
   });
   const business = tx.filter((x) => x.decision === 'business');
-  const lines: JLine[] = business.flatMap((x) => pair('499', chartFor(ctx, x.t.account_code), x.amount, `${x.t.description}: a business cost, not the director's`));
+  const lines: JLine[] = business.flatMap((x) => pair('4990', chartFor(ctx, x.t.account_code), x.amount, `${x.t.description}: a business cost, not the director's`));
   const reclass = business.reduce((a, x) => a + x.amount, 0n);
   const closing = (hasLedger ? tbClose : asPence(data.closing_p ?? '0')) - reclass;
 
@@ -138,7 +138,7 @@ export function dlaReview(ctx: PaperContext) {
 }
 
 function chartFor(ctx: PaperContext, sourceCode: string) {
-  return db.account_mappings.find((m) => m.engagement_id === ctx.engagementId && m.source_code === sourceCode)?.blynt_code ?? '740';
+  return db.account_mappings.find((m) => m.engagement_id === ctx.engagementId && m.source_code === sourceCode)?.blynt_code ?? '7400';
 }
 
 /** The note on advances to directors, required even in micro-entity accounts. */
@@ -155,11 +155,11 @@ export function reviewDla(ctx: PaperContext): string {
   Object.assign(totals, { opening: r.opening, closing: r.closing, s455: r.s455.s455, benefit: r.loan.benefit, class1a: r.loan.class1a });
   r.tx.forEach((x) => anchors.push({ id: x.t.id, label: `${ukDate(x.t.date)} ${x.t.description}` }));
 
-  const mapped = ctx.tb('740').mapped || ctx.tb('798').mapped;
+  const mapped = ctx.tb('7400').mapped || ctx.tb('7980').mapped;
   checks.push({
     id: 'tb',
     label: "Director's loan agrees to TB",
-    detail: !mapped ? "Map the director's loan account to 740 or 798." : r.hasLedger ? `Opening ${formatPence(r.opening)} and the year's ${r.tx.length} transactions give ${formatPence(r.tbClose)}, as in the TB.` : 'No ledger transactions; enter the opening and closing balances.',
+    detail: !mapped ? "Map the director's loan account to 7400 or 7980." : r.hasLedger ? `Opening ${formatPence(r.opening)} and the year's ${r.tx.length} transactions give ${formatPence(r.tbClose)}, as in the TB.` : 'No ledger transactions; enter the opening and closing balances.',
     passed: mapped,
   });
   const unsure = r.tx.filter((x) => x.unsure && !x.decision);

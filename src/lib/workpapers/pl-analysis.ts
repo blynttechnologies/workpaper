@@ -12,10 +12,10 @@ import { journalCheck, pair, type JLine, type PaperContext } from './common';
  */
 
 export const PL_GROUPS = [
-  { key: 'turnover', label: 'Turnover', codes: (c: string) => /^1/.test(c) && c !== '140' },
+  { key: 'turnover', label: 'Turnover', codes: (c: string) => /^1/.test(c) && c !== '1400' },
   { key: 'cos', label: 'Cost of sales', codes: (c: string) => /^2/.test(c) },
-  { key: 'overheads', label: 'Overheads', codes: (c: string) => /^[34]/.test(c) && c !== '493' },
-  { key: 'other', label: 'Other income', codes: (c: string) => c === '140' || c === '493' || c === '500' },
+  { key: 'overheads', label: 'Overheads', codes: (c: string) => /^[34]/.test(c) && c !== '4930' },
+  { key: 'other', label: 'Other income', codes: (c: string) => c === '1400' || c === '4930' || c === '5000' },
   { key: 'finance', label: 'Finance costs', codes: (c: string) => /^5[1-4]/.test(c) },
 ] as const;
 export type GroupKey = (typeof PL_GROUPS)[number]['key'];
@@ -44,7 +44,7 @@ export function plAnalysis(ctx: PaperContext) {
   const pct = Number(data.threshold_pct ?? 10);
   const minimum = asPence(data.threshold_p ?? '100000');
   const journals = db.adjustments.filter((a) => a.engagement_id === ctx.engagementId && LIVE.includes(a.status));
-  const codes = db.blynt_accounts.filter((a) => ['Revenue', 'Cost of Sales', 'Overhead'].includes(a.type) && a.code !== '550' && a.code !== '560');
+  const codes = db.blynt_accounts.filter((a) => ['Revenue', 'Cost of Sales', 'Overhead'].includes(a.type) && a.code !== '5500' && a.code !== '5600');
   const rows: PlRow[] = [];
   for (const a of codes) {
     const group = PL_GROUPS.find((g) => g.codes(a.code))?.key;
