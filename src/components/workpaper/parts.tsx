@@ -453,12 +453,15 @@ export function PreviewModal({
   top,
   expanded = false,
   onToggleSize,
+  docked = false,
 }: {
   file: Attachment | null;
   onClose: () => void;
   top?: React.ReactNode;
   expanded?: boolean;
   onToggleSize?: () => void;
+  /** On wide screens, sit in the page's right column instead of floating */
+  docked?: boolean;
 }) {
   useEffect(() => {
     if (!file) return;
@@ -477,7 +480,7 @@ export function PreviewModal({
       className={
         expanded
           ? 'fixed inset-y-0 right-0 z-50 w-full lg:w-[min(46vw,760px)] bg-white border-l border-[#D3DCEE] shadow-[-8px_0_24px_rgba(11,26,59,0.12)]'
-          : 'fixed top-20 right-4 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(70vh,680px)] bg-white border border-[#D3DCEE] rounded-[14px] overflow-hidden shadow-[0_12px_32px_rgba(11,26,59,0.18)] xl:static xl:z-auto xl:w-full xl:h-[min(85vh,820px)] xl:shadow-none'
+          : `fixed top-20 right-4 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(70vh,680px)] bg-white border border-[#D3DCEE] rounded-[14px] overflow-hidden shadow-[0_12px_32px_rgba(11,26,59,0.18)]${docked ? ' xl:static xl:z-auto xl:w-full xl:h-[min(85vh,820px)] xl:shadow-none' : ''}`
       }
     >
       <div className="h-full flex flex-col">
@@ -485,7 +488,7 @@ export function PreviewModal({
           <div className="min-w-0">
             <div className="text-sm font-bold text-[#122654] truncate">{file.filename}</div>
             <div className="text-[10px] font-mono text-[#4A5878] truncate">
-              {file.category} · {(file.size / 1024).toFixed(1)} KB · sha256 {file.sha256.slice(0, 12)}…
+              {[file.category, file.size ? `${(file.size / 1024).toFixed(1)} KB` : '', file.sha256 ? `sha256 ${file.sha256.slice(0, 12)}…` : ''].filter(Boolean).join(' · ')}
             </div>
           </div>
           {onToggleSize && (

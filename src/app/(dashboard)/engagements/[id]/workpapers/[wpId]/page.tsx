@@ -113,8 +113,6 @@ export default function WorkpaperPage() {
   const [previewLarge, setPreviewLarge] = useState(false);
   // The review panel folds away while a file is open, unless someone opens it again for that file
   const [railFor, setRailFor] = useState<{ id: string | null; open: boolean } | null>(null);
-  const railOpen = railFor && railFor.id === (preview?.id ?? null) ? railFor.open : !preview;
-  const setRail = (open: boolean) => setRailFor({ id: preview?.id ?? null, open });
   // Bank and cash: what the AI read off the statement open in the preview, shown above it to pick from
   const [aiRead, setAiRead] = useState<{ attId: string; rowId: string; state: 'reading' | 'done' | 'failed'; bank?: string; options: BalanceOption[] } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -141,6 +139,12 @@ export default function WorkpaperPage() {
       return next;
     });
   };
+
+  // Folded or open is remembered across papers; with a file open the panel folds under it unless opened for that file
+  const railOpen = preview ? railFor?.id === preview.id && railFor.open : showComments;
+  const setRail = (open: boolean) => (preview ? setRailFor({ id: preview.id, open }) : open !== showComments && toggleComments());
+  // With no file open, folding tucks the panel into a slim strip at the right and the paper takes the width
+  const sideFolded = !railOpen && !preview;
 
   const engagement = db.engagements.find((e) => e.id === engagementId);
   const client = engagement ? db.clients.find((c) => c.id === engagement.client_id) : undefined;
@@ -669,6 +673,19 @@ export default function WorkpaperPage() {
   const missingRefs = TEMPLATES.filter((tp) => !papers.some((p) => p.ref === tp.ref));
   const botDraft = !data.conclusion?.bot_dismissed && !conclusionText.trim() ? result.draftConclusion : '';
   const reviewItems = result.checks.filter((c) => !c.passed);
+  const railTabs = checksOnly
+                  ? [
+                      { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
+                      { id: 'comments' as const, label: `Comments (${comments.filter((c) => c.status === 'open').length})`, icon: MessageSquare },
+                      { id: 'evidence' as const, label: `Files (${attachments.length})`, icon: FileText },
+                      { id: 'history' as const, label: 'History', icon: History },
+                    ]
+                  : [
+                  { id: 'evidence' as const, label: `Evidence ${attachments.length}`, icon: FileText },
+                  { id: 'comments' as const, label: `Comments ${comments.filter((c) => c.status === 'open').length}`, icon: MessageSquare },
+                  { id: 'ai_review' as const, label: `AI Review ${db.ai_review_findings.filter((f) => (f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref) && f.status === 'open').length}`, icon: Sparkles },
+                  { id: 'history' as const, label: 'History', icon: History },
+                ];
   const explainCheck = (id: string) => {
     const reason = prompt('Why is this acceptable?')?.trim();
     if (reason) saveData({ explanations: { ...(live().explanations ?? {}), [id]: reason } });
@@ -1159,7 +1176,7 @@ export default function WorkpaperPage() {
 
       <div
         className={`grid gap-5 transition-all ${
-          showComments || checksOnly ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-1'
+          sideFolded ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_52px]' : 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]'
         }`}
       >
         {/* On smaller screens, where the previous and next buttons are harder to use */}
@@ -1913,6 +1930,7 @@ export default function WorkpaperPage() {
           // An open file sits at the top, above the review panel, so the paper stays in view beside it
           <div className={`flex flex-col gap-4 h-fit ${preview && !previewLarge ? '' : 'xl:sticky xl:top-20'}`}>
           <PreviewModal
+            docked
             file={preview}
             expanded={previewLarge}
             onToggleSize={() => setPreviewLarge((v) => !v)}
@@ -1962,22 +1980,33 @@ export default function WorkpaperPage() {
               ) : null
             }
           />
+          {sideFolded ? (
+            <aside aria-label="Review panel (folded)" className="blynt-card p-1.5 h-fit flex xl:flex-col items-center gap-1">
+              <button type="button" onClick={() => setRail(true)} aria-expanded={false} aria-label="Open the review panel" title="Open" className="p-1.5 text-[#7E8DA6] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {railTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  title={tab.label}
+                  aria-label={tab.label}
+                  onClick={() => {
+                    setSideTab(tab.id);
+                    setRail(true);
+                  }}
+                  className="flex flex-col items-center gap-0.5 p-1.5 text-[10px] font-bold text-[#4A5878] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]"
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {/\((\d+)\)|\s(\d+)$/.exec(tab.label)?.slice(1).find(Boolean)}
+                </button>
+              ))}
+            </aside>
+          ) : (
           <aside className={`blynt-card p-4 h-fit ${railOpen ? '' : '[&>*:not(:first-child)]:hidden'}`}>
             <div className={`flex items-center justify-between border-b border-[#E3E7EF] ${railOpen ? 'mb-3' : ''}`}>
-              <div role="tablist" className="flex gap-1 overflow-x-auto pb-1">
-                {(checksOnly
-                  ? [
-                      { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
-                      { id: 'comments' as const, label: `Comments (${comments.filter((c) => c.status === 'open').length})`, icon: MessageSquare },
-                      { id: 'evidence' as const, label: `Files (${attachments.length})`, icon: FileText },
-                      { id: 'history' as const, label: 'History', icon: History },
-                    ]
-                  : [
-                  { id: 'evidence' as const, label: `Evidence ${attachments.length}`, icon: FileText },
-                  { id: 'comments' as const, label: `Comments ${comments.filter((c) => c.status === 'open').length}`, icon: MessageSquare },
-                  { id: 'ai_review' as const, label: `AI Review ${db.ai_review_findings.filter((f) => (f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref) && f.status === 'open').length}`, icon: Sparkles },
-                  { id: 'history' as const, label: 'History', icon: History },
-                ]).map((tab) => (
+              <div role="tablist" className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {railTabs.map((tab) => (
                   <button
                     key={tab.id}
                     role="tab"
@@ -2001,7 +2030,7 @@ export default function WorkpaperPage() {
                 title={railOpen ? 'Fold' : 'Open'}
                 className="p-1 -mt-1 shrink-0 text-[#7E8DA6] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]"
               >
-                {railOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {!preview ? <ChevronRight className="w-4 h-4" /> : railOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               {!checksOnly && (
               <button
@@ -2346,6 +2375,7 @@ export default function WorkpaperPage() {
               {result.totals.nbv !== undefined && <div className="mt-1">NBV {formatPence(result.totals.nbv)}</div>}
             </div>
           </aside>
+          )}
           </div>
         )}
       </div>
