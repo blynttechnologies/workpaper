@@ -477,7 +477,7 @@ export function PreviewModal({
       className={
         expanded
           ? 'fixed inset-y-0 right-0 z-50 w-full lg:w-[min(46vw,760px)] bg-white border-l border-[#D3DCEE] shadow-[-8px_0_24px_rgba(11,26,59,0.12)]'
-          : 'fixed top-20 right-4 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(70vh,680px)] bg-white border border-[#D3DCEE] rounded-[14px] overflow-hidden shadow-[0_12px_32px_rgba(11,26,59,0.18)]'
+          : 'fixed top-20 right-4 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(70vh,680px)] bg-white border border-[#D3DCEE] rounded-[14px] overflow-hidden shadow-[0_12px_32px_rgba(11,26,59,0.18)] xl:static xl:z-auto xl:w-full xl:h-[min(85vh,820px)] xl:shadow-none'
       }
     >
       <div className="h-full flex flex-col">
