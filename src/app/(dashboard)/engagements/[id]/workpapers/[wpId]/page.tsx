@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -24,6 +24,8 @@ import {
   X,
   Download,
   Unlock,
+  MapPin,
+  MessageSquarePlus,
 } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { services } from '@/lib/server/services';
@@ -69,6 +71,7 @@ import {
 } from '@/components/workpaper/schedules';
 import { AnalyticalSchedule } from '@/components/workpaper/review-schedules';
 import { CheckChips } from '@/components/workpaper/kit';
+import { Avatar, CommentPins, isPin, TYPE_TONE, type CommentType, type PinAnchor } from '@/components/workpaper/comment-pins';
 import { ukDate } from '@/lib/dates';
 
 const ROLE_ORDER = ['preparer', 'reviewer', 'partner'] as const;
@@ -91,6 +94,11 @@ export default function WorkpaperPage() {
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [sideTab, setSideTab] = useState<'evidence' | 'comments' | 'ai_review' | 'history' | null>(null);
+  // Comments pinned on the paper: placing one, and the thread open in the side panel
+  const [pinMode, setPinMode] = useState(false);
+  const [activeComment, setActiveComment] = useState<string | null>(null);
+  const paperRef = useRef<HTMLDivElement | null>(null);
+  const stopPinMode = useCallback(() => setPinMode(false), []);
   const [unreviewOpen, setUnreviewOpen] = useState(false);
   const [unreviewReason, setUnreviewReason] = useState('');
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -173,6 +181,8 @@ export default function WorkpaperPage() {
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
       if (e.key === '[' && prevPaper) router.push(`/engagements/${engagementId}/workpapers/${prevPaper.id}`);
       if (e.key === ']' && nextPaper) router.push(`/engagements/${engagementId}/workpapers/${nextPaper.id}`);
+      // C: comment anywhere on the paper
+      if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey && !e.altKey) setPinMode((m) => !m);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -468,6 +478,23 @@ export default function WorkpaperPage() {
     refresh();
   };
 
+  const openThread = (id: string) => {
+    setActiveComment(id);
+    setSideTab('comments');
+    setRail(true);
+    requestAnimationFrame(() => document.getElementById(`thread-${id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  };
+  const showPin = (id: string) => {
+    setActiveComment(id);
+    document.getElementById(`pin-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
+  const postPin = (anchor: PinAnchor, type: CommentType, body: string) => {
+    const c = services.addComment(engagement.firm_id, actor, workpaper.id, { type, anchor_json: anchor, body });
+    c.anchor_summary = anchor.label;
+    refresh();
+    openThread(c.id);
+  };
+
   const reply = (commentId: string) => {
     const body = replyDrafts[commentId]?.trim();
     const c = db.comments.find((x) => x.id === commentId);
@@ -546,7 +573,8 @@ export default function WorkpaperPage() {
       if (prepLeft.length) return `Left: ${prepLeft.join(', ')}`;
       return null;
     }
-    if (!latestSignoff('preparer')) return 'Needs preparer sign-off first';
+    // Review is open at any stage; approval still needs preparer and reviewer
+    if (role === 'partner' && !latestSignoff('preparer')) return 'Needs preparer sign-off first';
     if (openNotes.length) return `${openNotes.length} open review note(s) block review`;
     if (role === 'partner' && !latestSignoff('reviewer')) return 'Needs reviewer sign-off first';
     return null;
@@ -1215,8 +1243,8 @@ export default function WorkpaperPage() {
           </select>
         </label>
 
-        {/* Main column */}
-        <div className="flex flex-col gap-5 min-w-0">
+        {/* Main column; comments can be pinned anywhere on it */}
+        <div ref={paperRef} className={`relative flex flex-col gap-5 min-w-0 ${pinMode && !isLocked ? 'cursor-crosshair [&_*]:cursor-crosshair' : ''}`}>
           {reviewedBy && (
             <div role="status" className="p-3 rounded-[10px] bg-[#EAF5FC] border border-[#1D4E89]/20 text-xs text-[#122654]">
               {reviewedBy.role === 'partner' ? 'Approved' : 'Reviewed'} by <strong>{reviewedBy.user_name}</strong> on {fmtDateTime(reviewedBy.signed_at)}: read only. Use <strong>Unreview to edit</strong> to change it. Comments can still be added.
@@ -1923,6 +1951,16 @@ export default function WorkpaperPage() {
             </fieldset>
           </Section>
           )}
+          <CommentPins
+            paper={paperRef}
+            comments={comments}
+            activeId={activeComment}
+            placing={pinMode && !isLocked}
+            canPost={!isLocked}
+            onOpen={openThread}
+            onPost={postPin}
+            onStopPlacing={stopPinMode}
+          />
         </div>
 
         {/* Right rail: comments and history */}
@@ -1985,6 +2023,18 @@ export default function WorkpaperPage() {
               <button type="button" onClick={() => setRail(true)} aria-expanded={false} aria-label="Open the review panel" title="Open" className="p-1.5 text-[#7E8DA6] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]">
                 <ChevronLeft className="w-4 h-4" />
               </button>
+              {!isLocked && (
+                <button
+                  type="button"
+                  onClick={() => setPinMode((m) => !m)}
+                  aria-pressed={pinMode}
+                  aria-label="Comment on the paper"
+                  title="Comment on the paper (C)"
+                  className={`p-1.5 rounded-[6px] ${pinMode ? 'bg-[#122654] text-white' : 'text-[#FF7A66] hover:bg-[#FFF1EE]'}`}
+                >
+                  <MessageSquarePlus className="w-4 h-4" />
+                </button>
+              )}
               {railTabs.map((tab) => (
                 <button
                   key={tab.id}
@@ -2252,79 +2302,136 @@ export default function WorkpaperPage() {
             )}
 
             {activeTab === 'comments' && (
-              <div className="flex flex-col gap-3 text-xs">
-                {comments.length === 0 && <p className="text-[#4A5878]">No comments yet.</p>}
-                {comments.map((c, i) => (
-                  <div key={c.id} className={`p-3 rounded-[10px] border ${c.status === 'open' ? (c.type === 'review_note' ? 'bg-[#FFF9EC] border-[#C58B00]/30' : 'bg-white border-[#D3DCEE]') : 'bg-[#F5F8FD] border-[#E3E7EF] opacity-80'}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-[#122654]">
-                        {i + 1} {c.created_by_name}
-                      </span>
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#4A5878]">
-                        {c.type === 'review_note' ? '◐ Review note' : c.type === 'client_query' ? '◷ Client query' : 'Comment'}
-                        {c.status === 'resolved' ? ' · resolved' : ''}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[#122654] break-words">{c.body}</p>
-                    <div className="text-[10px] font-mono text-[#7E8DA6] mt-1">Anchor: {c.anchor_summary || 'Whole paper'}</div>
-                    {(c.replies ?? []).map((r) => (
-                      <div key={r.id} className="mt-2 pl-2 border-l-2 border-[#D3DCEE]">
-                        <div className="text-[10px] font-bold text-[#122654]">
-                          {r.created_by_name} · {fmtDateTime(r.created_at)}
-                        </div>
-                        <p className="text-[#122654] break-words">{r.body}</p>
-                      </div>
-                    ))}
-                    {c.status === 'open' && !isLocked && (
-                      <div className="mt-2 flex flex-col gap-1.5">
-                        <div className="flex gap-1.5">
-                          <input
-                            type="text"
-                            aria-label={`Reply to ${c.created_by_name}`}
-                            placeholder="Reply…"
-                            value={replyDrafts[c.id] ?? ''}
-                            onChange={(e) => setReplyDrafts((d) => ({ ...d, [c.id]: e.target.value }))}
-                            onKeyDown={(e) => e.key === 'Enter' && reply(c.id)}
-                            className="flex-1 min-w-0 px-2 py-1 border border-[#D3DCEE] rounded-[6px]"
-                          />
-                          <button type="button" onClick={() => reply(c.id)} disabled={!replyDrafts[c.id]?.trim()} className="px-2 font-bold text-[#122654] disabled:opacity-40">
-                            Reply
-                          </button>
-                        </div>
-                        <button type="button" onClick={() => resolveNote(c.id)} className="self-end text-[11px] font-bold text-[#0B6B52] hover:underline">
-                          ✓ Resolve
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              <div className="flex flex-col gap-3 text-xs text-[#122654]">
                 {!isLocked && (
-                  <div className="flex flex-col gap-1.5 pt-2 border-t border-[#E3E7EF]">
-                    <select aria-label="Comment type" value={noteType} onChange={(e) => setNoteType(e.target.value as typeof noteType)} className="min-h-[32px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
-                      <option value="review_note">Review note (blocks sign-off)</option>
-                      <option value="comment">Comment</option>
-                      <option value="client_query">Client query</option>
-                    </select>
-                    <select aria-label="Comment on" value={noteAnchor} onChange={(e) => setNoteAnchor(e.target.value)} className="min-h-[32px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
-                      <option value="paper">Whole paper</option>
-                      {result.anchors.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label}
-                        </option>
-                      ))}
-                    </select>
-                    <textarea
-                      aria-label="New comment"
-                      rows={3}
-                      value={noteBody}
-                      onChange={(e) => setNoteBody(e.target.value)}
-                      placeholder="Write a comment… type @name to tag a colleague"
-                      className="p-2 border border-[#D3DCEE] rounded-[8px]"
-                    />
-                    <button type="button" onClick={addNote} disabled={!noteBody.trim()} className="min-h-[34px] bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] font-bold rounded-[8px] disabled:opacity-40">
-                      Add {noteType === 'review_note' ? 'review note' : noteType === 'client_query' ? 'client query' : 'comment'}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPinMode((m) => !m)}
+                    aria-pressed={pinMode}
+                    className={`flex items-center justify-center gap-1.5 min-h-[34px] rounded-[10px] font-bold border ${pinMode ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white border-[#D3DCEE] hover:border-[#122654]'}`}
+                  >
+                    <MessageSquarePlus className="w-4 h-4" /> {pinMode ? 'Click on the paper… (Esc to cancel)' : 'Comment on the paper'}
+                    {!pinMode && <kbd className="ml-1 px-1 rounded border border-[#D3DCEE] text-[9px] font-mono text-[#7E8DA6]">C</kbd>}
+                  </button>
+                )}
+                {comments.length === 0 && (
+                  <p className="text-[#4A5878]">
+                    No comments yet. Click <strong>Comment on the paper</strong>, then click any figure or row to leave one there.
+                  </p>
+                )}
+                {[...comments]
+                  .sort((a, b) => (a.status === b.status ? b.created_at.localeCompare(a.created_at) : a.status === 'open' ? -1 : 1))
+                  .map((c) => {
+                    const pinned = isPin(c.anchor_json);
+                    const active = activeComment === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        id={`thread-${c.id}`}
+                        onClick={() => setActiveComment(c.id)}
+                        className={`p-3 rounded-[12px] border bg-white transition-shadow ${active ? 'border-[#FF7A66] shadow-[0_0_0_3px_rgba(255,122,102,0.15)]' : 'border-[#E3E7EF]'} ${c.status === 'resolved' ? 'opacity-60' : ''}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <Avatar name={c.created_by_name} type={c.type} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-bold truncate">{c.created_by_name}</span>
+                              <span className="text-[10px] text-[#7E8DA6] whitespace-nowrap">{fmtDateTime(c.created_at)}</span>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${TYPE_TONE[c.type].chip}`}>
+                                {TYPE_TONE[c.type].label}
+                                {c.status === 'resolved' ? ' · resolved' : ''}
+                              </span>
+                              {pinned && c.status === 'open' ? (
+                                <button type="button" onClick={() => showPin(c.id)} className="inline-flex items-center gap-0.5 max-w-full text-[10px] text-[#1D4E89] hover:underline" title="Show on the paper">
+                                  <MapPin className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{c.anchor_summary || 'On the paper'}</span>
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-[#7E8DA6] truncate">{c.anchor_summary || 'Whole paper'}</span>
+                              )}
+                            </div>
+                            <p className="mt-1.5 leading-relaxed break-words">{c.body}</p>
+                          </div>
+                        </div>
+                        {(c.replies ?? []).map((r) => (
+                          <div key={r.id} className="mt-2.5 ml-4 flex items-start gap-2">
+                            <Avatar name={r.created_by_name} type={c.type} small />
+                            <div className="min-w-0">
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="font-bold text-[11px]">{r.created_by_name}</span>
+                                <span className="text-[10px] text-[#7E8DA6]">{fmtDateTime(r.created_at)}</span>
+                              </div>
+                              <p className="break-words">{r.body}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {c.status === 'open' && !isLocked && (
+                          <div className="mt-2.5 flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              aria-label={`Reply to ${c.created_by_name}`}
+                              placeholder="Reply…"
+                              value={replyDrafts[c.id] ?? ''}
+                              onChange={(e) => setReplyDrafts((d) => ({ ...d, [c.id]: e.target.value }))}
+                              onKeyDown={(e) => e.key === 'Enter' && reply(c.id)}
+                              className="flex-1 min-w-0 px-3 py-1.5 bg-[#F5F8FD] border border-transparent focus:border-[#D3DCEE] focus:bg-white rounded-full outline-none"
+                            />
+                            {replyDrafts[c.id]?.trim() ? (
+                              <button type="button" onClick={() => reply(c.id)} className="px-2 font-bold text-[#122654]">
+                                Reply
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => resolveNote(c.id)} aria-label={`Resolve the comment from ${c.created_by_name}`} className="px-2 py-1 rounded-full text-[11px] font-bold text-[#0B6B52] hover:bg-[#E8F5EF]">
+                                ✓ Resolve
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                {!isLocked && (
+                  <details className="pt-2 border-t border-[#E3E7EF]">
+                    <summary className="cursor-pointer text-[11px] font-bold text-[#4A5878]">Comment on the whole paper or a row</summary>
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      <div className="flex gap-1" role="radiogroup" aria-label="Kind of comment">
+                        {(Object.keys(TYPE_TONE) as CommentType[]).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            role="radio"
+                            aria-checked={noteType === t}
+                            onClick={() => setNoteType(t)}
+                            className={`px-2 py-1 rounded-full text-[10px] font-bold border ${noteType === t ? `${TYPE_TONE[t].chip} border-transparent` : 'border-[#E3E7EF] text-[#4A5878]'}`}
+                          >
+                            {TYPE_TONE[t].label}
+                          </button>
+                        ))}
+                      </div>
+                      <select aria-label="Comment on" value={noteAnchor} onChange={(e) => setNoteAnchor(e.target.value)} className="min-h-[32px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
+                        <option value="paper">Whole paper</option>
+                        {result.anchors.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.label}
+                          </option>
+                        ))}
+                      </select>
+                      <textarea
+                        aria-label="New comment"
+                        rows={3}
+                        value={noteBody}
+                        onChange={(e) => setNoteBody(e.target.value)}
+                        placeholder="Write a comment… type @name to tag a colleague"
+                        className="p-2 border border-[#D3DCEE] rounded-[8px]"
+                      />
+                      {noteType === 'review_note' && <div className="text-[10px] text-[#8A5A00]">A review note blocks sign-off until it is resolved.</div>}
+                      <button type="button" onClick={addNote} disabled={!noteBody.trim()} className="min-h-[34px] bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] font-bold rounded-[8px] disabled:opacity-40">
+                        Post
+                      </button>
+                    </div>
+                  </details>
                 )}
               </div>
             )}

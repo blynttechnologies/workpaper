@@ -75,10 +75,15 @@ describe('archived clients', () => {
 describe('sign-off rules (REV-01)', () => {
   it('follows the order, checks the role and stops one person ticking two levels', () => {
     const wp = reconciledBank();
-    expect(() => signOff(rev, wp.id, 'review')).toThrow(/prepared first/);
     expect(() => signOff(prep, wp.id, 'approve')).toThrow(/partner/);
     signOff(rev, wp.id, 'prepare');
     expect(() => signOff(rev, wp.id, 'review')).toThrow(/two levels/);
+  });
+
+  it('lets a reviewer review before the paper is prepared, but not approve', () => {
+    const wp = reconciledBank();
+    expect(signOff(rev, wp.id, 'review').role).toBe('reviewer');
+    expect(() => signOff(partner, wp.id, 'approve')).toThrow(/prepared first/);
   });
 
   it('prepared needs the paper reconciled', () => {
