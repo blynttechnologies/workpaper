@@ -76,7 +76,8 @@ export function signOff(actor: Actor, wpId: string, action: Action): Signoff {
       throw new ServiceError('The schedule must be Reconciled before it is prepared.', 409);
     }
   } else {
-    if (!ticks.some((s) => s.role === 'preparer')) throw new ServiceError('The schedule must be prepared first.', 409);
+    // A reviewer may review at any stage; approval still follows review
+    if (action === 'approve' && !ticks.some((s) => s.role === 'preparer')) throw new ServiceError('The schedule must be prepared first.', 409);
     if (action === 'approve' && !ticks.some((s) => s.role === 'reviewer')) throw new ServiceError('The schedule must be reviewed first.', 409);
     const open = db.comments.filter((c) => c.workpaper_id === wp.id && c.type === 'review_note' && c.status === 'open').length;
     if (open) throw new ServiceError(`${open} open review point(s) must be cleared first (REV-03).`, 409);

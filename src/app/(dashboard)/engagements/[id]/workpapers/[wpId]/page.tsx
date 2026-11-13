@@ -546,7 +546,8 @@ export default function WorkpaperPage() {
       if (prepLeft.length) return `Left: ${prepLeft.join(', ')}`;
       return null;
     }
-    if (!latestSignoff('preparer')) return 'Needs preparer sign-off first';
+    // Review is open at any stage; approval still needs preparer and reviewer
+    if (role === 'partner' && !latestSignoff('preparer')) return 'Needs preparer sign-off first';
     if (openNotes.length) return `${openNotes.length} open review note(s) block review`;
     if (role === 'partner' && !latestSignoff('reviewer')) return 'Needs reviewer sign-off first';
     return null;
