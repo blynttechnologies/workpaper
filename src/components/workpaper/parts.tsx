@@ -444,7 +444,7 @@ export function RowFiles({
 export const PREVIEW_ROOM = 'lg:mr-[min(46vw,760px)]';
 
 /** A file opened beside the working paper, docked right, so the schedule stays in view and usable. */
-export function PreviewModal({ file, onClose }: { file: Attachment | null; onClose: () => void }) {
+export function PreviewModal({ file, onClose, top }: { file: Attachment | null; onClose: () => void; top?: React.ReactNode }) {
   useEffect(() => {
     if (!file) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -479,6 +479,7 @@ export function PreviewModal({ file, onClose }: { file: Attachment | null; onClo
             <X className="w-4 h-4" />
           </button>
         </div>
+        {top}
         <div className="flex-1 min-h-0 bg-[#F5F8FD] overflow-auto">
           {inline ? (
             kind === 'IMG' ? (

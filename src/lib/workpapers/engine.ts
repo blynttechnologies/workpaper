@@ -121,6 +121,9 @@ export interface ReconAccount {
   add: ReconItem[];
 }
 
+/** A balance the AI read off a statement, offered for the row's statement figure. */
+export type BalanceOption = NonNullable<ReconAccount['ai_balances']>[number];
+
 export const accountKind = (code: string): 'bank' | 'cash' | 'card' => (code === '6200' || code === '6450' ? 'cash' : code === '6300' ? 'card' : 'bank');
 export const accountName = (a: ReconAccount) => (a.code === '*' ? a.name : `${a.code} ${a.name}`);
 export const statementEntered = (a: ReconAccount) => a.statement_p !== '' && a.statement_p != null;
