@@ -108,6 +108,7 @@ export default function WorkpaperPage() {
   const [uploadPermanent, setUploadPermanent] = useState(false);
   const [fileFilter, setFileFilter] = useState<'all' | 'permanent' | 'archived' | AttachmentCategory>('all');
   const [preview, setPreview] = useState<Attachment | null>(null);
+  const [previewLarge, setPreviewLarge] = useState(false);
   // Bank and cash: what the AI read off the statement open in the preview, shown above it to pick from
   const [aiRead, setAiRead] = useState<{ attId: string; rowId: string; state: 'reading' | 'done' | 'failed'; bank?: string; options: BalanceOption[] } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -734,7 +735,7 @@ export default function WorkpaperPage() {
     );
 
   return (
-    <div className={`flex flex-col gap-4 max-w-[1500px] mx-auto pb-16 ${preview ? PREVIEW_ROOM : ''}`}>
+    <div className={`flex flex-col gap-4 max-w-[1500px] mx-auto pb-16 ${preview && previewLarge ? PREVIEW_ROOM : ''}`}>
       <input
         ref={fileInput}
         type="file"
@@ -751,13 +752,15 @@ export default function WorkpaperPage() {
       />
       <PreviewModal
         file={preview}
+        expanded={previewLarge}
+        onToggleSize={() => setPreviewLarge((v) => !v)}
         onClose={() => {
           setPreview(null);
           setAiRead(null);
         }}
         top={
           aiRead && preview?.id === aiRead.attId ? (
-            <div className="p-3 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
+            <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
               <div className="flex items-center gap-1.5 font-bold">
                 <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
                 <span className="ml-auto font-normal text-[10px] text-[#4A5878]">for {anchorLabel(aiRead.rowId)}</span>

@@ -440,11 +440,26 @@ export function RowFiles({
   );
 }
 
-/** Room the working paper page leaves on the right while a preview is docked there (same width as the panel). */
+/** Room the working paper page leaves on the right while an expanded preview is docked there (same width as the panel). */
 export const PREVIEW_ROOM = 'lg:mr-[min(46vw,760px)]';
 
-/** A file opened beside the working paper, docked right, so the schedule stays in view and usable. */
-export function PreviewModal({ file, onClose, top }: { file: Attachment | null; onClose: () => void; top?: React.ReactNode }) {
+/**
+ * A file opened beside the working paper so the schedule stays in view and usable: a small panel in the
+ * top-right corner, or docked down the right side when expanded (the page then makes room for it).
+ */
+export function PreviewModal({
+  file,
+  onClose,
+  top,
+  expanded = false,
+  onToggleSize,
+}: {
+  file: Attachment | null;
+  onClose: () => void;
+  top?: React.ReactNode;
+  expanded?: boolean;
+  onToggleSize?: () => void;
+}) {
   useEffect(() => {
     if (!file) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -459,7 +474,11 @@ export function PreviewModal({ file, onClose, top }: { file: Attachment | null; 
       role="dialog"
       aria-modal="false"
       aria-label={`Preview ${file.filename}`}
-      className="fixed inset-y-0 right-0 z-50 w-full lg:w-[min(46vw,760px)] bg-white border-l border-[#D3DCEE] shadow-[-8px_0_24px_rgba(11,26,59,0.12)]"
+      className={
+        expanded
+          ? 'fixed inset-y-0 right-0 z-50 w-full lg:w-[min(46vw,760px)] bg-white border-l border-[#D3DCEE] shadow-[-8px_0_24px_rgba(11,26,59,0.12)]'
+          : 'fixed top-20 right-4 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(70vh,680px)] bg-white border border-[#D3DCEE] rounded-[14px] overflow-hidden shadow-[0_12px_32px_rgba(11,26,59,0.18)]'
+      }
     >
       <div className="h-full flex flex-col">
         <div className="flex items-center gap-3 p-3 border-b border-[#E3E7EF]">
@@ -469,11 +488,22 @@ export function PreviewModal({ file, onClose, top }: { file: Attachment | null; 
               {file.category} · {(file.size / 1024).toFixed(1)} KB · sha256 {file.sha256.slice(0, 12)}…
             </div>
           </div>
+          {onToggleSize && (
+            <button
+              type="button"
+              onClick={onToggleSize}
+              className="ml-auto shrink-0 text-xs font-bold text-[#122654] border border-[#D3DCEE] rounded-[8px] px-2.5 py-1.5 hover:border-[#122654]"
+            >
+              {expanded ? 'Shrink' : 'Expand'}
+            </button>
+          )}
           <a
             href={fileUrl(file, true)}
-            className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-[#122654] border border-[#D3DCEE] rounded-[8px] px-3 py-1.5 hover:border-[#122654]"
+            aria-label={`Download ${file.filename}`}
+            className={`${onToggleSize ? '' : 'ml-auto '}shrink-0 inline-flex items-center gap-1 text-xs font-bold text-[#122654] border border-[#D3DCEE] rounded-[8px] px-2.5 py-1.5 hover:border-[#122654]`}
           >
-            <Download className="w-3.5 h-3.5" /> Download
+            <Download className="w-3.5 h-3.5" />
+            {expanded && ' Download'}
           </a>
           <button type="button" onClick={onClose} aria-label="Close preview" className="p-1.5 text-[#4A5878] hover:text-[#122654]">
             <X className="w-4 h-4" />
