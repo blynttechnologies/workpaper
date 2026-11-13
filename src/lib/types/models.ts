@@ -285,6 +285,8 @@ export interface BlyntAccount {
   statutory_line?: string;
   schedule_ref?: string;
   cash_flow_category?: 'Operating activities' | 'Investing activities' | 'Financing activities' | 'Cash and cash equivalents';
+  /** Profit and loss accounts only: the default corporation tax treatment the AI starts from */
+  tax_treatment?: 'Taxable' | 'Allowable' | 'Add back' | 'Review' | 'Timing' | 'Separate' | 'Exempt' | 'Tax';
   used_by_count?: number;
   /** Set on accounts a practice added; the standard chart has none */
   firm_id?: string;

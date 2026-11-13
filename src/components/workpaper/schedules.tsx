@@ -486,11 +486,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const journalLines = [
     ...(need.provision !== 0n
       ? need.provision > 0n
-        ? [{ blynt_code: '491', debit: need.provision, narrative: 'Specific bad debt provision' }, { blynt_code: '711', credit: need.provision, narrative: 'Bad debt provision' }]
-        : [{ blynt_code: '711', debit: -need.provision, narrative: 'Release of bad debt provision' }, { blynt_code: '491', credit: -need.provision, narrative: 'Bad debt provision released' }]
+        ? [{ blynt_code: '4910', debit: need.provision, narrative: 'Specific bad debt provision' }, { blynt_code: '7110', credit: need.provision, narrative: 'Bad debt provision' }]
+        : [{ blynt_code: '7110', debit: -need.provision, narrative: 'Release of bad debt provision' }, { blynt_code: '4910', credit: -need.provision, narrative: 'Bad debt provision released' }]
       : []),
     ...(need.creditors > 0n
-      ? [{ blynt_code: '710', debit: need.creditors, narrative: 'Customer credit balances' }, { blynt_code: '750', credit: need.creditors, narrative: 'Customer credit balances shown in creditors' }]
+      ? [{ blynt_code: '7100', debit: need.creditors, narrative: 'Customer credit balances' }, { blynt_code: '7500', credit: need.creditors, narrative: 'Customer credit balances shown in creditors' }]
       : []),
   ] as { blynt_code: string; debit?: bigint; credit?: bigint; narrative: string }[];
   const journalCheck = result.checks.find((c) => c.id === 'journal_sent');
@@ -2534,7 +2534,7 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
         <div className="p-3.5 rounded-[12px] bg-white border border-[#E3E7EF] flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <div className="text-[11px] font-bold text-[#122654]">Trial Balance Tie Check (TB 840)</div>
+              <div className="text-[11px] font-bold text-[#122654]">Trial Balance Tie Check (TB 8400)</div>
               <div className="text-[10px] text-[#4A5878]">
                 Difference: <span className="font-mono font-bold">{formatPence(diff)}</span>
               </div>
@@ -2676,7 +2676,7 @@ export function TaxSchedule({ data, result, locked, save, filesFor, attachTo, pr
         </div>
 
         <div className="p-3 bg-white rounded-[8px] border border-[#E3E7EF]">
-          <div className="text-[10px] uppercase font-bold text-[#4A5878]">Trial Balance CT Liability (TB 795)</div>
+          <div className="text-[10px] uppercase font-bold text-[#4A5878]">Trial Balance CT Liability (TB 7950)</div>
           <div className="font-mono font-bold text-base text-[#122654] mt-1">{formatPence(result.totals.tb ?? 0n)}</div>
           <div className="text-[10px] text-[#4A5878] mt-0.5">Control account in ledger</div>
         </div>

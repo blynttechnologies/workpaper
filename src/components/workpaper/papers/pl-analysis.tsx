@@ -56,8 +56,8 @@ export function PlAnalysisSchedule({ data, result, locked, save, live }: Schedul
     { label: 'Other income', f: (r: PlRow) => r.group === 'other', neg: false },
     { label: 'Cost of raw materials and consumables', f: (r: PlRow) => r.group === 'cos', neg: true },
     { label: 'Staff costs', f: (r: PlRow) => /^3/.test(r.code), neg: true },
-    { label: 'Depreciation', f: (r: PlRow) => r.code === '492', neg: true },
-    { label: 'Other charges', f: (r: PlRow) => (r.group === 'overheads' && !/^3/.test(r.code) && r.code !== '492') || r.group === 'finance', neg: true },
+    { label: 'Depreciation', f: (r: PlRow) => r.code === '4920', neg: true },
+    { label: 'Other charges', f: (r: PlRow) => (r.group === 'overheads' && !/^3/.test(r.code) && r.code !== '4920') || r.group === 'finance', neg: true },
   ];
 
   return (

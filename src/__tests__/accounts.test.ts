@@ -11,12 +11,12 @@ beforeEach(() => {
   db.seed(true);
   db.engagements.push({ id: ENG, client_id: 'cli_harlow', period_start: '2025-04-06', period_end: '2026-04-05', prior_engagement_id: null } as any);
   db.account_mappings.push(
-    map('100', -10000), // sales (credit)
-    map('200', 6000), // purchases
-    map('600', 14000), // bank
-    map('750', -3000), // trade payables
-    map('850', -5000), // share capital
-    map('890', -2000), // retained earnings
+    map('1000', -10000), // sales (credit)
+    map('2000', 6000), // purchases
+    map('6000', 14000), // bank
+    map('7500', -3000), // trade payables
+    map('8500', -5000), // share capital
+    map('8900', -2000), // retained earnings
   );
 });
 
@@ -35,8 +35,8 @@ describe('accounts from the trial balance', () => {
   });
 
   it('includes journals in the TB and reports balances not yet mapped', () => {
-    db.adjustments.push({ id: 'adj_t', engagement_id: ENG, status: 'approved', lines: [{ blynt_code: '400', debit_p: '500', credit_p: '0' }, { blynt_code: '760', debit_p: '0', credit_p: '500' }] } as any);
-    db.account_mappings.push(map('999', 700, 'suggested'));
+    db.adjustments.push({ id: 'adj_t', engagement_id: ENG, status: 'approved', lines: [{ blynt_code: '4000', debit_p: '500', credit_p: '0' }, { blynt_code: '7600', debit_p: '0', credit_p: '500' }] } as any);
+    db.account_mappings.push(map('9990', 700, 'suggested'));
     const a = buildAccounts(ENG);
     expect(a.profit.amount).toBe(3500n);
     expect(a.bs.creditorsShort.find((l) => l.label === 'Accruals and deferred income')?.amount).toBe(500n);
@@ -59,7 +59,7 @@ describe('accounts edge cases', () => {
     const own = { code: '455', name: 'Practice addition', type: 'Overhead', normal_balance: 'Debit', lead_letter: 'E', is_control: false, is_system: false } as any;
     db.importState({ blynt_accounts: [{ code: '1010', name: 'Old bank', is_system: true } as any, own] });
     expect(db.blynt_accounts.some((x) => x.code === '1010')).toBe(false);
-    expect(db.blynt_accounts.some((x) => x.code === '600')).toBe(true);
-    expect(db.blynt_accounts.some((x) => x.code === '455')).toBe(true);
+    expect(db.blynt_accounts.some((x) => x.code === '6000')).toBe(true);
+    expect(db.blynt_accounts.some((x) => x.code === '4550')).toBe(true);
   });
 });

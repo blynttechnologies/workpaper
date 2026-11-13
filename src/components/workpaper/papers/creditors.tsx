@@ -101,7 +101,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     <div className="flex flex-col gap-4">
       <Tiles
         items={[
-          { label: 'Aged creditors vs TB 750', value: control?.passed ? 'Agrees' : 'Differs', tone: control?.passed ? 'good' : 'bad', sub: `${formatPence(tot('aged'))} · ${views.length} suppliers` },
+          { label: 'Aged creditors vs TB 7500', value: control?.passed ? 'Agrees' : 'Differs', tone: control?.passed ? 'good' : 'bad', sub: `${formatPence(tot('aged'))} · ${views.length} suppliers` },
           { label: 'Statements on file', value: `${withStatement.length} of ${owedCount}`, sub: 'suppliers owed money' },
           { label: 'Unrecorded liabilities found', value: formatPence(tot('found')), tone: tot('found') ? 'warn' : 'plain', sub: `${items.filter((i) => !i.decision).length} to decide · ${items.length} items` },
           { label: 'Paid after period end', value: tot('owed') ? `${Number((tot('paid_after') * 100n) / tot('owed'))}%` : '–', sub: `${formatPence(tot('paid_after'))} of ${formatPence(tot('owed'))} within ${windowDays} days` },
@@ -392,7 +392,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
             <tfoot className="border-t-2 border-[#122654]/20 font-bold">
               <tr>
                 <td />
-                <td className="p-2">Total · {control?.passed ? 'agrees to TB 750' : 'differs from TB 750'}</td>
+                <td className="p-2">Total · {control?.passed ? 'agrees to TB 7500' : 'differs from TB 7500'}</td>
                 <td className="p-2 text-right font-mono">{money(tot('aged'))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.statement ?? 0n), 0n))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.diff ?? 0n), 0n))}</td>
@@ -512,10 +512,10 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         <AccountsPreview
           rows={[
             { label: 'Trade creditors per ledger', amount: tot('control') },
-            { label: 'Missing invoices and bills added', amount: lines.filter((l) => l.code === '750').reduce((a, l) => a + l.credit, 0n) },
-            { label: 'Debit balances moved to debtors', amount: lines.filter((l) => l.code === '750').reduce((a, l) => a + l.debit, 0n) },
+            { label: 'Missing invoices and bills added', amount: lines.filter((l) => l.code === '7500').reduce((a, l) => a + l.credit, 0n) },
+            { label: 'Debit balances moved to debtors', amount: lines.filter((l) => l.code === '7500').reduce((a, l) => a + l.debit, 0n) },
             { label: 'Trade creditors due within one year', amount: tot('after_adjustments'), strong: true },
-            { label: 'Accruals (on the Accruals paper)', amount: lines.filter((l) => l.code === '760').reduce((a, l) => a + l.credit, 0n) },
+            { label: 'Accruals (on the Accruals paper)', amount: lines.filter((l) => l.code === '7600').reduce((a, l) => a + l.credit, 0n) },
           ]}
         />
       </div>

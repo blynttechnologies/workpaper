@@ -568,7 +568,7 @@ export class RollForwardService {
     if (e10) {
       const e10Data = { ...e10.data_json };
       e10Data.lines = [
-        { id: 'sc_1', class: 'Ordinary £1.00 shares', number: '100', nominal_val: '1.00', amount_p: data.share_capital_p?.value || '10000' },
+        { id: 'sc_1', class: 'Ordinary £1.00 shares', number: '1000', nominal_val: '1.00', amount_p: data.share_capital_p?.value || '10000' },
       ];
       e10.data_json = e10Data;
       prefilledSchedules.push('E-10 Share Capital');

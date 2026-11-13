@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { OWNER_ACCOUNTS, STANDARD_CHART } from '@/lib/standard-chart';
 import { accountsForClient } from '@/lib/coa';
+import { migrateCodes } from '@/lib/coa-migration';
 import {
   Firm,
   User,
@@ -113,6 +114,7 @@ class Database {
 
   importState(state: Record<string, unknown[]> | null | undefined) {
     if (!state) return;
+    migrateCodes(state); // chart v2 codes in an older save become v3
     for (const k of Database.COLLECTIONS) {
       if (Array.isArray(state[k])) (this as any)[k] = state[k];
     }
@@ -583,7 +585,7 @@ class Database {
           parts: {
             objective:
               'Verify the existence, ownership, valuation and depreciation of property, plant and equipment under FRS 102 s.17.',
-            lead: ['660', '661', '492', '493'],
+            lead: ['6600', '6610', '4920', '4930'],
             schedule: {
               type: 'grid',
               rows: 'classes',
@@ -597,7 +599,7 @@ class Database {
               { id: 'disposals_evidence', rule: 'disposals_have_evidence', severity: 'blocker' },
             ],
             procedures: [
-              'Agree closing cost and accumulated depreciation to trial balance accounts 660 and 661.',
+              'Agree closing cost and accumulated depreciation to trial balance accounts 6600 and 6610.',
               'Vouch all capital additions over £1,000 to purchase invoices and verify appropriate capitalisation classification.',
               'Inspect evidence of disposal proceeds and verify calculation of profit/loss on disposal.',
               'Perform proof in total calculation of depreciation charge based on accounting policy rates.',
@@ -623,7 +625,7 @@ class Database {
           version: 1,
           parts: {
             objective: 'Micro-entity summary verification of tangibles under FRS 105.',
-            lead: ['660', '661'],
+            lead: ['6600', '6610'],
           },
         },
       },
@@ -807,7 +809,7 @@ class Database {
       {
         id: 'proc_f10_1',
         workpaper_id: f10Id,
-        text: 'Agree closing cost and accumulated depreciation to trial balance accounts 660 and 661.',
+        text: 'Agree closing cost and accumulated depreciation to trial balance accounts 6600 and 6610.',
         done_by: 'usr_test_preparer',
         done_at: '2026-10-23T11:00:00Z',
         not_applicable_reason: null,
@@ -1104,7 +1106,7 @@ class Database {
         {
           id: 'line_1',
           adjustment_id: 'aje_001',
-          blynt_code: '400',
+          blynt_code: '4000',
           debit_p: '500000', // £5,000.00
           credit_p: '0',
           narrative: 'Audit fee expense',
@@ -1112,7 +1114,7 @@ class Database {
         {
           id: 'line_2',
           adjustment_id: 'aje_001',
-          blynt_code: '760',
+          blynt_code: '7600',
           debit_p: '0',
           credit_p: '500000', // £5,000.00
           narrative: 'Accruals',
@@ -1151,30 +1153,30 @@ class Database {
       status: 'suggested' | 'confirmed' | 'needs_you';
       confidence: number;
     }[] = [
-      { code: '1010', name: 'Barclays Operating Account', type: 'Bank', debit_p: 95535000n, credit_p: 0n, blynt_code: '600', status: 'confirmed', confidence: 100 },
-      { code: '1020', name: 'Barclays High Yield Reserve', type: 'Bank', debit_p: 35000000n, credit_p: 0n, blynt_code: '610', status: 'confirmed', confidence: 100 },
-      { code: '1200', name: 'Sales Ledger Control Account', type: 'Current Asset', debit_p: 248950000n, credit_p: 0n, blynt_code: '710', status: 'confirmed', confidence: 100 },
-      { code: '1210', name: 'Allowance for Doubtful Debts', type: 'Current Asset', debit_p: 0n, credit_p: 12500000n, blynt_code: '711', status: 'confirmed', confidence: 100 },
-      { code: '1300', name: 'Finished Warehouse Stock', type: 'Current Asset', debit_p: 182400000n, credit_p: 0n, blynt_code: '700', status: 'confirmed', confidence: 100 },
-      { code: '1410', name: 'Prepaid Commercial Rates & Insurance', type: 'Current Asset', debit_p: 3240000n, credit_p: 0n, blynt_code: '730', status: 'confirmed', confidence: 100 },
-      { code: '1500', name: 'Plant and Warehouse Machinery Cost', type: 'Fixed Asset', debit_p: 450000000n, credit_p: 0n, blynt_code: '660', status: 'confirmed', confidence: 100 },
-      { code: '1510', name: 'Computer Equipment at Cost', type: 'Fixed Asset', debit_p: 720000n, credit_p: 0n, blynt_code: '660', status: 'confirmed', confidence: 100 }, // £7,200.00 matches F-10!
-      { code: '1520', name: 'Fixtures and Office Fittings Cost', type: 'Fixed Asset', debit_p: 450000n, credit_p: 0n, blynt_code: '660', status: 'confirmed', confidence: 100 }, // £4,500.00 matches F-10!
-      { code: '1700', name: 'Plant Machinery Accumulated Deprec', type: 'Fixed Asset', debit_p: 0n, credit_p: 180000000n, blynt_code: '661', status: 'confirmed', confidence: 100 },
-      { code: '1710', name: 'Computer Equip Accumulated Deprec', type: 'Fixed Asset', debit_p: 0n, credit_p: 350000n, blynt_code: '661', status: 'confirmed', confidence: 100 }, // £3,500.00 matches F-10!
-      { code: '1720', name: 'Fixtures Accumulated Deprec', type: 'Fixed Asset', debit_p: 0n, credit_p: 180000n, blynt_code: '661', status: 'confirmed', confidence: 100 }, // £1,800.00 matches F-10!
-      { code: '2000', name: 'Purchase Ledger Control Account', type: 'Current Liability', debit_p: 0n, credit_p: 168450000n, blynt_code: '750', status: 'confirmed', confidence: 100 },
-      { code: '2100', name: 'Accrued Operating Expenses', type: 'Current Liability', debit_p: 0n, credit_p: 45200000n, blynt_code: '760', status: 'confirmed', confidence: 100 },
-      { code: '2200', name: 'HM Revenue VAT Liability', type: 'Current Liability', debit_p: 0n, credit_p: 19820000n, blynt_code: '780', status: 'suggested', confidence: 94 },
-      { code: '2300', name: 'PAYE / NIC Control Account', type: 'Current Liability', debit_p: 0n, credit_p: 14200000n, blynt_code: '790', status: 'suggested', confidence: 91 },
-      { code: '3000', name: 'Ordinary Share Capital (£1 par)', type: 'Equity', debit_p: 0n, credit_p: 50000000n, blynt_code: '850', status: 'confirmed', confidence: 100 },
-      { code: '3100', name: 'Retained Earnings Prior Periods', type: 'Equity', debit_p: 0n, credit_p: 320000000n, blynt_code: '890', status: 'confirmed', confidence: 100 },
-      { code: '4000', name: 'Wholesale Commercial UK Sales', type: 'Revenue', debit_p: 0n, credit_p: 620000000n, blynt_code: '100', status: 'confirmed', confidence: 100 },
-      { code: '5000', name: 'Direct Component Materials', type: 'Cost of Sales', debit_p: 380000000n, credit_p: 0n, blynt_code: '210', status: 'confirmed', confidence: 100 },
-      { code: '6000', name: 'London Office Rent and Service', type: 'Expense', debit_p: 30000000n, credit_p: 0n, blynt_code: '400', status: 'confirmed', confidence: 100 },
-      { code: '6100', name: 'Gas and Electricity Utilities', type: 'Expense', debit_p: 4120000n, credit_p: 0n, blynt_code: '410', status: 'confirmed', confidence: 100 },
-      { code: '6900', name: 'Depreciation Charge on Tangibles', type: 'Expense', debit_p: 270000n, credit_p: 0n, blynt_code: '492', status: 'confirmed', confidence: 100 }, // £2,700.00 matches F-10!
-      { code: '6950', name: 'Loss on Disposal of Computer Equipment', type: 'Expense', debit_p: 15000n, credit_p: 0n, blynt_code: '493', status: 'confirmed', confidence: 100 }, // £150.00 matches F-10!
+      { code: '1010', name: 'Barclays Operating Account', type: 'Bank', debit_p: 95535000n, credit_p: 0n, blynt_code: '6000', status: 'confirmed', confidence: 100 },
+      { code: '1020', name: 'Barclays High Yield Reserve', type: 'Bank', debit_p: 35000000n, credit_p: 0n, blynt_code: '6100', status: 'confirmed', confidence: 100 },
+      { code: '1200', name: 'Sales Ledger Control Account', type: 'Current Asset', debit_p: 248950000n, credit_p: 0n, blynt_code: '7100', status: 'confirmed', confidence: 100 },
+      { code: '1210', name: 'Allowance for Doubtful Debts', type: 'Current Asset', debit_p: 0n, credit_p: 12500000n, blynt_code: '7110', status: 'confirmed', confidence: 100 },
+      { code: '1300', name: 'Finished Warehouse Stock', type: 'Current Asset', debit_p: 182400000n, credit_p: 0n, blynt_code: '7000', status: 'confirmed', confidence: 100 },
+      { code: '1410', name: 'Prepaid Commercial Rates & Insurance', type: 'Current Asset', debit_p: 3240000n, credit_p: 0n, blynt_code: '7300', status: 'confirmed', confidence: 100 },
+      { code: '1500', name: 'Plant and Warehouse Machinery Cost', type: 'Fixed Asset', debit_p: 450000000n, credit_p: 0n, blynt_code: '6600', status: 'confirmed', confidence: 100 },
+      { code: '1510', name: 'Computer Equipment at Cost', type: 'Fixed Asset', debit_p: 720000n, credit_p: 0n, blynt_code: '6600', status: 'confirmed', confidence: 100 }, // £7,200.00 matches F-10!
+      { code: '1520', name: 'Fixtures and Office Fittings Cost', type: 'Fixed Asset', debit_p: 450000n, credit_p: 0n, blynt_code: '6600', status: 'confirmed', confidence: 100 }, // £4,500.00 matches F-10!
+      { code: '1700', name: 'Plant Machinery Accumulated Deprec', type: 'Fixed Asset', debit_p: 0n, credit_p: 180000000n, blynt_code: '6610', status: 'confirmed', confidence: 100 },
+      { code: '1710', name: 'Computer Equip Accumulated Deprec', type: 'Fixed Asset', debit_p: 0n, credit_p: 350000n, blynt_code: '6610', status: 'confirmed', confidence: 100 }, // £3,500.00 matches F-10!
+      { code: '1720', name: 'Fixtures Accumulated Deprec', type: 'Fixed Asset', debit_p: 0n, credit_p: 180000n, blynt_code: '6610', status: 'confirmed', confidence: 100 }, // £1,800.00 matches F-10!
+      { code: '2000', name: 'Purchase Ledger Control Account', type: 'Current Liability', debit_p: 0n, credit_p: 168450000n, blynt_code: '7500', status: 'confirmed', confidence: 100 },
+      { code: '2100', name: 'Accrued Operating Expenses', type: 'Current Liability', debit_p: 0n, credit_p: 45200000n, blynt_code: '7600', status: 'confirmed', confidence: 100 },
+      { code: '2200', name: 'HM Revenue VAT Liability', type: 'Current Liability', debit_p: 0n, credit_p: 19820000n, blynt_code: '7800', status: 'suggested', confidence: 94 },
+      { code: '2300', name: 'PAYE / NIC Control Account', type: 'Current Liability', debit_p: 0n, credit_p: 14200000n, blynt_code: '7900', status: 'suggested', confidence: 91 },
+      { code: '3000', name: 'Ordinary Share Capital (£1 par)', type: 'Equity', debit_p: 0n, credit_p: 50000000n, blynt_code: '8500', status: 'confirmed', confidence: 100 },
+      { code: '3100', name: 'Retained Earnings Prior Periods', type: 'Equity', debit_p: 0n, credit_p: 320000000n, blynt_code: '8900', status: 'confirmed', confidence: 100 },
+      { code: '4000', name: 'Wholesale Commercial UK Sales', type: 'Revenue', debit_p: 0n, credit_p: 620000000n, blynt_code: '1000', status: 'confirmed', confidence: 100 },
+      { code: '5000', name: 'Direct Component Materials', type: 'Cost of Sales', debit_p: 380000000n, credit_p: 0n, blynt_code: '2100', status: 'confirmed', confidence: 100 },
+      { code: '6000', name: 'London Office Rent and Service', type: 'Expense', debit_p: 30000000n, credit_p: 0n, blynt_code: '4000', status: 'confirmed', confidence: 100 },
+      { code: '6100', name: 'Gas and Electricity Utilities', type: 'Expense', debit_p: 4120000n, credit_p: 0n, blynt_code: '4100', status: 'confirmed', confidence: 100 },
+      { code: '6900', name: 'Depreciation Charge on Tangibles', type: 'Expense', debit_p: 270000n, credit_p: 0n, blynt_code: '4920', status: 'confirmed', confidence: 100 }, // £2,700.00 matches F-10!
+      { code: '6950', name: 'Loss on Disposal of Computer Equipment', type: 'Expense', debit_p: 15000n, credit_p: 0n, blynt_code: '4930', status: 'confirmed', confidence: 100 }, // £150.00 matches F-10!
       // Accounts requiring mapping attention (Needs you)
       { code: '7810', name: 'Special Transition Consulting Fee', type: 'Other', debit_p: 4200000n, credit_p: 0n, blynt_code: null, status: 'needs_you', confidence: 40 },
       { code: '7820', name: 'Special Warranty Reserve Contra', type: 'Other', debit_p: 0n, credit_p: 4200000n, blynt_code: null, status: 'needs_you', confidence: 35 },
@@ -1228,8 +1230,8 @@ class Database {
         ai_alternatives:
           line.status === 'needs_you'
             ? [
-                { blynt_code: '400', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
-                { blynt_code: '760', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
+                { blynt_code: '4000', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
+                { blynt_code: '7600', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
               ]
             : undefined,
         confirmed_by: line.status === 'confirmed' ? 'usr_test_reviewer' : null,
@@ -1244,7 +1246,7 @@ class Database {
       const priorCredit = (line.credit_p * 88n) / 100n;
       const netBalance = priorDebit - priorCredit;
       const stat = getStatutoryDetails(line.blynt_code, line.name, line.type);
-      const blyntCode = line.blynt_code || (netBalance >= 0n ? '400' : '760');
+      const blyntCode = line.blynt_code || (netBalance >= 0n ? '4000' : '7600');
       this.account_mappings.push({
         id: `map_harlow_fy25_${idx + 1}`,
         engagement_id: priorEngId,
@@ -1307,8 +1309,8 @@ class Database {
         ai_alternatives:
           line.status === 'needs_you'
             ? [
-                { blynt_code: '400', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
-                { blynt_code: '760', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
+                { blynt_code: '4000', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
+                { blynt_code: '7600', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
               ]
             : undefined,
         confirmed_by: line.status === 'confirmed' ? 'usr_test_reviewer' : null,
@@ -1368,46 +1370,46 @@ class Database {
       status: 'suggested' | 'confirmed' | 'needs_you';
       confidence: number;
     }[] = [
-      { code: '200', name: 'Sales', type: 'Revenue', debit_p: 0n, credit_p: 8711220n, blynt_code: '100', status: 'confirmed', confidence: 100 },
-      { code: '270', name: 'Interest Income', type: 'Revenue', debit_p: 0n, credit_p: 88735n, blynt_code: '500', status: 'confirmed', confidence: 96 },
-      { code: '325', name: 'Direct Expenses', type: 'Direct Costs', debit_p: 33212n, credit_p: 0n, blynt_code: '210', status: 'confirmed', confidence: 98 },
-      { code: '400', name: 'Advertising & Marketing', type: 'Overhead', debit_p: 139038n, credit_p: 0n, blynt_code: '440', status: 'confirmed', confidence: 98 },
-      { code: '401', name: 'Audit & Accountancy fees', type: 'Overhead', debit_p: 275400n, credit_p: 0n, blynt_code: '481', status: 'confirmed', confidence: 98 },
-      { code: '402', name: 'Staff wellfair', type: 'Overhead', debit_p: 65848n, credit_p: 0n, blynt_code: '330', status: 'confirmed', confidence: 92 },
-      { code: '405', name: 'Client entertainment', type: 'Overhead', debit_p: 0n, credit_p: 0n, blynt_code: '499', status: 'confirmed', confidence: 90 },
-      { code: '408', name: 'Cleaning', type: 'Overhead', debit_p: 32500n, credit_p: 0n, blynt_code: '420', status: 'confirmed', confidence: 95 },
-      { code: '412', name: 'Consulting', type: 'Overhead', debit_p: 69750n, credit_p: 0n, blynt_code: '480', status: 'confirmed', confidence: 92 },
-      { code: '416', name: 'Depreciation Expense', type: 'Overhead', debit_p: 4548n, credit_p: 0n, blynt_code: '492', status: 'confirmed', confidence: 100 },
-      { code: '420', name: 'Entertainment-100% business', type: 'Overhead', debit_p: 23404n, credit_p: 0n, blynt_code: '499', status: 'confirmed', confidence: 92 },
-      { code: '429', name: 'General Expenses', type: 'Overhead', debit_p: 102828n, credit_p: 0n, blynt_code: '499', status: 'confirmed', confidence: 98 },
-      { code: '433', name: 'Insurance', type: 'Overhead', debit_p: 7668n, credit_p: 0n, blynt_code: '470', status: 'confirmed', confidence: 98 },
-      { code: '437', name: 'Interest Paid', type: 'Overhead', debit_p: 29138n, credit_p: 0n, blynt_code: '510', status: 'confirmed', confidence: 98 },
-      { code: '449', name: 'Motor Vehicle Expenses', type: 'Overhead', debit_p: 31771n, credit_p: 0n, blynt_code: '430', status: 'confirmed', confidence: 98 },
-      { code: '463', name: 'IT Software and Consumables', type: 'Overhead', debit_p: 67270n, credit_p: 0n, blynt_code: '460', status: 'confirmed', confidence: 98 },
-      { code: '469', name: 'Rent', type: 'Overhead', debit_p: 504000n, credit_p: 0n, blynt_code: '400', status: 'confirmed', confidence: 100 },
-      { code: '473', name: 'Repairs & Maintenance', type: 'Overhead', debit_p: 15801n, credit_p: 0n, blynt_code: '420', status: 'confirmed', confidence: 95 },
-      { code: '478', name: "Directors' Remuneration", type: 'Overhead', debit_p: 1254000n, credit_p: 0n, blynt_code: '300', status: 'confirmed', confidence: 100 },
-      { code: '479', name: 'Employers National Insurance', type: 'Overhead', debit_p: 0n, credit_p: 113100n, blynt_code: '310', status: 'confirmed', confidence: 100 },
-      { code: '480', name: 'Staff Training', type: 'Overhead', debit_p: 2700n, credit_p: 0n, blynt_code: '340', status: 'confirmed', confidence: 95 },
-      { code: '482', name: 'Pensions Costs', type: 'Overhead', debit_p: 30000n, credit_p: 0n, blynt_code: '320', status: 'confirmed', confidence: 98 },
-      { code: '485', name: 'Subscriptions', type: 'Overhead', debit_p: 92398n, credit_p: 0n, blynt_code: '460', status: 'confirmed', confidence: 96 },
-      { code: '489', name: 'Telephone & Internet', type: 'Overhead', debit_p: 155263n, credit_p: 0n, blynt_code: '450', status: 'confirmed', confidence: 98 },
-      { code: '493', name: 'Travel - National', type: 'Overhead', debit_p: 30016n, credit_p: 0n, blynt_code: '430', status: 'confirmed', confidence: 98 },
-      { code: '500', name: 'Corporation Tax', type: 'Overhead', debit_p: 1202042n, credit_p: 0n, blynt_code: '550', status: 'confirmed', confidence: 100 },
-      { code: 'ACC-STARLING', name: 'Starling Business Account', type: 'Bank', debit_p: 809138n, credit_p: 0n, blynt_code: '600', status: 'confirmed', confidence: 98 },
-      { code: '610', name: 'Accounts Receivable', type: 'Current Asset', debit_p: 0n, credit_p: 0n, blynt_code: '710', status: 'confirmed', confidence: 100 },
-      { code: '625', name: 'Other Debtors - Unpaid Share Capital', type: 'Current Asset', debit_p: 100n, credit_p: 0n, blynt_code: '720', status: 'confirmed', confidence: 95 },
-      { code: '710', name: 'Office Equipment', type: 'Fixed Asset', debit_p: 22739n, credit_p: 0n, blynt_code: '660', status: 'confirmed', confidence: 100 },
-      { code: '711', name: 'Less Accumulated Depreciation on Office Equipment', type: 'Fixed Asset', debit_p: 0n, credit_p: 4548n, blynt_code: '661', status: 'confirmed', confidence: 100 },
-      { code: '835b', name: "Director's Loan Account - debtors", type: 'Current Asset', debit_p: 2424996n, credit_p: 0n, blynt_code: '740', status: 'confirmed', confidence: 100 },
-      { code: '800', name: 'Accounts Payable', type: 'Current Liability', debit_p: 0n, credit_p: 0n, blynt_code: '750', status: 'confirmed', confidence: 100 },
-      { code: '810', name: 'Income in Advance', type: 'Current Liability', debit_p: 0n, credit_p: 939000n, blynt_code: '760', status: 'confirmed', confidence: 98 },
-      { code: '825', name: 'PAYE Payable', type: 'Current Liability', debit_p: 0n, credit_p: 0n, blynt_code: '790', status: 'confirmed', confidence: 100 },
-      { code: '830', name: 'Provision for Corporation Tax', type: 'Current Liability', debit_p: 0n, credit_p: 2250533n, blynt_code: '795', status: 'confirmed', confidence: 100 },
-      { code: '950', name: 'Capital - x,xxx Ordinary Shares', type: 'Equity', debit_p: 0n, credit_p: 100n, blynt_code: '850', status: 'confirmed', confidence: 100 },
-      { code: '960', name: 'Retained Earnings', type: 'Equity', debit_p: 0n, credit_p: 4368332n, blynt_code: '890', status: 'confirmed', confidence: 100 },
-      { code: '961', name: 'Dividends current year', type: 'Equity', debit_p: 4750000n, credit_p: 0n, blynt_code: '890', status: 'confirmed', confidence: 98 },
-      { code: '962', name: 'Dividends b/f', type: 'Equity', debit_p: 4300000n, credit_p: 0n, blynt_code: '890', status: 'confirmed', confidence: 100 },
+      { code: '2000', name: 'Sales', type: 'Revenue', debit_p: 0n, credit_p: 8711220n, blynt_code: '1000', status: 'confirmed', confidence: 100 },
+      { code: '270', name: 'Interest Income', type: 'Revenue', debit_p: 0n, credit_p: 88735n, blynt_code: '5000', status: 'confirmed', confidence: 96 },
+      { code: '325', name: 'Direct Expenses', type: 'Direct Costs', debit_p: 33212n, credit_p: 0n, blynt_code: '2100', status: 'confirmed', confidence: 98 },
+      { code: '4000', name: 'Advertising & Marketing', type: 'Overhead', debit_p: 139038n, credit_p: 0n, blynt_code: '4400', status: 'confirmed', confidence: 98 },
+      { code: '401', name: 'Audit & Accountancy fees', type: 'Overhead', debit_p: 275400n, credit_p: 0n, blynt_code: '4810', status: 'confirmed', confidence: 98 },
+      { code: '402', name: 'Staff wellfair', type: 'Overhead', debit_p: 65848n, credit_p: 0n, blynt_code: '3300', status: 'confirmed', confidence: 92 },
+      { code: '405', name: 'Client entertainment', type: 'Overhead', debit_p: 0n, credit_p: 0n, blynt_code: '4990', status: 'confirmed', confidence: 90 },
+      { code: '408', name: 'Cleaning', type: 'Overhead', debit_p: 32500n, credit_p: 0n, blynt_code: '4200', status: 'confirmed', confidence: 95 },
+      { code: '412', name: 'Consulting', type: 'Overhead', debit_p: 69750n, credit_p: 0n, blynt_code: '4800', status: 'confirmed', confidence: 92 },
+      { code: '416', name: 'Depreciation Expense', type: 'Overhead', debit_p: 4548n, credit_p: 0n, blynt_code: '4920', status: 'confirmed', confidence: 100 },
+      { code: '4200', name: 'Entertainment-100% business', type: 'Overhead', debit_p: 23404n, credit_p: 0n, blynt_code: '4990', status: 'confirmed', confidence: 92 },
+      { code: '429', name: 'General Expenses', type: 'Overhead', debit_p: 102828n, credit_p: 0n, blynt_code: '4990', status: 'confirmed', confidence: 98 },
+      { code: '433', name: 'Insurance', type: 'Overhead', debit_p: 7668n, credit_p: 0n, blynt_code: '4700', status: 'confirmed', confidence: 98 },
+      { code: '437', name: 'Interest Paid', type: 'Overhead', debit_p: 29138n, credit_p: 0n, blynt_code: '5100', status: 'confirmed', confidence: 98 },
+      { code: '449', name: 'Motor Vehicle Expenses', type: 'Overhead', debit_p: 31771n, credit_p: 0n, blynt_code: '4300', status: 'confirmed', confidence: 98 },
+      { code: '463', name: 'IT Software and Consumables', type: 'Overhead', debit_p: 67270n, credit_p: 0n, blynt_code: '4600', status: 'confirmed', confidence: 98 },
+      { code: '469', name: 'Rent', type: 'Overhead', debit_p: 504000n, credit_p: 0n, blynt_code: '4000', status: 'confirmed', confidence: 100 },
+      { code: '473', name: 'Repairs & Maintenance', type: 'Overhead', debit_p: 15801n, credit_p: 0n, blynt_code: '4200', status: 'confirmed', confidence: 95 },
+      { code: '478', name: "Directors' Remuneration", type: 'Overhead', debit_p: 1254000n, credit_p: 0n, blynt_code: '3000', status: 'confirmed', confidence: 100 },
+      { code: '479', name: 'Employers National Insurance', type: 'Overhead', debit_p: 0n, credit_p: 113100n, blynt_code: '3100', status: 'confirmed', confidence: 100 },
+      { code: '4800', name: 'Staff Training', type: 'Overhead', debit_p: 2700n, credit_p: 0n, blynt_code: '3400', status: 'confirmed', confidence: 95 },
+      { code: '4820', name: 'Pensions Costs', type: 'Overhead', debit_p: 30000n, credit_p: 0n, blynt_code: '3200', status: 'confirmed', confidence: 98 },
+      { code: '485', name: 'Subscriptions', type: 'Overhead', debit_p: 92398n, credit_p: 0n, blynt_code: '4600', status: 'confirmed', confidence: 96 },
+      { code: '489', name: 'Telephone & Internet', type: 'Overhead', debit_p: 155263n, credit_p: 0n, blynt_code: '4500', status: 'confirmed', confidence: 98 },
+      { code: '4930', name: 'Travel - National', type: 'Overhead', debit_p: 30016n, credit_p: 0n, blynt_code: '4300', status: 'confirmed', confidence: 98 },
+      { code: '5000', name: 'Corporation Tax', type: 'Overhead', debit_p: 1202042n, credit_p: 0n, blynt_code: '5500', status: 'confirmed', confidence: 100 },
+      { code: 'ACC-STARLING', name: 'Starling Business Account', type: 'Bank', debit_p: 809138n, credit_p: 0n, blynt_code: '6000', status: 'confirmed', confidence: 98 },
+      { code: '6100', name: 'Accounts Receivable', type: 'Current Asset', debit_p: 0n, credit_p: 0n, blynt_code: '7100', status: 'confirmed', confidence: 100 },
+      { code: '625', name: 'Other Debtors - Unpaid Share Capital', type: 'Current Asset', debit_p: 100n, credit_p: 0n, blynt_code: '7200', status: 'confirmed', confidence: 95 },
+      { code: '7100', name: 'Office Equipment', type: 'Fixed Asset', debit_p: 22739n, credit_p: 0n, blynt_code: '6600', status: 'confirmed', confidence: 100 },
+      { code: '7110', name: 'Less Accumulated Depreciation on Office Equipment', type: 'Fixed Asset', debit_p: 0n, credit_p: 4548n, blynt_code: '6610', status: 'confirmed', confidence: 100 },
+      { code: '835b', name: "Director's Loan Account - debtors", type: 'Current Asset', debit_p: 2424996n, credit_p: 0n, blynt_code: '7400', status: 'confirmed', confidence: 100 },
+      { code: '8000', name: 'Accounts Payable', type: 'Current Liability', debit_p: 0n, credit_p: 0n, blynt_code: '7500', status: 'confirmed', confidence: 100 },
+      { code: '8100', name: 'Income in Advance', type: 'Current Liability', debit_p: 0n, credit_p: 939000n, blynt_code: '7600', status: 'confirmed', confidence: 98 },
+      { code: '825', name: 'PAYE Payable', type: 'Current Liability', debit_p: 0n, credit_p: 0n, blynt_code: '7900', status: 'confirmed', confidence: 100 },
+      { code: '8300', name: 'Provision for Corporation Tax', type: 'Current Liability', debit_p: 0n, credit_p: 2250533n, blynt_code: '7950', status: 'confirmed', confidence: 100 },
+      { code: '950', name: 'Capital - x,xxx Ordinary Shares', type: 'Equity', debit_p: 0n, credit_p: 100n, blynt_code: '8500', status: 'confirmed', confidence: 100 },
+      { code: '960', name: 'Retained Earnings', type: 'Equity', debit_p: 0n, credit_p: 4368332n, blynt_code: '8900', status: 'confirmed', confidence: 100 },
+      { code: '961', name: 'Dividends current year', type: 'Equity', debit_p: 4750000n, credit_p: 0n, blynt_code: '8900', status: 'confirmed', confidence: 98 },
+      { code: '962', name: 'Dividends b/f', type: 'Equity', debit_p: 4300000n, credit_p: 0n, blynt_code: '8900', status: 'confirmed', confidence: 100 },
     ];
 
     mbSeedLines.forEach((line, idx) => {
@@ -1437,8 +1439,8 @@ class Database {
         ai_alternatives:
           line.status === 'suggested'
             ? [
-                { blynt_code: '400', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
-                { blynt_code: '760', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
+                { blynt_code: '4000', name: 'Office Rent & Rates', reason: 'Common administrative overhead classification', confidence: 45 },
+                { blynt_code: '7600', name: 'Accruals', reason: 'Potential balance sheet contra provision', confidence: 35 },
               ]
             : undefined,
         confirmed_by: line.status === 'confirmed' ? 'usr_test_reviewer' : null,
@@ -1986,7 +1988,7 @@ class Database {
       {
         id: 'tx_420_laptop',
         engagement_id: harlowEngId,
-        account_code: '420',
+        account_code: '4200',
         account_name: 'Office & IT Consumables',
         date: '2026-08-20',
         contact: 'Apple Store Regent Street',

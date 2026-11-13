@@ -63,7 +63,7 @@ export function findPrepaidCosts(engagementId: string, periodEnd: string, minimu
   const small = looks.filter((t) => asPence(t.amount_p) < minimum);
   const found: PrepLine[] = looks
     .filter((t) => asPence(t.amount_p) >= minimum && !existing.some((l) => l.id === `prep_${t.id}`))
-    .map((t) => ({ id: `prep_${t.id}`, desc: [t.contact, t.description].filter(Boolean).join(' · '), code: chartCodeOf(engagementId, t.account_code) ?? '499', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true }));
+    .map((t) => ({ id: `prep_${t.id}`, desc: [t.contact, t.description].filter(Boolean).join(' · '), code: chartCodeOf(engagementId, t.account_code) ?? '4990', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true }));
   return { found, scanned: costs.length, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(t.amount_p), 0n) };
 }
 
@@ -86,9 +86,9 @@ export function accruedIncome(engagementId: string) {
 export function prepaymentsJournal(ctx: Pick<PaperContext, 'priorId' | 'engagementId' | 'tb' | 'periodEnd'>, data: Record<string, any>): JLine[] {
   const lines: JLine[] = [];
   const ly = lastYear(ctx);
-  // Last year's prepayments still sitting in 730 (not reversed into this year) are charged now
-  if (!ly.reversed && ctx.tb('730').draft !== 0n) for (const v of ly.lines) lines.push(...pair(v.l.code, '730', v.prepaid, `${v.l.desc}: last year's prepayment released`));
-  for (const v of ((data.prepayments ?? []) as PrepLine[]).map((l) => prepView(l, ctx.periodEnd))) if (v.prepaid && v.l.code) lines.push(...pair('730', v.l.code, v.prepaid, `${v.l.desc}: prepaid`));
+  // Last year's prepayments still sitting in 7300 (not reversed into this year) are charged now
+  if (!ly.reversed && ctx.tb('7300').draft !== 0n) for (const v of ly.lines) lines.push(...pair(v.l.code, '7300', v.prepaid, `${v.l.desc}: last year's prepayment released`));
+  for (const v of ((data.prepayments ?? []) as PrepLine[]).map((l) => prepView(l, ctx.periodEnd))) if (v.prepaid && v.l.code) lines.push(...pair('7300', v.l.code, v.prepaid, `${v.l.desc}: prepaid`));
   return lines;
 }
 
@@ -99,7 +99,7 @@ export function reviewPrepayments(ctx: PaperContext): string {
   const prepaid = counted.reduce((a, v) => a + v.prepaid, 0n);
   const accrued = accruedIncome(ctx.engagementId).reduce((a, i) => a + asPence(i.amount_p), 0n);
   const ly = lastYear(ctx);
-  const draft = ctx.tb('730').draft;
+  const draft = ctx.tb('7300').draft;
   const lines = prepaymentsJournal(ctx, data);
   Object.assign(totals, { prepaid, accrued, total: prepaid + accrued, last_year: ly.total, tb_draft: draft });
   views.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Prepayment' }));
@@ -107,8 +107,8 @@ export function reviewPrepayments(ctx: PaperContext): string {
   checks.push({
     id: 'mapped',
     label: 'Accounts mapped',
-    detail: ctx.tb('730').mapped ? 'The prepayments account in the trial balance feeds this paper.' : draft === 0n ? 'Nothing is in prepayments in the trial balance yet; the journal creates the balance.' : 'Map the client’s prepayments account to 730.',
-    passed: ctx.tb('730').mapped || draft === 0n,
+    detail: ctx.tb('7300').mapped ? 'The prepayments account in the trial balance feeds this paper.' : draft === 0n ? 'Nothing is in prepayments in the trial balance yet; the journal creates the balance.' : 'Map the client’s prepayments account to 730.',
+    passed: ctx.tb('7300').mapped || draft === 0n,
   });
   const undecided = views.filter((v) => v.l.found && !v.l.decision);
   checks.push({

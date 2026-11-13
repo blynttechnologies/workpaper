@@ -12,17 +12,17 @@ export interface CoaCategory {
 
 /** Number ranges of the chart. A new account must stay inside its category's range. */
 export const CATEGORIES: CoaCategory[] = [
-  { name: 'Revenue', from: 100, to: 199, other: '140' },
-  { name: 'Cost of sales', from: 200, to: 299, other: '290' },
-  { name: 'Staff costs', from: 300, to: 399, other: '390' },
-  { name: 'Administrative expenses', from: 400, to: 499, other: '499' },
-  { name: 'Finance costs and tax', from: 500, to: 599, other: '510' },
-  { name: 'Bank and cash', from: 600, to: 649, other: '649' },
-  { name: 'Fixed assets', from: 650, to: 699, other: '650' },
-  { name: 'Current assets', from: 700, to: 749, other: '749' },
-  { name: 'Current liabilities', from: 750, to: 799, other: '770' },
-  { name: 'Long-term liabilities', from: 800, to: 849, other: '830' },
-  { name: 'Equity', from: 850, to: 899, other: '880' },
+  { name: 'Revenue', from: 1000, to: 1999, other: '1400' },
+  { name: 'Cost of sales', from: 2000, to: 2999, other: '2900' },
+  { name: 'Staff costs', from: 3000, to: 3999, other: '3900' },
+  { name: 'Administrative expenses', from: 4000, to: 4999, other: '4990' },
+  { name: 'Finance income, investments and tax', from: 5000, to: 5999, other: '5100' },
+  { name: 'Bank and cash', from: 6000, to: 6499, other: '6490' },
+  { name: 'Fixed assets and investments', from: 6500, to: 6999, other: '6500' },
+  { name: 'Current assets', from: 7000, to: 7499, other: '7490' },
+  { name: 'Current liabilities', from: 7500, to: 7999, other: '7700' },
+  { name: 'Long-term liabilities and provisions', from: 8000, to: 8499, other: '8300' },
+  { name: 'Equity and reserves', from: 8500, to: 8999, other: '8800' },
 ];
 
 export const categoryOf = (code: string | number) => CATEGORIES.find((c) => Number(code) >= c.from && Number(code) <= c.to) ?? null;
@@ -40,7 +40,7 @@ export function nextCode(existing: { code: string }[], cat: CoaCategory, base = 
 }
 
 // Share capital, directors' loans and corporation tax exist only for limited companies
-const COMPANY_ONLY = new Set(['550', '740', '745', '795', '798', '850', '860', '870']);
+const COMPANY_ONLY = new Set(['5500', '7400', '7450', '7950', '7980', '8500', '8600', '8700']);
 
 /** The chart for one client: their business type's accounts plus accounts added for them. No client means the whole chart. */
 export function accountsForClient<T extends BlyntAccount>(accounts: T[], client?: { id: string; company_type?: string }): T[] {
@@ -49,10 +49,10 @@ export function accountsForClient<T extends BlyntAccount>(accounts: T[], client?
   return accounts.filter((a) => (!a.client_id || a.client_id === client.id) && (a.structure ? a.structure === structure : structure === 'ltd' || !COMPANY_ONLY.has(a.code)));
 }
 
-/** Expenses the standard chart has no account for, and the standard account a new one sits beside. */
+/** Expenses a client often splits finer than the chart, and the standard account a new one sits beside. */
 const NEW_ACCOUNT_BASES: [RegExp, string][] = [
-  [/clean|waste/i, '420'],
-  [/entertain/i, '330'],
+  [/clean|waste/i, '4040'],
+  [/entertain/i, '3320'],
 ];
 export const newAccountBase = (name: string) => NEW_ACCOUNT_BASES.find(([pattern]) => pattern.test(name))?.[1] ?? null;
 

@@ -1,0 +1,303 @@
+Code,v2 code,Account,Section,Lead,Normal balance,Statutory accounts line,Schedule,Cash flow,Tax treatment,Control
+1000,100,Sales revenue - UK general,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1020,,Sales to EU customers,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1050,,Contract revenue - long-term contracts,Revenue and other income,A,Cr,Turnover,REC-14,Operating,Taxable,
+1060,,Costs recharged to customers,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1100,110,Service income,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1110,,Subscription and recurring income,Revenue and other income,A,Cr,Turnover,REC-09,Operating,Taxable,
+1120,,Commission income,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1130,,Royalty and licence income,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1150,,Rental income - property business,Revenue and other income,A,Cr,Turnover,REC-17,Operating,Separate,
+1160,,Management charges to group companies,Revenue and other income,A,Cr,Turnover,REC-15,Operating,Taxable,
+1200,120,Export sales,Revenue and other income,A,Cr,Turnover,REC-01,Operating,Taxable,
+1400,140,Other operating income,Revenue and other income,A,Cr,Other operating income,REC-01,Operating,Review,
+1410,,Government grants,Revenue and other income,A,Cr,Other operating income,REC-09,Operating,Review,
+1420,,Insurance claims received,Revenue and other income,A,Cr,Other operating income,REC-01,Operating,Review,
+1430,,Rental income - non-trading,Revenue and other income,A,Cr,Other operating income,REC-01,Operating,Separate,
+1440,,Research and development expenditure credit,Revenue and other income,A,Cr,Other operating income,REC-13,Operating,Taxable,
+1450,,Flat rate VAT scheme surplus,Revenue and other income,A,Cr,Other operating income,REC-06,Operating,Taxable,
+1490,,Sundry income,Revenue and other income,A,Cr,Other operating income,REC-01,Operating,Review,
+1900,190,Sales returns and discounts,Revenue and other income,A,Dr,Turnover,REC-01,Operating,Allowable,
+2000,200,Purchases,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2050,,Purchase discounts and rebates received,Cost of sales,A,Cr,Cost of sales,REC-01,Operating,Taxable,
+2100,210,Direct materials and components,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2150,,Packaging,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2200,220,Direct labour,Cost of sales,A,Dr,Cost of sales,REC-05,Operating,Allowable,
+2210,,Direct labour - employer's National Insurance,Cost of sales,T,Dr,Cost of sales,REC-05,Operating,Allowable,
+2220,,Direct labour - employer pension contributions,Cost of sales,T,Dr,Cost of sales,REC-05,Operating,Timing,
+2300,230,Direct subcontract wages,Cost of sales,A,Dr,Cost of sales,REC-05,Operating,Allowable,
+2350,,Plant and equipment hire - direct,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2400,240,Carriage and delivery,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2410,,Import duty and freight inwards,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2450,,Sales commissions payable,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2500,250,Stock movement,Cost of sales,D,Dr,Cost of sales,REC-14,Operating,Allowable,
+2510,,Work in progress movement,Cost of sales,D,Dr,Cost of sales,REC-14,Operating,Allowable,
+2520,,Stock write-downs and obsolescence,Cost of sales,D,Dr,Cost of sales,REC-14,Operating,Review,
+2600,,Production power and fuel,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2650,,Direct software and hosting costs,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Allowable,
+2700,,Warranty and rectification costs,Cost of sales,A,Dr,Cost of sales,REC-18,Operating,Timing,
+2900,290,Other direct costs,Cost of sales,A,Dr,Cost of sales,REC-01,Operating,Review,
+3000,300,Salaries and wages,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3010,,"Overtime, bonuses and commission - staff",Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Timing,
+3020,,Holiday pay accrual movement,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Timing,
+3050,,Directors' salaries,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3060,,Directors' bonuses and fees,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Timing,
+3070,,Compensation for loss of office,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Review,
+3100,310,Employer's National Insurance,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3110,,Employer's National Insurance - directors,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3120,,Class 1A National Insurance on benefits,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3150,,Employment Allowance claimed,Payroll costs,T,Cr,Administrative expenses,REC-05,Operating,Taxable,
+3160,,Apprenticeship Levy,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3200,320,Employer pension contributions,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Timing,
+3210,,Directors' pension contributions,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Timing,
+3300,330,Staff benefits,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3310,,Directors' benefits in kind,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Review,
+3320,,Staff welfare and staff entertaining,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3400,340,Recruitment and training,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3450,,Agency and temporary staff,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3500,,Redundancy and termination payments,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Review,
+3550,,Share-based payment expense,Payroll costs,T,Dr,Administrative expenses,REC-12,Operating,Review,
+3600,,Off-payroll workers - deemed employment,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Allowable,
+3900,390,Other staff costs,Payroll costs,T,Dr,Administrative expenses,REC-05,Operating,Review,
+4000,400,Office rent and rates,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4010,,Business rates,Administrative expenses,E,Dr,Administrative expenses,REC-09,Operating,Allowable,
+4020,,Service charges,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4030,,Water rates,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4040,,Cleaning and waste,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4050,,Rent paid to directors,Administrative expenses,E,Dr,Administrative expenses,REC-11,Operating,Review,
+4060,,Short-term and low-value lease costs,Administrative expenses,E,Dr,Administrative expenses,REC-10,Operating,Allowable,
+4100,410,"Light, heat and power",Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4200,420,Repairs and maintenance,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4210,,Equipment hire,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4220,,Security costs,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4300,430,Motor and travel expenses,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4310,,Motor fuel,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4320,,Vehicle running costs,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4330,,Car lease rentals,Administrative expenses,E,Dr,Administrative expenses,REC-10,Operating,Review,
+4340,,"Rail, air, taxis and parking",Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4350,,Hotels and subsistence,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4360,,Mileage allowances paid,Administrative expenses,E,Dr,Administrative expenses,REC-05,Operating,Review,
+4400,440,Advertising and marketing,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4410,,Website and online marketing,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4420,,Client entertaining,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Add back,
+4430,,Gifts to customers,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4440,,"Events, exhibitions and sponsorship",Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4500,450,Telephone and internet,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4510,,Postage and courier,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4520,,Printing and stationery,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4530,,Equipment below the capitalisation limit,Administrative expenses,E,Dr,Administrative expenses,REC-03,Operating,Review,
+4540,,General office costs,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4600,460,Software and subscriptions,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4610,,Trade and professional memberships,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4620,,Licence fees and royalties,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4700,470,Insurance,Administrative expenses,E,Dr,Administrative expenses,REC-09,Operating,Allowable,
+4710,,Key person insurance,Administrative expenses,E,Dr,Administrative expenses,REC-09,Operating,Review,
+4720,,Research and development costs,Administrative expenses,E,Dr,Administrative expenses,REC-13,Operating,Review,
+4730,,Franchise fees,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4800,480,Professional fees,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4810,481,Accountancy fees,Administrative expenses,E,Dr,Administrative expenses,REC-09,Operating,Allowable,
+4820,482,Legal fees,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4830,,Audit fees,Administrative expenses,E,Dr,Administrative expenses,REC-09,Operating,Allowable,
+4840,,Bookkeeping and payroll services,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Allowable,
+4850,,Tax advice and compliance fees,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4860,,Consultancy fees,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4870,,Management charges from group companies,Administrative expenses,E,Dr,Administrative expenses,REC-15,Operating,Allowable,
+4880,,Professional fees on capital items,Administrative expenses,E,Dr,Administrative expenses,REC-03,Operating,Add back,
+4890,,Card and payment processing fees,Administrative expenses,E,Dr,Administrative expenses,REC-02,Operating,Allowable,
+4900,490,Bank charges,Administrative expenses,E,Dr,Administrative expenses,REC-02,Operating,Allowable,
+4910,491,Bad debts,Administrative expenses,C,Dr,Administrative expenses,REC-07,Operating,Review,
+4920,492,Depreciation charge for year,Administrative expenses,F,Dr,Administrative expenses,REC-03,Operating,Add back,
+4930,493,Loss / (profit) on asset disposal,Administrative expenses,F,Mixed,Administrative expenses,REC-03,Investing,Add back,
+4940,,Amortisation of intangible assets,Administrative expenses,F,Dr,Administrative expenses,REC-03,Operating,Review,
+4950,,Impairment of fixed assets,Administrative expenses,F,Dr,Administrative expenses,REC-03,Operating,Add back,
+4960,,Charitable donations,Administrative expenses,E,Dr,Administrative expenses,REC-13,Operating,Add back,
+4970,,Fines and penalties,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Add back,
+4980,,Irrecoverable VAT,Administrative expenses,T,Dr,Administrative expenses,REC-06,Operating,Allowable,
+4985,,Exceptional costs,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+4990,499,Other administrative expenses,Administrative expenses,E,Dr,Administrative expenses,REC-01,Operating,Review,
+5000,500,Interest received,"Finance income, investments, foreign exchange and tax",A,Cr,Interest receivable,REC-01,Operating,Separate,
+5010,,Bank deposit interest,"Finance income, investments, foreign exchange and tax",A,Cr,Interest receivable,REC-02,Operating,Separate,
+5020,,Interest charged on directors' loans,"Finance income, investments, foreign exchange and tax",A,Cr,Interest receivable,REC-11,Operating,Separate,
+5030,,Interest receivable from group companies,"Finance income, investments, foreign exchange and tax",A,Cr,Interest receivable,REC-15,Operating,Separate,
+5050,,Dividends received - group companies,"Finance income, investments, foreign exchange and tax",G,Cr,Income from shares in group undertakings,REC-17,Investing,Exempt,
+5060,,Dividends received - other investments,"Finance income, investments, foreign exchange and tax",G,Cr,Income from other fixed asset investments,REC-17,Investing,Exempt,
+5070,,Fair value gains and losses on investments,"Finance income, investments, foreign exchange and tax",G,Mixed,Finance income / costs,REC-17,Operating,Review,
+5080,,Fair value movement on investment property,"Finance income, investments, foreign exchange and tax",G,Mixed,Fair value movements,REC-17,Operating,Exempt,
+5090,,Profit / (loss) on disposal of investments,"Finance income, investments, foreign exchange and tax",G,Mixed,Finance income / costs,REC-17,Investing,Review,
+5095,,Amounts written off investments,"Finance income, investments, foreign exchange and tax",G,Dr,Amounts written off investments,REC-17,Operating,Review,
+5100,510,Loan interest,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-10,Financing,Allowable,
+5110,,Bank overdraft interest,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-02,Financing,Allowable,
+5120,,Mortgage interest,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-10,Financing,Allowable,
+5130,,Interest paid to directors,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-11,Financing,Review,
+5140,,Interest payable to group companies,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-15,Financing,Review,
+5150,,Loan arrangement fees spread over the loan,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-10,Financing,Allowable,
+5160,,Late payment interest - HMRC,"Finance income, investments, foreign exchange and tax",T,Dr,Interest payable,REC-13,Operating,Review,
+5170,,Unwinding of discount on provisions,"Finance income, investments, foreign exchange and tax",P,Dr,Interest payable,REC-18,Operating,Review,
+5200,520,Hire purchase interest,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-10,Financing,Allowable,
+5210,,Interest on lease liabilities,"Finance income, investments, foreign exchange and tax",L,Dr,Interest payable,REC-10,Financing,Review,
+5300,530,Realised foreign exchange gain / loss,"Finance income, investments, foreign exchange and tax",A,Mixed,Finance income / costs,REC-01,Operating,Allowable,
+5400,540,Unrealised foreign exchange gain / loss,"Finance income, investments, foreign exchange and tax",A,Mixed,Finance income / costs,REC-01,Operating,Review,
+5450,545,Currency conversion differences,"Finance income, investments, foreign exchange and tax",A,Mixed,Finance income / costs,REC-01,Operating,Review,
+5500,550,Corporation tax expense,"Finance income, investments, foreign exchange and tax",T,Dr,Tax on profit,REC-13,Operating,Tax,
+5510,,Corporation tax - prior year adjustment,"Finance income, investments, foreign exchange and tax",T,Mixed,Tax on profit,REC-13,Operating,Tax,
+5520,,Group relief paid / received,"Finance income, investments, foreign exchange and tax",T,Mixed,Tax on profit,REC-13,Operating,Tax,
+5530,,s455 tax charged to profit,"Finance income, investments, foreign exchange and tax",T,Dr,Tax on profit,REC-13,Operating,Tax,
+5540,,Overseas tax,"Finance income, investments, foreign exchange and tax",T,Dr,Tax on profit,REC-13,Operating,Tax,
+5550,,Double taxation relief,"Finance income, investments, foreign exchange and tax",T,Cr,Tax on profit,REC-13,Operating,Tax,
+5600,560,Deferred tax charge / credit,"Finance income, investments, foreign exchange and tax",T,Mixed,Tax on profit,REC-13,Operating,Tax,
+6000,600,Main bank account,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6010,,Second current account,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6020,,Foreign currency bank account,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6050,,Bank overdraft,Bank and cash,B,Cr,Creditors: bank loans and overdrafts,REC-02,Cash,,Yes
+6100,610,Savings account,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6110,,Deposits over 3 months,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Investing,,Yes
+6150,,Short-term deposits up to 3 months,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6200,620,Petty cash,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,
+6210,,Cash floats and tills,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,
+6300,630,Credit card,Bank and cash,B,Cr,Creditors: amounts due within one year,REC-02,Financing,,Yes
+6310,,Second credit card,Bank and cash,B,Cr,Creditors: amounts due within one year,REC-02,Financing,,Yes
+6400,640,Payment processor account,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6410,,Online marketplace balances,Bank and cash,B,Dr,Other debtors,REC-02,Operating,,Yes
+6450,645,Cash in transit,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,
+6490,649,Other bank account,Bank and cash,B,Dr,Cash at bank and in hand,REC-02,Cash,,Yes
+6500,650,Property at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6510,651,Property accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6520,,Long leasehold property at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6530,,Long leasehold property accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6540,,Leasehold improvements at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6550,,Leasehold improvements accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6560,,Land at cost (not depreciated),Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6570,,Assets under construction,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6580,,Right-of-use assets at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-10,Investing,,Yes
+6590,,Right-of-use assets accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-10,Investing,,
+6600,660,Plant and equipment at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6610,661,Plant and equipment accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6620,,Tools and equipment at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6630,,Tools and equipment accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6640,,Office equipment at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6650,,Office equipment accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6700,670,Motor vehicles at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6710,671,Motor vehicles accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6720,,Cars at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6730,,Cars accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6800,680,Computer equipment at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6810,681,Computer equipment accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6900,690,Fixtures and fittings at cost,Fixed assets and investments,F,Dr,Tangible fixed assets,REC-03,Investing,,Yes
+6910,691,Fixtures and fittings accumulated depreciation,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6920,,Shares in group undertakings,Fixed assets and investments,G,Dr,Investments,REC-17,Investing,,Yes
+6925,,Shares in associates and joint ventures,Fixed assets and investments,G,Dr,Investments,REC-17,Investing,,Yes
+6930,,Listed investments,Fixed assets and investments,G,Dr,Investments,REC-17,Investing,,Yes
+6935,,Unlisted investments,Fixed assets and investments,G,Dr,Investments,REC-17,Investing,,Yes
+6940,,Loans to group undertakings,Fixed assets and investments,G,Dr,Investments,REC-15,Investing,,Yes
+6945,,Other fixed asset loans,Fixed assets and investments,G,Dr,Investments,REC-17,Investing,,Yes
+6950,,Investment property,Fixed assets and investments,G,Dr,Investment property,REC-17,Investing,,Yes
+6955,,Other fixed asset investments,Fixed assets and investments,G,Dr,Investments,REC-17,Investing,,Yes
+6960,696,Accumulated impairment,Fixed assets and investments,F,Cr,Tangible fixed assets,REC-03,Investing,,
+6970,,Goodwill at cost,Fixed assets and investments,F,Dr,Intangible assets,REC-03,Investing,,Yes
+6971,,Goodwill accumulated amortisation,Fixed assets and investments,F,Cr,Intangible assets,REC-03,Investing,,
+6975,,Software (intangible) at cost,Fixed assets and investments,F,Dr,Intangible assets,REC-03,Investing,,Yes
+6976,,Software (intangible) accumulated amortisation,Fixed assets and investments,F,Cr,Intangible assets,REC-03,Investing,,
+6980,,Development costs at cost,Fixed assets and investments,F,Dr,Intangible assets,REC-03,Investing,,Yes
+6981,,Development costs accumulated amortisation,Fixed assets and investments,F,Cr,Intangible assets,REC-03,Investing,,
+6985,,"Trademarks, patents and licences at cost",Fixed assets and investments,F,Dr,Intangible assets,REC-03,Investing,,Yes
+6986,,"Trademarks, patents and licences accumulated amortisation",Fixed assets and investments,F,Cr,Intangible assets,REC-03,Investing,,
+6990,,Website development at cost,Fixed assets and investments,F,Dr,Intangible assets,REC-03,Investing,,Yes
+6991,,Website development accumulated amortisation,Fixed assets and investments,F,Cr,Intangible assets,REC-03,Investing,,
+6995,,Other intangible assets at cost,Fixed assets and investments,F,Dr,Intangible assets,REC-03,Investing,,Yes
+6996,,Other intangible assets accumulated amortisation,Fixed assets and investments,F,Cr,Intangible assets,REC-03,Investing,,
+7000,700,Inventory,Current assets,D,Dr,Stocks and work in progress,REC-14,Operating,,Yes
+7010,,Raw materials,Current assets,D,Dr,Stocks and work in progress,REC-14,Operating,,Yes
+7020,,Work in progress,Current assets,D,Dr,Stocks and work in progress,REC-14,Operating,,Yes
+7030,,Finished goods,Current assets,D,Dr,Stocks and work in progress,REC-14,Operating,,Yes
+7040,,Goods in transit,Current assets,D,Dr,Stocks and work in progress,REC-14,Operating,,
+7050,,Stock provision,Current assets,D,Cr,Stocks and work in progress,REC-14,Operating,,
+7060,,Amounts recoverable on contracts,Current assets,D,Dr,Debtors: amounts recoverable on contracts,REC-14,Operating,,Yes
+7100,710,Trade receivables control,Current assets,C,Dr,Debtors: trade,REC-07,Operating,,Yes
+7110,711,Bad debt provision,Current assets,C,Cr,Debtors: trade,REC-07,Operating,,
+7120,,Invoice finance debtors,Current assets,C,Dr,Debtors: trade,REC-07,Operating,,Yes
+7130,,Retentions receivable,Current assets,C,Dr,Debtors: trade,REC-07,Operating,,Yes
+7200,720,Other receivables,Current assets,C,Dr,Other debtors,REC-07,Operating,,
+7210,721,Intercompany receivable,Current assets,C,Dr,Amounts owed by group undertakings,REC-15,Operating,,Yes
+7220,,Amounts owed by associates and joint ventures,Current assets,C,Dr,Amounts owed by undertakings with a participating interest,REC-15,Operating,,Yes
+7230,,Amounts owed by other related parties,Current assets,C,Dr,Other debtors,REC-07,Operating,,Yes
+7240,,Loans to employees,Current assets,C,Dr,Other debtors,REC-07,Operating,,
+7250,,Called up share capital not paid,Current assets,Z,Dr,Called up share capital not paid,REC-12,Financing,,
+7260,,Deposits paid,Current assets,C,Dr,Other debtors,REC-07,Operating,,
+7270,,s455 tax recoverable,Current assets,T,Dr,Other debtors,REC-13,Operating,,Yes
+7280,,Insurance claims receivable,Current assets,C,Dr,Other debtors,REC-07,Operating,,
+7290,,Deferred tax asset,Current assets,T,Dr,Deferred tax asset,REC-13,Operating,,
+7300,730,Prepayments,Current assets,E,Dr,Prepayments and accrued income,REC-09,Operating,,
+7310,,Accrued income,Current assets,E,Dr,Prepayments and accrued income,REC-09,Operating,,
+7350,,Current asset investments,Current assets,G,Dr,Investments (current assets),REC-17,Investing,,Yes
+7400,740,Director's loan account - debit,Current assets,C,Dr,Other debtors,REC-11,Financing,,Yes
+7450,745,Corporation tax recoverable,Current assets,T,Dr,Corporation tax recoverable,REC-13,Operating,,
+7490,749,Other current assets,Current assets,C,Dr,Other debtors,REC-07,Operating,,
+7500,750,Trade payables control,Current liabilities and payroll creditors,K,Cr,Creditors: trade,REC-08,Operating,,Yes
+7510,,Retentions payable,Current liabilities and payroll creditors,K,Cr,Creditors: trade,REC-08,Operating,,Yes
+7520,,Payments received on account,Current liabilities and payroll creditors,K,Cr,Payments received on account,REC-08,Operating,,
+7600,760,Accruals,Current liabilities and payroll creditors,K,Cr,Accruals and deferred income,REC-09,Operating,,
+7610,,Deferred income,Current liabilities and payroll creditors,K,Cr,Accruals and deferred income,REC-09,Operating,,
+7620,,Holiday pay accrual,Current liabilities and payroll creditors,K,Cr,Accruals and deferred income,REC-05,Operating,,
+7630,,Accrued interest payable,Current liabilities and payroll creditors,L,Cr,Accruals and deferred income,REC-10,Financing,,
+7700,770,Other payables,Current liabilities and payroll creditors,K,Cr,Other creditors,REC-08,Operating,,
+7710,771,Intercompany payable,Current liabilities and payroll creditors,K,Cr,Amounts owed to group undertakings,REC-15,Operating,,Yes
+7720,,Amounts owed to associates and joint ventures,Current liabilities and payroll creditors,K,Cr,Amounts owed to undertakings with a participating interest,REC-15,Operating,,Yes
+7730,,Amounts owed to other related parties,Current liabilities and payroll creditors,K,Cr,Other creditors,REC-08,Operating,,Yes
+7740,,Dividends declared not yet paid,Current liabilities and payroll creditors,Z,Cr,Other creditors,REC-12,Financing,,
+7750,,Group relief payable,Current liabilities and payroll creditors,T,Cr,Amounts owed to group undertakings,REC-13,Operating,,Yes
+7800,780,VAT control,Current liabilities and payroll creditors,T,Cr,Taxation and social security,REC-06,Operating,,Yes
+7810,,VAT on unpaid invoices - cash accounting,Current liabilities and payroll creditors,T,Cr,Taxation and social security,REC-06,Operating,,Yes
+7820,,CIS deductions payable,Current liabilities and payroll creditors,T,Cr,Taxation and social security,REC-05,Operating,,Yes
+7830,,Other taxes and duties payable,Current liabilities and payroll creditors,T,Cr,Taxation and social security,REC-06,Operating,,
+7890,789,Wages payable control,Current liabilities and payroll creditors,T,Cr,Other creditors - wages,REC-05,Operating,,Yes
+7900,790,PAYE and National Insurance payable,Current liabilities and payroll creditors,T,Cr,Taxation and social security,REC-05,Operating,,Yes
+7910,791,Pension contributions payable,Current liabilities and payroll creditors,T,Cr,Other creditors,REC-05,Operating,,Yes
+7920,,Student loan and earnings deductions payable,Current liabilities and payroll creditors,T,Cr,Taxation and social security,REC-05,Operating,,Yes
+7950,795,Corporation tax payable,Current liabilities and payroll creditors,T,Cr,Corporation tax payable,REC-13,Operating,,Yes
+7960,,s455 tax payable,Current liabilities and payroll creditors,T,Cr,Corporation tax payable,REC-13,Operating,,Yes
+7980,798,Director's loan account - credit,Current liabilities and payroll creditors,K,Cr,Other creditors,REC-11,Financing,,Yes
+7990,799,Current portion of loans,Current liabilities and payroll creditors,L,Cr,Creditors: amounts due within one year,REC-10,Financing,,
+7991,,Current portion of hire purchase,Current liabilities and payroll creditors,L,Cr,Creditors: amounts due within one year,REC-10,Financing,,
+7992,,Current portion of lease liabilities,Current liabilities and payroll creditors,L,Cr,Creditors: amounts due within one year,REC-10,Financing,,
+7993,,Current portion of other borrowings,Current liabilities and payroll creditors,L,Cr,Creditors: amounts due within one year,REC-10,Financing,,
+8000,800,Bank loans,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,Yes
+8010,,Mortgages secured on property,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,Yes
+8020,,Government-backed loans,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,Yes
+8100,810,Hire purchase liabilities,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,Yes
+8200,820,Lease liabilities,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,Yes
+8300,830,Other long-term borrowings,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,
+8310,,Directors' loans due after one year,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-11,Financing,,Yes
+8320,,Loans from group companies due after one year,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-15,Financing,,Yes
+8330,,Convertible loans,Long-term liabilities and provisions,L,Cr,Creditors: amounts due after one year,REC-10,Financing,,Yes
+8350,,Deferred income due after one year,Long-term liabilities and provisions,K,Cr,Accruals and deferred income,REC-09,Operating,,
+8400,840,Deferred tax liability,Long-term liabilities and provisions,T,Cr,Provisions for liabilities,REC-13,Operating,,
+8410,,Dilapidations provision,Long-term liabilities and provisions,P,Cr,Provisions for liabilities,REC-18,Operating,,
+8420,,Warranty provision,Long-term liabilities and provisions,P,Cr,Provisions for liabilities,REC-18,Operating,,
+8430,,Legal claims provision,Long-term liabilities and provisions,P,Cr,Provisions for liabilities,REC-18,Operating,,
+8490,,Other provisions,Long-term liabilities and provisions,P,Cr,Provisions for liabilities,REC-18,Operating,,
+8500,850,Ordinary share capital,Equity and reserves,Z,Cr,Called up share capital,REC-12,Financing,,
+8510,,Preference shares classed as equity,Equity and reserves,Z,Cr,Called up share capital,REC-12,Financing,,
+8600,860,Other share capital,Equity and reserves,Z,Cr,Called up share capital,REC-12,Financing,,
+8700,870,Share premium,Equity and reserves,Z,Cr,Share premium account,REC-12,Financing,,
+8710,,Capital redemption reserve,Equity and reserves,Z,Cr,Capital redemption reserve,REC-12,Financing,,
+8720,,Revaluation reserve,Equity and reserves,Z,Cr,Revaluation reserve,REC-12,Operating,,
+8730,,Fair value reserve,Equity and reserves,Z,Cr,Fair value reserve,REC-12,Operating,,
+8740,,Capital contribution reserve,Equity and reserves,Z,Cr,Other reserves,REC-12,Financing,,
+8750,,Merger reserve,Equity and reserves,Z,Cr,Other reserves,REC-12,Financing,,
+8800,880,Other reserves,Equity and reserves,Z,Cr,Other reserves,REC-12,Financing,,
+8810,,Non-distributable reserve,Equity and reserves,Z,Cr,Other reserves,REC-12,Operating,,
+8900,890,Retained earnings,Equity and reserves,Z,Cr,Profit and loss account,REC-12,Financing,,Yes
+8910,,Dividends paid - ordinary,Equity and reserves,Z,Dr,Profit and loss account,REC-12,Financing,,Yes
+8920,,Dividends paid - preference,Equity and reserves,Z,Dr,Profit and loss account,REC-12,Financing,,Yes
+8930,,Prior year adjustments,Equity and reserves,Z,Mixed,Profit and loss account,REC-12,Operating,,
+8940,,Purchase of own shares,Equity and reserves,Z,Dr,Profit and loss account,REC-12,Financing,,
+8990,899,Current-year earnings,Equity and reserves,Z,Cr,Profit and loss account,REC-12,Operating,,System
+9000,900,Suspense account,"System, control and clearing",S,Mixed,Suspense - must be zero,REC-16,Operating,,Yes
+9100,910,Opening balance control,"System, control and clearing",S,Mixed,Opening balances - must be zero,REC-16,Operating,,Yes
+9200,920,Payroll clearing,"System, control and clearing",S,Mixed,Clearing - must be zero,REC-05,Operating,,Yes
+9300,930,Payment clearing,"System, control and clearing",S,Mixed,Clearing - must be zero,REC-16,Operating,,Yes
+9400,,Bank transfers clearing,"System, control and clearing",S,Mixed,Clearing - must be zero,REC-02,Operating,,Yes
+9500,,Rounding,"System, control and clearing",S,Mixed,Clearing - must be zero,REC-16,Operating,,Yes
+9600,,Historical ledger adjustment,"System, control and clearing",S,Mixed,Opening balances - must be zero,REC-16,Operating,,Yes
+9700,,Unmapped client accounts,"System, control and clearing",S,Mixed,Mapping - must be zero,REC-16,Operating,,System
+9990,999,System balancing account,"System, control and clearing",S,Mixed,System balance - must be zero,REC-16,Operating,,System

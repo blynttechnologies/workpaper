@@ -1,4 +1,4 @@
-import { OWNER_ACCOUNTS, STANDARD_CHART } from '@/lib/standard-chart';
+import { OWNER_ACCOUNTS, STANDARD_CHART, V2_TO_V3 } from '@/lib/standard-chart';
 import type { Structure } from '@/lib/practice-structure';
 
 export interface MappingSuggestion {
@@ -23,9 +23,67 @@ export function matchBlyntAccount(
   void sourceCode;
   const owner = matchOwnerAccount(sourceName, structure);
   if (owner) return owner;
+  const named = matchV3Account(sourceName, sourceType);
+  if (named) return { blynt_code: named.code, name: named.name, lead_letter: named.lead_letter, ...scoreMatch(sourceName, sourceType, named.code, `Named like ${named.code} ${named.name}`) };
   const m = matchByName(sourceName, sourceType);
   return { ...strip(m), ...scoreMatch(sourceName, sourceType, m.blynt_code, m.reason, !!m.fallback) };
 }
+
+// Accounts v3 added (audit fees, directors' pay, client entertaining...): the keyword rules below predate them
+const V3_ONLY = STANDARD_CHART.filter((a) => a.type !== 'System' && !Object.values(V2_TO_V3).includes(a.code));
+
+/**
+ * A v3 account whose every meaningful word is in the client's account name, and whose type agrees
+ * when the client gives one. The most specific (most words) wins, so "Deferred income" is not
+ * taken for "Deferred income due after one year".
+ */
+function matchV3Account(sourceName: string, sourceType: string) {
+  const src = words(sourceName);
+  const fam = family(sourceType);
+  const fits = (a: (typeof STANDARD_CHART)[number]) => !fam || CHART_FAMILY[a.type] === fam;
+  const named = V3_ONLY.map((a) => ({ a, need: [...words(a.name)] }))
+    .filter(({ a, need }) => need.length && need.every((w) => src.has(w)) && fits(a))
+    .sort((x, y) => y.need.length - x.need.length)[0]?.a;
+  if (named) return named;
+  // Common ledger names for the v3 accounts the chart was expanded for (tax add-backs and notes)
+  const code = V3_KEYWORDS.find(([pattern]) => pattern.test(sourceName))?.[1];
+  const account = code ? STANDARD_CHART.find((a) => a.code === code) : undefined;
+  return account && fits(account) ? account : undefined;
+}
+
+const V3_KEYWORDS: [RegExp, string][] = [
+  [/director\S*\s.*(bonus|fee)/i, '3060'],
+  [/director\S*\s.*pension/i, '3210'],
+  [/director\S*\s.*(remuneration|salar|pay\b)/i, '3050'],
+  [/staff (entertain|welfare)/i, '3320'],
+  [/client entertain|entertaining - client|business entertain/i, '4420'],
+  [/\bgifts?\b/i, '4430'],
+  [/\baudit\b/i, '4830'],
+  [/donation|charit/i, '4960'],
+  [/\bfines?\b|penalt/i, '4970'],
+  [/car lease|lease car/i, '4330'],
+  [/mileage/i, '4360'],
+  [/hotel|subsistence/i, '4350'],
+  [/\b(rail|train|air ?fares?|flights?|taxis?|parking)\b/i, '4340'],
+  [/\bfuel\b|petrol|diesel/i, '4310'],
+  [/business rates/i, '4010'],
+  [/water rates/i, '4030'],
+  [/clean|waste/i, '4040'],
+  [/postage|courier/i, '4510'],
+  [/printing|stationery/i, '4520'],
+  [/bookkeeping|payroll (bureau|services)/i, '4840'],
+  [/goodwill.*amortis/i, '6971'],
+  [/goodwill/i, '6970'],
+  [/amortis/i, '4940'],
+  [/\bgrants?\b/i, '1410'],
+  [/\bcis\b/i, '7820'],
+  [/overdraft interest/i, '5110'],
+  [/overdraft/i, '6050'],
+  [/mortgage interest/i, '5120'],
+  [/mortgage/i, '8010'],
+  [/dividends? received/i, '5060'],
+  [/dividends?/i, '8910'],
+];
 
 /* ---------- How sure the match is, from the evidence ---------- */
 
@@ -52,7 +110,7 @@ function family(sourceType: string): 'asset' | 'liability' | 'equity' | 'income'
 }
 const CHART_FAMILY: Record<string, ReturnType<typeof family>> = { Asset: 'asset', Liability: 'liability', Equity: 'equity', Revenue: 'income', 'Cost of Sales': 'cost', Overhead: 'cost' };
 /** Accounts that collect whatever didn't fit elsewhere, so landing there proves little. */
-const CATCH_ALL = new Set(['499', '749', '770', '290', '390', '140']);
+const CATCH_ALL = new Set(['4990', '7490', '7700', '2900', '3900', '1400']);
 
 /**
  * Confidence from the evidence, not a fixed number per pattern: the account's own words
@@ -114,7 +172,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   // 2. Cash and Bank Balances (Lead B: 1000, 1010, 1020)
   if (/petty cash|cash on hand|till float|cash float/i.test(name)) {
     return {
-      blynt_code: '620',
+      blynt_code: '6200',
       name: 'Petty cash',
       confidence: 98,
       reason: 'Petty cash and cash-in-hand control account',
@@ -122,13 +180,13 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
     };
   }
   if (/credit card/i.test(name)) {
-    return { blynt_code: '630', name: 'Credit card', confidence: 96, reason: 'Credit card liability', lead_letter: 'B' };
+    return { blynt_code: '6300', name: 'Credit card', confidence: 96, reason: 'Credit card liability', lead_letter: 'B' };
   }
   // Income and expense accounts named after a bank ("Bank Fees", "HSBC charges") are not cash at bank
   const profitAndLoss = /expense|overhead|cost|revenue|income|sales|direct/i.test(type);
   if ((!profitAndLoss && /starling|barclays|hsbc|lloyds|natwest|santander|revolut|tide|monzo|bank|current account|checking|operating account/i.test(name)) || /bank/i.test(type)) {
     return {
-      blynt_code: '600',
+      blynt_code: '6000',
       name: 'Main bank account',
       confidence: 98,
       reason: 'Commercial bank operating and current accounts',
@@ -137,7 +195,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/deposit account|reserve account|savings account|treasury|liquidity/i.test(name)) {
     return {
-      blynt_code: '610',
+      blynt_code: '6100',
       name: 'Savings account',
       confidence: 96,
       reason: 'High-yield interest and treasury deposit balances',
@@ -148,7 +206,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   // 3. Trade Debtors, Prepayments, and Receivables (Lead C / E: 1200, 1210, 1400)
   if (/doubtful debt|bad debt provision|allowance for doubtful|credit loss/i.test(name)) {
     return {
-      blynt_code: '711',
+      blynt_code: '7110',
       name: 'Bad debt provision',
       confidence: 98,
       reason: 'Contra-asset provision against impaired trade debtors',
@@ -157,7 +215,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/prepayment|prepaid|advance payment|rates & insurance prepaid/i.test(name)) {
     return {
-      blynt_code: '730',
+      blynt_code: '7300',
       name: 'Prepayments',
       confidence: 98,
       reason: 'Prepaid expenses and statutory rate apportionments',
@@ -165,14 +223,14 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
     };
   }
   if (/director.*loan|\bdla\b/i.test(name)) {
-    return { blynt_code: '740', name: "Director's loan account - debit", confidence: 90, reason: 'Director loan account: check whether it is owed to or by the director', lead_letter: 'C' };
+    return { blynt_code: '7400', name: "Director's loan account - debit", confidence: 90, reason: 'Director loan account: check whether it is owed to or by the director', lead_letter: 'C' };
   }
   if (/other debtor|other receivable/i.test(name)) {
-    return { blynt_code: '720', name: 'Other receivables', confidence: 96, reason: 'Other debtors and receivables', lead_letter: 'C' };
+    return { blynt_code: '7200', name: 'Other receivables', confidence: 96, reason: 'Other debtors and receivables', lead_letter: 'C' };
   }
   if (/debtor|receivable|sales ledger|slca|trade debtor|director.*loan.*debtor|unpaid share capital|other debtor/i.test(name) || (type.includes('asset') && /debt/i.test(name))) {
     return {
-      blynt_code: '710',
+      blynt_code: '7100',
       name: 'Trade receivables control',
       confidence: 98,
       reason: 'Trade and current asset receivables control',
@@ -183,7 +241,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   // 4. Inventories & Stock (Lead D: 1300)
   if (/stock|inventory|work in progress|wip|finished goods|raw materials/i.test(name)) {
     return {
-      blynt_code: '700',
+      blynt_code: '7000',
       name: 'Inventory',
       confidence: 98,
       reason: 'Commercial trading inventory and stock valuation',
@@ -194,7 +252,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   // 5. Fixed Assets & Accumulated Depreciation (Lead F: 1500, 1510, 1520, 1700, 1710, 1720)
   if (/accumulated dep.*(computer|office equipment|it|hardware|software)|less.*accumulated.*dep.*office/i.test(name)) {
     return {
-      blynt_code: '681',
+      blynt_code: '6810',
       name: 'Computer equipment accumulated depreciation',
       confidence: 99,
       reason: 'Accumulated depreciation contra for IT and office assets',
@@ -203,7 +261,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/accumulated dep.*(plant|machinery)|less.*accumulated.*dep.*plant/i.test(name)) {
     return {
-      blynt_code: '661',
+      blynt_code: '6610',
       name: 'Plant and equipment accumulated depreciation',
       confidence: 98,
       reason: 'Accumulated depreciation contra for plant and machinery',
@@ -212,7 +270,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/accumulated dep.*(fixture|fitting|furniture)/i.test(name)) {
     return {
-      blynt_code: '691',
+      blynt_code: '6910',
       name: 'Fixtures and fittings accumulated depreciation',
       confidence: 98,
       reason: 'Accumulated depreciation contra for fixtures and leasehold fit-out',
@@ -221,7 +279,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/less.*accumulated.*dep|deprec.*reserve|contra.*asset.*dep/i.test(name)) {
     return {
-      blynt_code: '681',
+      blynt_code: '6810',
       name: 'Computer equipment accumulated depreciation',
       confidence: 95,
       reason: 'Depreciation cumulative allowance contra',
@@ -230,7 +288,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/computer|office equipment|it equipment|laptop|server|technology/i.test(name)) {
     return {
-      blynt_code: '680',
+      blynt_code: '6800',
       name: 'Computer equipment at cost',
       confidence: 98,
       reason: 'Capitalized IT infrastructure and office hardware',
@@ -239,7 +297,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/plant|warehouse machinery|factory equipment|vehicle.*asset/i.test(name)) {
     return {
-      blynt_code: '660',
+      blynt_code: '6600',
       name: 'Plant and equipment at cost',
       confidence: 96,
       reason: 'Capitalized industrial plant and production machinery',
@@ -248,7 +306,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/fixture|fitting|furniture|office refurb/i.test(name)) {
     return {
-      blynt_code: '690',
+      blynt_code: '6900',
       name: 'Fixtures and fittings at cost',
       confidence: 98,
       reason: 'Capitalized commercial fittings and interior furniture',
@@ -257,7 +315,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/fixed asset/i.test(type) || /tangible/i.test(type)) {
     return {
-      blynt_code: '680',
+      blynt_code: '6800',
       name: 'Computer equipment at cost',
       confidence: 92,
       reason: 'Tangible fixed asset capital cost schedule',
@@ -267,14 +325,14 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
 
   // 6. Current & Statutory Liabilities (Lead K / T / L: 2000, 2100, 2200, 2300, 2600)
   if (/wages.*payable|net wages/i.test(name)) {
-    return { blynt_code: '789', name: 'Wages payable control', confidence: 97, reason: 'Net wages payable control', lead_letter: 'T' };
+    return { blynt_code: '7890', name: 'Wages payable control', confidence: 97, reason: 'Net wages payable control', lead_letter: 'T' };
   }
   if (/pension.*payable/i.test(name)) {
-    return { blynt_code: '791', name: 'Pension contributions payable', confidence: 97, reason: 'Pension contributions payable', lead_letter: 'T' };
+    return { blynt_code: '7910', name: 'Pension contributions payable', confidence: 97, reason: 'Pension contributions payable', lead_letter: 'T' };
   }
   if (/vat|hmrc.*vat|output tax|input tax|value added tax/i.test(name)) {
     return {
-      blynt_code: '780',
+      blynt_code: '7800',
       name: 'VAT control',
       confidence: 99,
       reason: 'Statutory VAT net settlement balance due to HMRC',
@@ -283,7 +341,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/paye|nic|national insurance|payroll payable|pension.*payable|wages.*payable/i.test(name)) {
     return {
-      blynt_code: '790',
+      blynt_code: '7900',
       name: 'PAYE and National Insurance payable',
       confidence: 99,
       reason: 'Payroll statutory PAYE/NIC withholding and social security liability',
@@ -292,7 +350,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/provision for corporation tax|corporation tax payable|corporation tax liability/i.test(name)) {
     return {
-      blynt_code: '795',
+      blynt_code: '7950',
       name: 'Corporation tax payable',
       confidence: 96,
       reason: 'Statutory tax provision balance on balance sheet',
@@ -301,7 +359,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/accrual|accrued|income in advance|deferred income/i.test(name)) {
     return {
-      blynt_code: '760',
+      blynt_code: '7600',
       name: 'Accruals',
       confidence: 98,
       reason: 'Period-end expense accruals and deferred revenue balances',
@@ -310,7 +368,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/creditor|payable|purchase ledger|plca|trade creditor|supplier/i.test(name) || (type.includes('liability') && /credit/i.test(name))) {
     return {
-      blynt_code: '750',
+      blynt_code: '7500',
       name: 'Trade payables control',
       confidence: 98,
       reason: 'Trade creditors control account and supplier invoices payable',
@@ -318,14 +376,14 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
     };
   }
   if (/hire purchase/i.test(name)) {
-    return { blynt_code: '810', name: 'Hire purchase liabilities', confidence: 96, reason: 'Hire purchase liabilities', lead_letter: 'L' };
+    return { blynt_code: '8100', name: 'Hire purchase liabilities', confidence: 96, reason: 'Hire purchase liabilities', lead_letter: 'L' };
   }
   if (/lease liab/i.test(name)) {
-    return { blynt_code: '820', name: 'Lease liabilities', confidence: 96, reason: 'Lease liabilities', lead_letter: 'L' };
+    return { blynt_code: '8200', name: 'Lease liabilities', confidence: 96, reason: 'Lease liabilities', lead_letter: 'L' };
   }
   if (/bank loan|mortgage|term loan|long term borrowing/i.test(name)) {
     return {
-      blynt_code: '800',
+      blynt_code: '8000',
       name: 'Bank loans',
       confidence: 97,
       reason: 'Secured and unsecured bank financing facility liabilities',
@@ -335,11 +393,11 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
 
   // 7. Equity & Reserves (Lead Z: 3000, 3100)
   if (/share premium/i.test(name)) {
-    return { blynt_code: '870', name: 'Share premium', confidence: 99, reason: 'Share premium account', lead_letter: 'Z' };
+    return { blynt_code: '8700', name: 'Share premium', confidence: 99, reason: 'Share premium account', lead_letter: 'Z' };
   }
   if (/share capital|ordinary share|called up|equity capital/i.test(name) || (type.includes('equity') && /capital/i.test(name))) {
     return {
-      blynt_code: '850',
+      blynt_code: '8500',
       name: 'Ordinary share capital',
       confidence: 99,
       reason: 'Statutory issued and paid-up share capital equity',
@@ -348,7 +406,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/retained earning|profit and loss account|reserves|dividend|dividends current|dividends b\/f/i.test(name) || type.includes('equity')) {
     return {
-      blynt_code: '890',
+      blynt_code: '8900',
       name: 'Retained earnings',
       confidence: 98,
       reason: 'Accumulated distributable reserves and profit-and-loss equity balance',
@@ -359,7 +417,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   // 8. Cost of Sales & Direct Costs (Lead A: 5000, 5100)
   if (/direct expense|direct cost|cost of sales|cos|material|component|carriage in|production/i.test(name) || /cost of sales|direct cost/i.test(type)) {
     return {
-      blynt_code: '210',
+      blynt_code: '2100',
       name: 'Direct materials and components',
       confidence: 98,
       reason: 'Direct variable materials, production and operational cost of sales',
@@ -371,7 +429,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   // Professional fees & audit/accountancy overheads must match before generic revenue/fees
   if (/depreciation charge|depreciation expense|deprec.*charge|deprec.*expense/i.test(name)) {
     return {
-      blynt_code: '492',
+      blynt_code: '4920',
       name: 'Depreciation charge for year',
       confidence: 99,
       reason: 'P&L tangible asset amortization and depreciation charge',
@@ -380,7 +438,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/loss.*disposal|profit.*disposal|gain.*disposal/i.test(name)) {
     return {
-      blynt_code: '493',
+      blynt_code: '4930',
       name: 'Loss / (profit) on asset disposal',
       confidence: 99,
       reason: 'Net asset retirement and scrap gain/loss on disposals',
@@ -389,7 +447,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/salary|salaries|wage|director.*remun|staff welfare|staff wellfair|staff training|pension|recruitment/i.test(name)) {
     return {
-      blynt_code: '300',
+      blynt_code: '3000',
       name: 'Salaries and wages',
       confidence: 99,
       reason: 'Gross payroll, director emoluments, pension and staff welfare expenses',
@@ -398,7 +456,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/employers national insurance|employers nic|employer nic/i.test(name)) {
     return {
-      blynt_code: '310',
+      blynt_code: '3100',
       name: "Employer's National Insurance",
       confidence: 95,
       reason: 'Employers social security contribution and payroll levy',
@@ -407,7 +465,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   }
   if (/light|heat|power|electricity|gas|utilities|water/i.test(name)) {
     return {
-      blynt_code: '410',
+      blynt_code: '4100',
       name: 'Light, heat and power',
       confidence: 98,
       reason: 'Commercial energy, utilities and facilities consumption',
@@ -415,50 +473,50 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
     };
   }
   if (/bank (charge|fee)/i.test(name)) {
-    return { blynt_code: '490', name: 'Bank charges', confidence: 97, reason: 'Bank charges and card fees', lead_letter: 'E' };
+    return { blynt_code: '4900', name: 'Bank charges', confidence: 97, reason: 'Bank charges and card fees', lead_letter: 'E' };
   }
   if (/interest paid|loan interest/i.test(name)) {
-    return { blynt_code: '510', name: 'Loan interest', confidence: 97, reason: 'Interest payable on borrowings', lead_letter: 'E' };
+    return { blynt_code: '5100', name: 'Loan interest', confidence: 97, reason: 'Interest payable on borrowings', lead_letter: 'E' };
   }
   if (/corporation tax/i.test(name)) {
-    return { blynt_code: '550', name: 'Corporation tax expense', confidence: 97, reason: 'Corporation tax charge for the year', lead_letter: 'E' };
+    return { blynt_code: '5500', name: 'Corporation tax expense', confidence: 97, reason: 'Corporation tax charge for the year', lead_letter: 'E' };
   }
   if (/\brent\b|rates/i.test(name)) {
-    return { blynt_code: '400', name: 'Office rent and rates', confidence: 97, reason: 'Premises rent and business rates', lead_letter: 'E' };
+    return { blynt_code: '4000', name: 'Office rent and rates', confidence: 97, reason: 'Premises rent and business rates', lead_letter: 'E' };
   }
   if (/insurance/i.test(name)) {
-    return { blynt_code: '470', name: 'Insurance', confidence: 97, reason: 'Insurance premiums', lead_letter: 'E' };
+    return { blynt_code: '4700', name: 'Insurance', confidence: 97, reason: 'Insurance premiums', lead_letter: 'E' };
   }
   if (/audit|accountancy/i.test(name)) {
-    return { blynt_code: '481', name: 'Accountancy fees', confidence: 97, reason: 'Audit and accountancy fees', lead_letter: 'E' };
+    return { blynt_code: '4810', name: 'Accountancy fees', confidence: 97, reason: 'Audit and accountancy fees', lead_letter: 'E' };
   }
   if (/legal/i.test(name)) {
-    return { blynt_code: '482', name: 'Legal fees', confidence: 97, reason: 'Legal fees', lead_letter: 'E' };
+    return { blynt_code: '4820', name: 'Legal fees', confidence: 97, reason: 'Legal fees', lead_letter: 'E' };
   }
   if (/professional|consulting/i.test(name)) {
-    return { blynt_code: '480', name: 'Professional fees', confidence: 97, reason: 'Professional and consultancy fees', lead_letter: 'E' };
+    return { blynt_code: '4800', name: 'Professional fees', confidence: 97, reason: 'Professional and consultancy fees', lead_letter: 'E' };
   }
   if (/advertising|marketing/i.test(name)) {
-    return { blynt_code: '440', name: 'Advertising and marketing', confidence: 97, reason: 'Advertising and marketing', lead_letter: 'E' };
+    return { blynt_code: '4400', name: 'Advertising and marketing', confidence: 97, reason: 'Advertising and marketing', lead_letter: 'E' };
   }
   if (/telephone|internet|communication/i.test(name)) {
-    return { blynt_code: '450', name: 'Telephone and internet', confidence: 97, reason: 'Telephone and internet', lead_letter: 'E' };
+    return { blynt_code: '4500', name: 'Telephone and internet', confidence: 97, reason: 'Telephone and internet', lead_letter: 'E' };
   }
   if (/software|subscription|\bit\b/i.test(name)) {
-    return { blynt_code: '460', name: 'Software and subscriptions', confidence: 97, reason: 'Software and subscriptions', lead_letter: 'E' };
+    return { blynt_code: '4600', name: 'Software and subscriptions', confidence: 97, reason: 'Software and subscriptions', lead_letter: 'E' };
   }
   if (/motor|travel/i.test(name)) {
-    return { blynt_code: '430', name: 'Motor and travel expenses', confidence: 97, reason: 'Motor and travel expenses', lead_letter: 'E' };
+    return { blynt_code: '4300', name: 'Motor and travel expenses', confidence: 97, reason: 'Motor and travel expenses', lead_letter: 'E' };
   }
   if (/repair|maintenance|cleaning/i.test(name)) {
-    return { blynt_code: '420', name: 'Repairs and maintenance', confidence: 97, reason: 'Repairs, maintenance and cleaning', lead_letter: 'E' };
+    return { blynt_code: '4200', name: 'Repairs and maintenance', confidence: 97, reason: 'Repairs, maintenance and cleaning', lead_letter: 'E' };
   }
   if (
     /rent|rate|office|marketing|advertising|audit|accountancy|consulting|cleaning|entertainment|general expense|insurance|interest paid|motor vehicle|travel|software|it |consumable|repair|maintenance|subscription|telephone|internet|communication|legal|bank charge|corporation tax/i.test(name) ||
     /overhead|expense/i.test(type)
   ) {
     return {
-      blynt_code: '499',
+      blynt_code: '4990',
       name: 'Other administrative expenses',
       confidence: 98,
       reason: 'Administrative overhead, audit/professional fees, marketing and operating costs',
@@ -475,7 +533,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
   ) {
     if (/interest|finance income/i.test(name)) {
       return {
-        blynt_code: '500',
+        blynt_code: '5000',
         name: 'Interest received',
         confidence: 96,
         reason: 'Secondary and finance operating income category',
@@ -483,7 +541,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
       };
     }
     return {
-      blynt_code: '100',
+      blynt_code: '1000',
       name: 'Sales revenue - UK general',
       confidence: 99,
       reason: 'Primary commercial turnover and trading sales',
@@ -493,7 +551,7 @@ function matchByName(sourceName: string, sourceType: string): MappingSuggestion 
 
   // Fallback: Other administrative expenses (499)
   return {
-    blynt_code: '499',
+    blynt_code: '4990',
     name: 'Other administrative expenses',
     confidence: 60,
     reason: 'General operational overhead classification',

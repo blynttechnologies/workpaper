@@ -249,7 +249,7 @@ export function StockSchedule({ data, result, locked, save, filesFor, attachTo, 
             <tr>
               <td className="p-2" colSpan={8}>
                 Total stock · count at cost <span className="font-mono">{money(tot('counted'))}</span> · write-downs <span className="font-mono">{money(tot('write_downs'))}</span> · closing stock{' '}
-                <span className="font-mono">{money(tot('closing'))}</span> · <span className="font-normal">ledger 700</span> <span className="font-mono">{money(tot('ledger'))}</span>
+                <span className="font-mono">{money(tot('closing'))}</span> · <span className="font-normal">ledger 7000</span> <span className="font-mono">{money(tot('ledger'))}</span>
               </td>
             </tr>
           </tfoot>

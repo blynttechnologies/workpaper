@@ -15,7 +15,7 @@ const field = 'w-full py-1.5 px-2 border border-[#D3DCEE] rounded-lg bg-white te
 export function NewAccountForm({ firmId, clientId, initialName = '', onCreated, onCancel, onUseExisting }: { firmId: string; clientId?: string; initialName?: string; onCreated: (acc: BlyntAccount) => void; onCancel: () => void; onUseExisting?: (code: string) => void }) {
   const recommend = (n: string) => {
     const rec = newAccountBase(n) ?? (n.trim() ? matchBlyntAccount(n)?.blynt_code : null);
-    const cat = (rec && categoryOf(rec)) || CATEGORIES.find((c) => c.other === '499')!;
+    const cat = (rec && categoryOf(rec)) || CATEGORIES.find((c) => c.other === '4990')!;
     return { cat: CATEGORIES.indexOf(cat), base: rec && categoryOf(rec) ? rec : cat.other };
   };
   const first = recommend(initialName);

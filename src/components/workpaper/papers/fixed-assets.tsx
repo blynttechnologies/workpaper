@@ -109,7 +109,7 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                 Build from the trial balance
               </button>
             )}
-            <button type="button" className={btnAdd} onClick={() => save({ assets: [...(live().assets ?? []), { id: newId('fa'), ref: nextRef(), desc: '', class_code: '680', acquired: ctx.periodEnd, cost_p: '0', dep_bf_p: '0', source: 'manual' }] })}>
+            <button type="button" className={btnAdd} onClick={() => save({ assets: [...(live().assets ?? []), { id: newId('fa'), ref: nextRef(), desc: '', class_code: '6800', acquired: ctx.periodEnd, cost_p: '0', dep_bf_p: '0', source: 'manual' }] })}>
               <Plus className="w-3.5 h-3.5" /> Add asset
             </button>
             {r.rows.length > 0 && (
@@ -425,7 +425,7 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
           locked={locked}
           save={save}
           title="Year-end journals"
-          note="Sale proceeds stay where they were posted; an asset sale moved out of turnover on the Revenue paper is credited to 493 there."
+          note="Sale proceeds stay where they were posted; an asset sale moved out of turnover on the Revenue paper is credited to 4930 there."
         />
         <AccountsPreview
           rows={[

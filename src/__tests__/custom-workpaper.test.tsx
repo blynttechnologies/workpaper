@@ -14,7 +14,7 @@ const fresh = () => {
   db.seed(true);
   return db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
 };
-const lines = (ref = 'X-01') => customTemplate(ref, { title: ' Livestock valuation ', kind: 'lines', leads: [{ code: '700', label: 'Inventory' }], creditArea: false, questions: [] });
+const lines = (ref = 'X-01') => customTemplate(ref, { title: ' Livestock valuation ', kind: 'lines', leads: [{ code: '7000', label: 'Inventory' }], creditArea: false, questions: [] });
 
 describe('custom working papers', () => {
   it('gives the next free reference', () => {

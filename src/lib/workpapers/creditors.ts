@@ -77,7 +77,7 @@ export function supplierView(s: Supplier) {
 
 /** Suppliers from the creditors control account at the period end; decisions already made are kept. */
 export function suppliersFromLedger(engagementId: string, periodEnd: string, windowDays: number, existing: Supplier[] = []): Supplier[] | null {
-  const tx = ledgerFor(engagementId, ['750']);
+  const tx = ledgerFor(engagementId, ['7500']);
   if (!tx.length) return null;
   const until = addDays(periodEnd, windowDays);
   const out: Supplier[] = [];
@@ -115,25 +115,25 @@ export function searchAfterDate(engagementId: string, periodEnd: string, windowD
     .map((t) => {
       const id = `srch_${t.id}`;
       const prev = existing.find((x) => x.id === id);
-      return { id, date: t.date, contact: t.contact, desc: t.description, amount_p: t.amount_p, code: chartCodeOf(engagementId, t.account_code) ?? '499', ...(t.external_url ? { url: t.external_url } : {}), ...(prev?.decision ? { decision: prev.decision } : {}) };
+      return { id, date: t.date, contact: t.contact, desc: t.description, amount_p: t.amount_p, code: chartCodeOf(engagementId, t.account_code) ?? '4990', ...(t.external_url ? { url: t.external_url } : {}), ...(prev?.decision ? { decision: prev.decision } : {}) };
     });
 }
 
 export function creditorsJournal(data: Record<string, any>): JLine[] {
   const lines: JLine[] = [];
   for (const v of ((data.suppliers ?? []) as Supplier[]).map(supplierView)) {
-    if (v.s.decision === 'debtors' && v.debit) lines.push(...pair('720', '750', -v.ledger, `${v.s.name}: debit balance to other debtors`));
+    if (v.s.decision === 'debtors' && v.debit) lines.push(...pair('7200', '7500', -v.ledger, `${v.s.name}: debit balance to other debtors`));
     if (v.s.decision === 'missing_invoice' && v.diff && v.diff > 0n) {
       const vat = asPence(v.s.vat_p);
       const net = v.diff - vat;
-      lines.push({ code: v.s.expense_code || '499', debit: net, credit: 0n, narrative: `${v.s.name}: invoice missing from the ledger` });
-      if (vat > 0n) lines.push({ code: '780', debit: vat, credit: 0n, narrative: `${v.s.name}: VAT on missing invoice` });
-      lines.push({ code: '750', debit: 0n, credit: v.diff, narrative: `${v.s.name}: invoice missing from the ledger` });
+      lines.push({ code: v.s.expense_code || '4990', debit: net, credit: 0n, narrative: `${v.s.name}: invoice missing from the ledger` });
+      if (vat > 0n) lines.push({ code: '7800', debit: vat, credit: 0n, narrative: `${v.s.name}: VAT on missing invoice` });
+      lines.push({ code: '7500', debit: 0n, credit: v.diff, narrative: `${v.s.name}: invoice missing from the ledger` });
     }
   }
   for (const i of (data.search?.items ?? []) as SearchItem[]) {
-    if (i.decision === 'accrue') lines.push(...pair(i.code, '760', asPence(i.amount_p), `${i.contact || i.desc}: accrued, paid ${i.date}`));
-    if (i.decision === 'creditor') lines.push(...pair(i.code, '750', asPence(i.amount_p), `${i.contact || i.desc}: invoice for this year posted after the period end`));
+    if (i.decision === 'accrue') lines.push(...pair(i.code, '7600', asPence(i.amount_p), `${i.contact || i.desc}: accrued, paid ${i.date}`));
+    if (i.decision === 'creditor') lines.push(...pair(i.code, '7500', asPence(i.amount_p), `${i.contact || i.desc}: invoice for this year posted after the period end`));
   }
   return lines;
 }
@@ -141,8 +141,8 @@ export function creditorsJournal(data: Record<string, any>): JLine[] {
 export function reviewCreditors(ctx: PaperContext): string {
   const { data, totals, checks, anchors } = ctx;
   const views = ((data.suppliers ?? []) as Supplier[]).map(supplierView);
-  const control = -ctx.tb('750').draft; // owed, before our journals
-  const mapped = ctx.tb('750').mapped;
+  const control = -ctx.tb('7500').draft; // owed, before our journals
+  const mapped = ctx.tb('7500').mapped;
   const aged = views.reduce((acc, v) => acc + v.ledger, 0n);
   const owedViews = views.filter((v) => v.ledger > 0n);
   const owed = owedViews.reduce((acc, v) => acc + v.ledger, 0n);
@@ -150,7 +150,7 @@ export function reviewCreditors(ctx: PaperContext): string {
   const items: SearchItem[] = data.search?.items ?? [];
   const found = items.filter((i) => i.decision === 'accrue' || i.decision === 'creditor').reduce((acc, i) => acc + asPence(i.amount_p), 0n);
   const lines = creditorsJournal(data);
-  const toCreditors = lines.filter((l) => l.code === '750').reduce((acc, l) => acc + l.credit - l.debit, 0n);
+  const toCreditors = lines.filter((l) => l.code === '7500').reduce((acc, l) => acc + l.credit - l.debit, 0n);
   Object.assign(totals, {
     control,
     aged,
@@ -165,8 +165,8 @@ export function reviewCreditors(ctx: PaperContext): string {
 
   checks.push({
     id: 'control_tb',
-    label: 'Aged creditors agree to TB 750',
-    detail: !mapped ? 'No confirmed trial balance mapping for trade creditors yet.' : `Aged creditors ${formatPence(aged)} · TB 750 ${formatPence(control)} · difference ${formatPence(aged - control)}`,
+    label: 'Aged creditors agree to TB 7500',
+    detail: !mapped ? 'No confirmed trial balance mapping for trade creditors yet.' : `Aged creditors ${formatPence(aged)} · TB 7500 ${formatPence(control)} · difference ${formatPence(aged - control)}`,
     passed: mapped && aged === control,
   });
   const diffs = views.filter((v) => v.diff !== null && v.diff !== 0n && !v.debit);

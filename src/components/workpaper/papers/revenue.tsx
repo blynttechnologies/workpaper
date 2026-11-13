@@ -21,7 +21,7 @@ export function RevenueSchedule({ data, result, locked, save, live }: SchedulePr
   const r = revenueReview(ctx);
   const sales = salesByMonth(ctx);
   const comments: Record<string, string> = data.comments ?? {};
-  const toCodes = db.blynt_accounts.filter((a) => ['140', '493', '798', '770', '880'].includes(a.code)).map((a) => ({ code: a.code, name: a.name }));
+  const toCodes = db.blynt_accounts.filter((a) => ['1400', '4930', '7980', '7700', '8800'].includes(a.code)).map((a) => ({ code: a.code, name: a.name }));
   const setDecision = (id: string, patch: Record<string, any> | undefined) => save({ nontrading: { ...(live().nontrading ?? {}), [id]: patch ? { ...(live().nontrading?.[id] ?? {}), ...patch } : undefined } });
   const setCut = (id: string, decision: CutoffItem['decision']) => save({ cutoff: { ...(live().cutoff ?? {}), items: (live().cutoff?.items ?? []).map((i: CutoffItem) => (i.id === id ? { ...i, decision } : i)) } });
   const scanCutoff = () => save({ cutoff: { ...(live().cutoff ?? {}), items: cutoffWindow(ctx, live().cutoff?.items ?? []), scanned_at: new Date().toISOString() } });
@@ -132,7 +132,7 @@ export function RevenueSchedule({ data, result, locked, save, live }: SchedulePr
                         )
                       }
                     >
-                      {formatPence(n.amount)} on {ukDate(n.date)} from {n.contact || 'an unnamed payer'} ({n.desc}) is in {chartName(n.code)}, but reads like {n.to === '493' ? 'the sale of an asset, which belongs on the Fixed assets paper' : n.to === '798' ? 'money from a director, not a sale' : 'other income, not turnover'}.
+                      {formatPence(n.amount)} on {ukDate(n.date)} from {n.contact || 'an unnamed payer'} ({n.desc}) is in {chartName(n.code)}, but reads like {n.to === '4930' ? 'the sale of an asset, which belongs on the Fixed assets paper' : n.to === '7980' ? 'money from a director, not a sale' : 'other income, not turnover'}.
                     </SuggestionRow>
                   )}
                 </td>

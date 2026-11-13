@@ -15,17 +15,17 @@ export function reservesReview(ctx: PaperContext) {
   const e10 = db.workpapers.find((w) => w.engagement_id === ctx.engagementId && w.ref === 'E-10');
   const eq = equityReview({ ...ctx, data: e10?.data_json ?? {} });
   const signed = ctx.priorId ? eq.bf : null;
-  // Retained earnings in the TB at the start of the year: the year's own postings to 890 taken out
-  const postedThisYear = ledgerFor(ctx.engagementId, ['890'])
+  // Retained earnings in the TB at the start of the year: the year's own postings to 8900 taken out
+  const postedThisYear = ledgerFor(ctx.engagementId, ['8900'])
     .filter((t) => t.date >= ctx.periodStart && t.date <= ctx.periodEnd)
     .reduce((a, t) => a + asPence(t.amount_p), 0n);
-  const tbOpening = -(ctx.tb('890').draft - postedThisYear);
+  const tbOpening = -(ctx.tb('8900').draft - postedThisYear);
   const difference = signed === null ? 0n : tbOpening - signed;
   const pbt = eq.pbt > 0n ? eq.pbt : -eq.pbt;
   const small = difference === 0n || (pbt > 0n && (difference < 0n ? -difference : difference) * 20n <= pbt);
   const decision: 'this_year' | 'prior_year' | undefined = data.decision;
-  const code: string = data.code ?? '499';
-  const lines: JLine[] = decision === 'this_year' && difference ? pair('890', code, difference, 'Posted into last year after its accounts were finalised; taken into this year') : [];
+  const code: string = data.code ?? '4990';
+  const lines: JLine[] = decision === 'this_year' && difference ? pair('8900', code, difference, 'Posted into last year after its accounts were finalised; taken into this year') : [];
   const pya = decision === 'prior_year' ? difference : 0n;
   const opening = signed ?? tbOpening;
   const closing = opening + pya + eq.pat - eq.total;

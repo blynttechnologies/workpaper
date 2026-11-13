@@ -209,7 +209,7 @@ describe('Step 3 · A late posting is detected on refresh', () => {
 
 describe('Step 4 · Account mapping, confidence gate and rules library', () => {
   it('a subcontract cost is cost of sales, not a suspense account ("contra" inside "Subcontract")', () => {
-    const s = getStatutoryDetails('230', 'Direct Subcontract Wages', 'Cost of Sales');
+    const s = getStatutoryDetails('2300', 'Direct Subcontract Wages', 'Cost of Sales');
     expect(s.statutory_line).toBe('Cost of sales');
     expect(s.schedule_ref).not.toBe('REC-16');
     // A real contra or suspense account still goes to REC-16
@@ -222,9 +222,9 @@ describe('Step 4 · Account mapping, confidence gate and rules library', () => {
     expect(pl.length).toBeGreaterThan(0);
     for (const a of pl) expect(getStatutoryDetails(a.code, a.name, a.type).schedule_ref).not.toBe('REC-01');
     // P&L lines that do have a supporting schedule keep it
-    expect(getStatutoryDetails('300', 'Staff Salaries', 'Overhead').schedule_ref).toBe('REC-05'); // payroll
-    expect(getStatutoryDetails('492', 'Depreciation Charge for Year', 'Overhead').schedule_ref).toBe('REC-03'); // fixed assets
-    expect(getStatutoryDetails('493', 'Loss / (Profit) on Disposal of Assets', 'Overhead').schedule_ref).toBe('REC-03');
+    expect(getStatutoryDetails('3000', 'Staff Salaries', 'Overhead').schedule_ref).toBe('REC-05'); // payroll
+    expect(getStatutoryDetails('4920', 'Depreciation Charge for Year', 'Overhead').schedule_ref).toBe('REC-03'); // fixed assets
+    expect(getStatutoryDetails('4930', 'Loss / (Profit) on Disposal of Assets', 'Overhead').schedule_ref).toBe('REC-03');
     expect(getStatutoryDetails(null, 'Mystery balance', 'Other').schedule_ref).not.toBe('REC-01');
   });
 
@@ -233,17 +233,17 @@ describe('Step 4 · Account mapping, confidence gate and rules library', () => {
     expect(fees.lead_letter).not.toBe('B');
     expect(fees.blynt_code).toMatch(/^4/); // an overhead, not cash at bank
     // A real bank account is still cash at bank
-    expect(matchBlyntAccount('Business Bank Account', 'Bank', '090')).toMatchObject({ blynt_code: '600', lead_letter: 'B' });
+    expect(matchBlyntAccount('Business Bank Account', 'Bank', '090')).toMatchObject({ blynt_code: '6000', lead_letter: 'B' });
   });
 
   it('a client code that clashes with the Blynt chart does not override a clear account name', () => {
     // 710 is Trade receivables in the Blynt chart; the name says bank
-    const bank = matchBlyntAccount('Business Current Account', 'Bank', '710')!;
+    const bank = matchBlyntAccount('Business Current Account', 'Bank', '7100')!;
     expect(bank.lead_letter).toBe('B');
     // The code number never decides: no 100% from a coincidental code, and no clue in the name means Check
-    expect(matchBlyntAccount('Sales Ledger Control', 'Current Asset', '710')!.confidence).toBeLessThan(100);
-    expect(matchBlyntAccount('Sales', 'Revenue', '200')).toMatchObject({ blynt_code: '100' });
-    expect(matchBlyntAccount('Account XJ-9', '', '710')!.confidence).toBeLessThan(90);
+    expect(matchBlyntAccount('Sales Ledger Control', 'Current Asset', '7100')!.confidence).toBeLessThan(100);
+    expect(matchBlyntAccount('Sales', 'Revenue', '2000')).toMatchObject({ blynt_code: '1000' });
+    expect(matchBlyntAccount('Account XJ-9', '', '7100')!.confidence).toBeLessThan(90);
   });
 
   const eng = 'eng_harlow_fy26';
@@ -254,9 +254,9 @@ describe('Step 4 · Account mapping, confidence gate and rules library', () => {
     db.account_mappings.push(m);
     expect(m.status).not.toBe('confirmed');
 
-    services.updateMapping(FIRM, admin, 'm1', '400');
+    services.updateMapping(FIRM, admin, 'm1', '4000');
     const next = services.buildMapping(FIRM, eng, 'm2', line, 1000n);
-    expect(next).toMatchObject({ blynt_code: '400', status: 'confirmed', method: 'rule', gate: 'ready' });
+    expect(next).toMatchObject({ blynt_code: '4000', status: 'confirmed', method: 'rule', gate: 'ready' });
 
     // The client rule does not leak to another client
     const other = services.buildMapping(FIRM, 'eng_acme_fy26', 'm3', line, 1000n);
@@ -271,7 +271,7 @@ describe('Step 4 · Account mapping, confidence gate and rules library', () => {
     expect(a.method).toBe('ai');
     expect(b.method).toBe('ai');
     services.confirmSelectedMappings(FIRM, admin, eng, ['a1']); // accepted as suggested
-    services.updateMapping(FIRM, admin, 'b1', '400'); // edited
+    services.updateMapping(FIRM, admin, 'b1', '4000'); // edited
     const acc = accuracy(FIRM, 'mapping', eng);
     expect(acc).toMatchObject({ decided: 2, accepted_unchanged: 1, edited: 1, rate: 50 });
   });
@@ -297,7 +297,7 @@ describe('Step 4 · Account mapping, confidence gate and rules library', () => {
 
   it('practice rules from a preparer wait for manager approval', () => {
     const preparer: Actor = { id: 'usr_test_preparer', name: 'P', role: 'preparer', firmId: FIRM };
-    const r = learnFromCorrection(preparer, { type: 'mapping', scope: 'practice', pattern: '*widgets*', target_value: '210' });
+    const r = learnFromCorrection(preparer, { type: 'mapping', scope: 'practice', pattern: '*widgets*', target_value: '2100' });
     expect(r.active).toBe(false);
     expect(services.buildMapping(FIRM, eng, 'w1', { code: '8888', name: 'Blue Widgets', type: 'Other' }, 1n).method).not.toBe('rule');
   });

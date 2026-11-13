@@ -31,7 +31,7 @@ const plCodes = () => db.blynt_accounts.filter((a) => PL_TYPES.includes(a.type))
 /** Profit before tax for an engagement from the trial balance (credit-positive), excluding the tax charge. */
 export function profitBeforeTax(ctx: Pick<PaperContext, 'tb'>, engagementId: string) {
   return -plCodes()
-    .filter((c) => c !== '550' && c !== '560')
+    .filter((c) => c !== '5500' && c !== '5600')
     .reduce((a, c) => a + ctx.tb(c, engagementId).final, 0n);
 }
 
@@ -45,7 +45,7 @@ const taxOn = (profit: bigint, ratePct: number) => (profit > 0n ? (profit * BigI
 /** Profit before tax from the start of the year to a date, from the ledger; pro rata by days when the ledger has no P&L detail. */
 function profitTo(ctx: PaperContext, date: string, yearProfit: bigint) {
   const tx = db.transactions.filter((t) => t.engagement_id === ctx.engagementId && t.date >= ctx.periodStart && t.date <= ctx.periodEnd);
-  const pl = new Set(plCodes().filter((c) => c !== '550' && c !== '560'));
+  const pl = new Set(plCodes().filter((c) => c !== '5500' && c !== '5600'));
   const plTx = tx.filter((t) => pl.has(chartCodeOf(ctx.engagementId, t.account_code) ?? ''));
   if (plTx.length) return { profit: -plTx.filter((t) => t.date <= date).reduce((a, t) => a + asPence(t.amount_p), 0n), source: 'ledger' as const };
   const days = daysBetween(ctx.periodStart, ctx.periodEnd) + 1;
@@ -60,12 +60,12 @@ export function equityReview(ctx: PaperContext) {
   const dividends = ((data.dividends ?? []) as Dividend[]).slice().sort((a, b) => a.date.localeCompare(b.date));
   const capital = classes.reduce((a, c) => a + BigInt(Math.round(Number(c.shares) || 0)) * asPence(c.nominal_p), 0n);
   const shares = classes.reduce((a, c) => a + BigInt(Math.round(Number(c.shares) || 0)), 0n);
-  const capitalTb = -(ctx.tb('850').draft + ctx.tb('860').draft);
+  const capitalTb = -(ctx.tb('8500').draft + ctx.tb('8600').draft);
   const pbt = profitBeforeTax(ctx, ctx.engagementId);
-  const taxPosted = ctx.tb('550').final;
+  const taxPosted = ctx.tb('5500').final;
   const tax = taxPosted !== 0n ? taxPosted : taxOn(pbt, rate);
   const pat = pbt - tax;
-  const bf = data.bf_p != null && data.bf_p !== '' ? asPence(data.bf_p) : ctx.priorId ? reservesPerTb(ctx, ctx.priorId) : -ctx.tb('890').draft;
+  const bf = data.bf_p != null && data.bf_p !== '' ? asPence(data.bf_p) : ctx.priorId ? reservesPerTb(ctx, ctx.priorId) : -ctx.tb('8900').draft;
   const bfSource = data.bf_p != null && data.bf_p !== '' ? 'entered' : ctx.priorId ? "last year's accounts" : 'retained earnings in the TB';
   let paid = 0n;
   const tested = dividends.map((d) => {
@@ -102,12 +102,12 @@ export function reviewEquity(ctx: PaperContext): string {
   });
   r.tested.forEach((t) => anchors.push({ id: t.d.id, label: `Dividend ${t.d.date}` }));
 
-  const mapped = ctx.tb('850').mapped || ctx.tb('89').mapped;
+  const mapped = ctx.tb('8500').mapped || ctx.tb('89').mapped;
   checks.push({ id: 'mapped', label: 'Accounts mapped', detail: mapped ? 'Share capital and reserves in the trial balance feed this paper.' : 'Map the client’s share capital and reserves accounts.', passed: mapped });
   checks.push({
     id: 'capital_tb',
     label: 'Share capital agrees to TB',
-    detail: `Classes ${formatPence(r.capital)} · TB 850 and 860 ${formatPence(r.capitalTb)} · difference ${formatPence(r.capital - r.capitalTb)}`,
+    detail: `Classes ${formatPence(r.capital)} · TB 8500 and 8600 ${formatPence(r.capitalTb)} · difference ${formatPence(r.capital - r.capitalTb)}`,
     passed: r.classes.length > 0 && r.capital === r.capitalTb,
   });
   checks.push({

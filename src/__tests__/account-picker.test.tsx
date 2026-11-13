@@ -7,7 +7,7 @@ beforeAll(() => {
 });
 afterEach(cleanup);
 
-const setup = (value = '200') => {
+const setup = (value = '2000') => {
   const onPick = vi.fn();
   render(<AccountPicker value={value} label="Account" firmId="firm_blynt_uk" onPick={onPick} />);
   const input = screen.getByRole('combobox', { name: 'Account' }) as HTMLInputElement;
@@ -17,12 +17,12 @@ const setup = (value = '200') => {
 describe('account selection menu', () => {
   it('shows the current account closed, and the whole chart grouped by category when opened', () => {
     const { input } = setup();
-    expect(input.value).toBe('200 Purchases');
+    expect(input.value).toBe('2000 Purchases');
     expect(screen.queryByRole('listbox')).toBeNull();
 
     fireEvent.click(input);
     const list = screen.getByRole('listbox');
-    expect(within(list).getAllByRole('option').length).toBeGreaterThanOrEqual(96); // not just the current account
+    expect(within(list).getAllByRole('option').length).toBeGreaterThanOrEqual(302); // not just the current account
     expect(within(list).getByRole('group', { name: 'Revenue' })).toBeTruthy();
     expect(within(list).getByRole('group', { name: 'Bank and cash' })).toBeTruthy();
     expect(within(list).getByRole('option', { selected: true }).textContent).toContain('Purchases');
@@ -34,18 +34,18 @@ describe('account selection menu', () => {
     fireEvent.change(input, { target: { value: 'legal fe' } });
     const options = within(screen.getByRole('listbox')).getAllByRole('option');
     expect(options).toHaveLength(1);
-    expect(options[0].textContent).toContain('482');
+    expect(options[0].textContent).toContain('4820');
     fireEvent.click(options[0]);
-    expect(onPick).toHaveBeenCalledWith('482');
+    expect(onPick).toHaveBeenCalledWith('4820');
     expect(screen.queryByRole('listbox')).toBeNull();
   });
 
   it('works from the keyboard, and picking the same account changes nothing', () => {
-    const { input, onPick } = setup('100');
+    const { input, onPick } = setup('1000');
     fireEvent.keyDown(input, { key: 'ArrowDown' }); // opens on the current account
-    fireEvent.keyDown(input, { key: 'ArrowDown' }); // next: 110
+    fireEvent.keyDown(input, { key: 'ArrowDown' }); // next: 1020 Sales to EU customers
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onPick).toHaveBeenCalledWith('110');
+    expect(onPick).toHaveBeenCalledWith('1020');
 
     onPick.mockClear();
     fireEvent.click(input);
@@ -60,18 +60,18 @@ describe('account selection menu', () => {
     expect(screen.getByRole('button', { name: /Create .zzz nothing/ })).toBeTruthy();
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(screen.queryByRole('listbox')).toBeNull();
-    expect(input.value).toBe('200 Purchases');
+    expect(input.value).toBe('2000 Purchases');
     expect(onPick).not.toHaveBeenCalled();
   });
 
   it('pre-fills the ledger name and can use a similar existing account instead', () => {
     const onPick = vi.fn();
-    render(<AccountPicker value="100" label="Account" firmId="firm_blynt_uk" suggestName="Repairs" onPick={onPick} />);
+    render(<AccountPicker value="1000" label="Account" firmId="firm_blynt_uk" suggestName="Repairs" onPick={onPick} />);
     fireEvent.click(screen.getByRole('button', { name: 'Create a new account' }));
     const dialog = screen.getByRole('dialog', { name: 'New account' });
     expect((within(dialog).getByPlaceholderText('e.g. Website hosting') as HTMLInputElement).value).toBe('Repairs');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Use 420 Repairs and maintenance' }));
-    expect(onPick).toHaveBeenCalledWith('420');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Use 4200 Repairs and maintenance' }));
+    expect(onPick).toHaveBeenCalledWith('4200');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

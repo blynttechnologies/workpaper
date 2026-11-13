@@ -417,7 +417,7 @@ export class InvoicePlatformIntegration {
 
     // Propose reclassification journal (JNL-02)
     // DR Fixed asset cost (e.g. 680), CR Expense account (tx.account_code)
-    const targetAssetCode = targetAssetClassId === 'c2' ? '690' : '680';
+    const targetAssetCode = targetAssetClassId === 'c2' ? '6900' : '6800';
     const jnlId = `adj_reclass_${Date.now()}`;
     const nextRef = `AJE-00${db.adjustments.filter((a) => a.engagement_id === engagementId).length + 1}`;
 
@@ -476,7 +476,7 @@ export class InvoicePlatformIntegration {
   ): BankFeedResponse {
     // Simulated Open Banking feed from invoice platform
     return {
-      bank_account_code: '600',
+      bank_account_code: '6000',
       account_name: 'Barclays Operating Current',
       sort_code: '20-45-78',
       account_number: '98451230',

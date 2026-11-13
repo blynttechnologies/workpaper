@@ -461,7 +461,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         source_name: 'Corporation Tax Liability',
         source_type: 'Current Liability',
         balance_p: '-1420000',
-        blynt_code: '795',
+        blynt_code: '7950',
         status: 'confirmed',
         confidence: 100,
         method: 'rule',
@@ -489,7 +489,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         source_name: 'Deferred Tax Provision',
         source_type: 'Provision',
         balance_p: '-1500000',
-        blynt_code: '840',
+        blynt_code: '8400',
         status: 'confirmed',
         confidence: 100,
         method: 'rule',
@@ -595,7 +595,7 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
       expect(candidates.length).toBeGreaterThan(0);
       const laptop = candidates.find((c) => c.description.toLowerCase().includes('macbook'));
       expect(laptop).toBeDefined();
-      expect(laptop?.account_code).toBe('420'); // Office & IT Consumables
+      expect(laptop?.account_code).toBe('4200'); // Office & IT Consumables
 
       // Capitalise expense transaction proposes reclassification journal
       const reclass = services.capitaliseExpenseItem(

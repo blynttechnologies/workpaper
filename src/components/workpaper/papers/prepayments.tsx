@@ -56,7 +56,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
           { label: 'Costs scanned', value: data.scan ? String(data.scan.scanned) : '–', sub: data.scan ? `${pending.length} to decide · ${data.scan.small} under ${formatPence(minimum)} left out` : 'search the ledger below' },
           {
             label: "Last year's prepayments",
-            value: ly.reversed || tot('tb_draft') === 0n ? 'Released' : 'Still in 730',
+            value: ly.reversed || tot('tb_draft') === 0n ? 'Released' : 'Still in 7300',
             tone: ly.reversed || tot('tb_draft') === 0n ? 'good' : 'warn',
             sub: ly.reversed ? `${formatPence(ly.total)} reversed on ${ukDate(eng?.period_start ?? '')}` : `${formatPence(tot('tb_draft'))} in the TB before adjustments`,
           },

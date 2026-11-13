@@ -17,8 +17,8 @@ beforeEach(() => {
   );
   // A balanced TB each year: sales 100,000 cr · materials 40,000 dr · cash · trade creditors · capital
   db.account_mappings.push(
-    map(ENG, '100', -10000000), map(ENG, '200', 4000000), map(ENG, '600', 7000000), map(ENG, '750', -900000), map(ENG, '850', -100000),
-    map(PRIOR, '100', -8000000), map(PRIOR, '200', 3000000), map(PRIOR, '600', 5200000), map(PRIOR, '750', -100000), map(PRIOR, '850', -100000)
+    map(ENG, '1000', -10000000), map(ENG, '2000', 4000000), map(ENG, '6000', 7000000), map(ENG, '7500', -900000), map(ENG, '8500', -100000),
+    map(PRIOR, '1000', -8000000), map(PRIOR, '2000', 3000000), map(PRIOR, '6000', 5200000), map(PRIOR, '7500', -100000), map(PRIOR, '8500', -100000)
   );
 });
 
@@ -32,7 +32,7 @@ describe('balance sheet analysis (Z-40)', () => {
     const r = bsAnalysis(paperContext(wp));
     expect(r.balances).toBe(true);
     expect(r.a.netAssets.amount).toBe(6100000n); // cash 70,000 less creditors 9,000
-    const cash = r.rows.find((x) => x.codes.includes('600'))!;
+    const cash = r.rows.find((x) => x.codes.includes('6000'))!;
     expect(cash.schedules.find((s) => s.ref === 'B-10')?.wpId).toBeTruthy();
     expect(cash).toMatchObject({ prior: 5200000n, change: 1800000n, material: true });
     expect(r.ratios.now.creditorDays).toBeCloseTo((9000 / 40000) * 365, 5);

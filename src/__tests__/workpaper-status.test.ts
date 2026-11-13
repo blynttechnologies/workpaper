@@ -57,7 +57,7 @@ describe('status engine (WPS-04)', () => {
     expect(paperStatus(wp)).toBe('reconciled');
     expect(evaluatePaper(wp)!.checks.find((c) => c.id === 'differences')!.passed).toBe(true);
     // Two accounts out by opposite amounts never cancel each other out
-    const two = [...wp.data_json.accounts, { id: 'x', code: '649', name: 'Other', statement_p: '1000', less: [], add: [] }];
+    const two = [...wp.data_json.accounts, { id: 'x', code: '6490', name: 'Other', statement_p: '1000', less: [], add: [] }];
     two[0] = { ...two[0], statement_p: (BigInt(two[0].statement_p) - 1000n).toString() };
     wp.data_json = { ...wp.data_json, accounts: two };
     const out = evaluatePaper(wp)!;

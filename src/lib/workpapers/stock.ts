@@ -60,7 +60,7 @@ function margin(ctx: PaperContext, engagementId: string, stockAdjustment: bigint
 }
 
 export function stockJournal(closing: bigint, ledger: bigint): JLine[] {
-  return pair('700', '250', closing - ledger, 'Closing stock: count less write-downs, against the ledger');
+  return pair('7000', '2500', closing - ledger, 'Closing stock: count less write-downs, against the ledger');
 }
 
 export function reviewStock(ctx: PaperContext): string {
@@ -69,7 +69,7 @@ export function reviewStock(ctx: PaperContext): string {
   const counted = views.reduce((a, v) => a + v.counted, 0n);
   const writeDowns = views.reduce((a, v) => a + v.revaluation + v.writeDown, 0n);
   const closing = counted - writeDowns;
-  const tb = ctx.tb('700');
+  const tb = ctx.tb('7000');
   const ledger = tb.final;
   const lines = stockJournal(closing, ledger);
   const before = margin(ctx, ctx.engagementId, 0n);
@@ -119,7 +119,7 @@ export function reviewStock(ctx: PaperContext): string {
   checks.push({
     id: 'agrees_ledger',
     label: 'Closing stock agrees to ledger',
-    detail: closing === ledger ? `Closing stock ${formatPence(closing)} agrees to 700.` : sent.passed ? `The closing stock journal (${data.journal.ref}) brings 700 to ${formatPence(closing)} once it is accepted.` : `Closing stock ${formatPence(closing)} · ledger 700 ${formatPence(ledger)}. Send the closing stock journal.`,
+    detail: closing === ledger ? `Closing stock ${formatPence(closing)} agrees to 7000.` : sent.passed ? `The closing stock journal (${data.journal.ref}) brings 7000 to ${formatPence(closing)} once it is accepted.` : `Closing stock ${formatPence(closing)} · ledger 7000 ${formatPence(ledger)}. Send the closing stock journal.`,
     passed: closing === ledger || (sent.passed && lines.length > 0),
   });
   if (after.pct !== null && prior?.pct != null) {
