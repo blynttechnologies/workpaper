@@ -7,8 +7,8 @@ import { ukDate } from '@/lib/dates';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, contextOf, JournalPanel, money, newId, Pill, SuggestBanner, SuggestionRow, th, Tiles } from '../kit';
-import { addDays, chartName } from '@/lib/workpapers/common';
-import { ASSET_CLASSES, bringForward, findCapitalCosts, policyText, registerReview, salesFromRevenue, type Asset, type Candidate, type ClassCode } from '@/lib/workpapers/fixed-assets';
+import { chartName } from '@/lib/workpapers/common';
+import { ASSET_CLASSES, bringForward, findCapitalCosts, fromLedger, policyText, registerReview, salesFromRevenue, type Asset, type Candidate, type ClassCode } from '@/lib/workpapers/fixed-assets';
 
 export function FixedAssetsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const [view, setView] = useState<'summary' | 'register'>('summary');
@@ -39,19 +39,16 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
     save({ assets: [...b, ...(live().assets ?? []).filter((a: Asset) => a.source !== 'opening')] });
     setNote(`${b.length} asset${b.length === 1 ? '' : 's'} brought forward from last year.`);
   };
-  const fromTb = () => {
-    const opening = ASSET_CLASSES.filter((c) => ctx.tb(c.code).draft !== 0n).map((c, i) => ({
-      id: newId('fa'),
-      ref: `FA${String(i + 1).padStart(3, '0')}`,
-      desc: `${c.name} brought forward`,
-      class_code: c.code,
-      acquired: addDays(ctx.periodStart, -1),
-      cost_p: (ctx.priorId ? ctx.tb(c.code, ctx.priorId).final : ctx.tb(c.code).draft).toString(),
-      dep_bf_p: (-(ctx.priorId ? ctx.tb(c.dep, ctx.priorId).final : ctx.tb(c.dep).draft)).toString(),
-      source: 'opening' as const,
-    }));
-    save({ assets: opening });
-    setNote(`One opening line per class from the ${ctx.priorId ? "last year's" : ''} trial balance. Split them into individual assets when you can.`);
+  // Pull the register from Xero or QuickBooks; blank lines added by hand are replaced
+  const pull = () => {
+    const kept = (live().assets ?? []).filter((a: Asset) => a.desc.trim() || asPence(a.cost_p) !== 0n);
+    const { assets, credits } = fromLedger(ctx, kept);
+    const next = [...kept, ...assets.map((a, i) => ({ ...a, id: newId('fa'), ref: `FA${String(kept.length + i + 1).padStart(3, '0')}` }))];
+    save({ assets: next });
+    setNote(
+      `${assets.length ? `${assets.length} line${assets.length === 1 ? '' : 's'} pulled from the ledger` : 'Nothing new in the ledger'}.` +
+        (credits.length ? ` ${credits.length} credit${credits.length === 1 ? '' : 's'} to asset accounts (${credits.map((c) => `${c.desc} ${formatPence(c.amount)}`).join(', ')}) look like disposals: set the date sold on the asset.` : ''),
+    );
   };
   const recordSale = (s: (typeof sales)[number], assetId: string) => setAsset(assetId, { disposed: s.date, proceeds_p: s.amount.toString(), from_tx: s.id });
   const exportCsv = () => {
@@ -104,11 +101,9 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                 <RefreshCw className="w-3.5 h-3.5" /> Bring forward last year&apos;s register
               </button>
             )}
-            {!r.rows.length && (
-              <button type="button" className={btnAdd} onClick={fromTb}>
-                Build from the trial balance
-              </button>
-            )}
+            <button type="button" className={btnAdd} onClick={pull}>
+              <RefreshCw className="w-3.5 h-3.5" /> Pull from the ledger
+            </button>
             <button type="button" className={btnAdd} onClick={() => save({ assets: [...(live().assets ?? []), { id: newId('fa'), ref: nextRef(), desc: '', class_code: '6800', acquired: ctx.periodEnd, cost_p: '0', dep_bf_p: '0', source: 'manual' }] })}>
               <Plus className="w-3.5 h-3.5" /> Add asset
             </button>

@@ -33,6 +33,28 @@ export function groupOf(desc: string, amount: bigint): Group {
 export interface DlaDirector {
   id: string;
   name: string;
+  /** The client's ledger account that is this director's loan account, when each director has their own */
+  account?: string;
+  /** Brought forward typed in, for a director sharing a loan account with others */
+  bf_p?: string;
+}
+
+/** The client's accounts mapped to directors' loans. */
+export const dlaAccounts = (engagementId: string) => db.account_mappings.filter((m) => m.engagement_id === engagementId && (m.blynt_code?.startsWith('7400') || m.blynt_code?.startsWith('7980')));
+
+const nameWords = (name: string) => name.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+
+/** Which director each loan account belongs to: picked on the paper, else the director named in the account's name. */
+export function accountOwners(engagementId: string, directors: DlaDirector[]) {
+  const owners: Record<string, string> = {};
+  const accounts = dlaAccounts(engagementId);
+  for (const m of accounts) {
+    const picked = directors.find((d) => d.account === m.source_code);
+    const named = accounts.length > 1 ? directors.find((d) => nameWords(d.name ?? '').some((w) => m.source_name.toLowerCase().includes(w))) : undefined;
+    const d = picked ?? (named && !named.account ? named : undefined);
+    if (d) owners[m.source_code] = d.id;
+  }
+  return owners;
 }
 
 /** The tax year (6 April to 5 April) the period end falls in. */
@@ -42,23 +64,46 @@ export function taxYearOf(periodEnd: string) {
   return { start: `${start}-04-06`, end: `${start + 1}-04-05`, label: `${start}/${String(start + 1).slice(2)}` };
 }
 
-export function dlaReview(ctx: PaperContext) {
+/**
+ * The loan for one director, or for all of them together when no director is given. Each director
+ * is their own loan: s455 and the £10,000 beneficial loan limit apply per director. A transaction
+ * belongs to the director whose account it is on, else the director named in its contact, else the first.
+ */
+export function dlaReview(ctx: PaperContext, directorId?: string) {
   const { data } = ctx;
-  const directors: DlaDirector[] = (data.directors ?? []).map((d: any) => ({ id: d.id, name: d.name }));
+  const directors: DlaDirector[] = (data.directors ?? []).map((d: any) => ({ id: d.id, name: d.name ?? '', account: d.account || undefined, bf_p: d.bf_p }));
   const decisions: Record<string, 'personal' | 'business'> = data.tx_decisions ?? {};
-  const all = ledgerFor(ctx.engagementId, ['7400', '7980']).sort((a, b) => a.date.localeCompare(b.date));
-  const inYear = all.filter((t) => t.date >= ctx.periodStart && t.date <= ctx.periodEnd);
-  const after = all.filter((t) => t.date > ctx.periodEnd);
+  const owners = accountOwners(ctx.engagementId, directors);
+  const byContact = (contact: string) => directors.find((d) => contact && nameWords(d.name).some((w) => contact.toLowerCase().includes(w)));
+  const ownerOf = (t: { account_code: string; contact: string }) => owners[t.account_code] ?? byContact(t.contact)?.id ?? directors[0]?.id;
+  const everything = ledgerFor(ctx.engagementId, ['7400', '7980']).sort((a, b) => a.date.localeCompare(b.date));
+  const inPeriod = (t: { date: string }) => t.date >= ctx.periodStart && t.date <= ctx.periodEnd;
+  const sum = (ts: { amount_p: string }[]) => ts.reduce((a, t) => a + asPence(t.amount_p), 0n);
   const tbClose = ctx.tb('7400').draft + ctx.tb('7980').draft;
-  const hasLedger = inYear.length > 0;
-  const opening = hasLedger ? tbClose - inYear.reduce((a, t) => a + asPence(t.amount_p), 0n) : asPence(data.opening_p ?? '0');
-  const who = (contact: string) => directors.find((d) => d.name && contact && contact.toLowerCase().includes(d.name.split(' ').pop()!.toLowerCase())) ?? directors[0];
+  const hasLedger = everything.some(inPeriod);
+  const pooledOpening = hasLedger ? tbClose - sum(everything.filter(inPeriod)) : asPence(data.opening_p ?? '0');
+
+  // A director with their own account: its TB balance less the year's postings. Sharing one: the figure typed in,
+  // and whoever shares without one takes what is left of the shared opening balance
+  const openingOf = (d: DlaDirector): bigint => {
+    const own = Object.keys(owners).filter((c) => owners[c] === d.id);
+    if (own.length) return dlaAccounts(ctx.engagementId).filter((m) => own.includes(m.source_code)).reduce((a, m) => a + asPence(m.balance_p), 0n) - sum(everything.filter((t) => own.includes(t.account_code) && inPeriod(t)));
+    if (d.bf_p != null && d.bf_p !== '') return asPence(d.bf_p);
+    const rest = directors.find((x) => !Object.values(owners).includes(x.id) && (x.bf_p == null || x.bf_p === ''));
+    return rest?.id === d.id ? pooledOpening - directors.filter((x) => x.id !== d.id).reduce((a, x) => a + openingOf(x), 0n) : 0n;
+  };
+  const director = directorId ? directors.find((d) => d.id === directorId) : undefined;
+  const all = director ? everything.filter((t) => ownerOf(t) === director.id) : everything;
+  const inYear = all.filter(inPeriod);
+  const after = all.filter((t) => t.date > ctx.periodEnd);
+  const opening = director ? (hasLedger ? openingOf(director) : asPence((data.directors ?? []).find((d: any) => d.id === director.id)?.opening_p ?? '0')) : pooledOpening;
+  const who = (t: { account_code: string; contact: string }) => directors.find((d) => d.id === ownerOf(t));
 
   const tx = inYear.map((t) => {
     const amount = asPence(t.amount_p);
     const group = groupOf(`${t.description} ${t.contact}`, amount);
     const unsure = group === 'personal' && RETAIL.test(`${t.description} ${t.contact}`);
-    return { t, amount, group, unsure, decision: decisions[t.id], director: who(t.contact)?.id };
+    return { t, amount, group, unsure, decision: decisions[t.id], director: who(t)?.id };
   });
   const groups = GROUPS.map(([key, label]) => {
     const items = tx.filter((x) => x.group === key);
@@ -67,7 +112,8 @@ export function dlaReview(ctx: PaperContext) {
   const business = tx.filter((x) => x.decision === 'business');
   const lines: JLine[] = business.flatMap((x) => pair('4990', chartFor(ctx, x.t.account_code), x.amount, `${x.t.description}: a business cost, not the director's`));
   const reclass = business.reduce((a, x) => a + x.amount, 0n);
-  const closing = (hasLedger ? tbClose : asPence(data.closing_p ?? '0')) - reclass;
+  const closingEntered = director ? (data.directors ?? []).find((d: any) => d.id === director.id)?.closing_p : data.closing_p;
+  const closing = (hasLedger ? opening + sum(inYear) : asPence(closingEntered ?? '0')) - reclass;
 
   // Balance at each month end
   const months: { key: string; label: string; balance: bigint }[] = [];
@@ -123,6 +169,8 @@ export function dlaReview(ctx: PaperContext) {
 
   return {
     directors,
+    director,
+    owners,
     hasLedger,
     opening,
     closing,
@@ -152,7 +200,11 @@ export function advancesNote(r: ReturnType<typeof dlaReview>, periodEnd: string,
 export function reviewDla(ctx: PaperContext): string {
   const { data, totals, checks, anchors } = ctx;
   const r = dlaReview(ctx);
-  Object.assign(totals, { opening: r.opening, closing: r.closing, s455: r.s455.s455, benefit: r.loan.benefit, class1a: r.loan.class1a });
+  // s455 and the beneficial loan limit are per director
+  const per = r.directors.length > 1 ? r.directors.map((d) => ({ name: d.name || 'Unnamed director', x: dlaReview(ctx, d.id) })) : [{ name: '', x: r }];
+  const total = (f: (x: typeof r) => bigint) => per.reduce((a, p) => a + f(p.x), 0n);
+  const each = (f: (x: typeof r) => string) => per.map((p) => (p.name ? `${p.name}: ${f(p.x)}` : f(p.x))).join(' ');
+  Object.assign(totals, { opening: r.opening, closing: r.closing, s455: total((x) => x.s455.s455), benefit: total((x) => x.loan.benefit), class1a: total((x) => x.loan.class1a) });
   r.tx.forEach((x) => anchors.push({ id: x.t.id, label: `${ukDate(x.t.date)} ${x.t.description}` }));
 
   const mapped = ctx.tb('7400').mapped || ctx.tb('7980').mapped;
@@ -172,22 +224,25 @@ export function reviewDla(ctx: PaperContext): string {
   checks.push({
     id: 's455',
     label: 's455 considered',
-    detail:
-      r.s455.overdrawn === 0n
+    detail: each((x) =>
+      x.s455.overdrawn === 0n
         ? 'Not overdrawn at the year end, so no s455.'
-        : r.s455.unrepaid === 0n
-          ? `${formatPence(r.s455.overdrawn)} overdrawn, repaid within nine months (${formatPence(r.s455.countable)} by ${ukDate(r.s455.nineMonths)}), so no s455 is due; claim relief on the CT600A.`
-          : `s455 of ${formatPence(r.s455.s455)} (${CENTRAL_TAX_RATES.s455.rate_pct}% of ${formatPence(r.s455.unrepaid)}) goes to the tax computation${r.s455.windowOpen && !r.s455.notRepaid ? ` unless repaid by ${ukDate(r.s455.nineMonths)}` : ''}.`,
-    passed: r.s455.overdrawn === 0n || r.s455.unrepaid === 0n || !!data.s455_not_repaid || !r.s455.windowOpen,
+        : x.s455.unrepaid === 0n
+          ? `${formatPence(x.s455.overdrawn)} overdrawn, repaid within nine months (${formatPence(x.s455.countable)} by ${ukDate(x.s455.nineMonths)}), so no s455 is due; claim relief on the CT600A.`
+          : `s455 of ${formatPence(x.s455.s455)} (${CENTRAL_TAX_RATES.s455.rate_pct}% of ${formatPence(x.s455.unrepaid)}) goes to the tax computation${x.s455.windowOpen && !x.s455.notRepaid ? ` unless repaid by ${ukDate(x.s455.nineMonths)}` : ''}.`,
+    ),
+    passed: per.every(({ x }) => x.s455.overdrawn === 0n || x.s455.unrepaid === 0n || !!data.s455_not_repaid || !x.s455.windowOpen),
   });
   checks.push({
     id: 'benefit',
     label: `Beneficial loan tested (${r.loan.ty.label})`,
-    detail: !r.loan.ledgerKnownToEnd
-      ? `The tax year runs to ${ukDate(r.loan.ty.end)}; the ledger doesn't reach it yet, so the highest balance so far is ${formatPence(r.loan.peak)}.`
-      : r.loan.over
-        ? `The balance went over £10,000 (highest ${formatPence(r.loan.peak)}): benefit ${formatPence(r.loan.benefit)} at ${r.loan.rate}% and Class 1A of ${formatPence(r.loan.class1a)} go to payroll.`
-        : `The balance stayed at or under £10,000 (highest ${formatPence(r.loan.peak)}), so there is no benefit.`,
+    detail: each((x) =>
+      !x.loan.ledgerKnownToEnd
+        ? `The tax year runs to ${ukDate(x.loan.ty.end)}; the ledger doesn't reach it yet, so the highest balance so far is ${formatPence(x.loan.peak)}.`
+        : x.loan.over
+          ? `The balance went over £10,000 (highest ${formatPence(x.loan.peak)}): benefit ${formatPence(x.loan.benefit)} at ${x.loan.rate}% and Class 1A of ${formatPence(x.loan.class1a)} go to payroll.`
+          : `The balance stayed at or under £10,000 (highest ${formatPence(x.loan.peak)}), so there is no benefit.`,
+    ),
     passed: r.loan.ledgerKnownToEnd,
   });
   const dividendsHere = -r.groups.find((g) => g.key === 'dividends')!.total;
@@ -200,7 +255,7 @@ export function reviewDla(ctx: PaperContext): string {
     });
   }
   checks.push(journalCheck(data.journal, r.lines));
-  return mapped ? advancesNote(r, ctx.periodEnd, r.directors[0]?.name ?? '') || `The director's loan account was in credit throughout, with ${formatPence(-r.closing)} owed to the director at the year end.` : '';
+  return mapped ? per.map((p) => advancesNote(p.x, ctx.periodEnd, p.name || r.directors[0]?.name || '')).filter(Boolean).join(' ') || `The director's loan account was in credit throughout, with ${formatPence(-r.closing)} owed to the director at the year end.` : '';
 }
 
 /** What the other papers need from the director's loan paper of the same engagement. */
@@ -220,7 +275,10 @@ export function dlaSummary(ctx: PaperContext) {
   }
   return {
     dividends: -r.groups.find((g) => g.key === 'dividends')!.total,
-    // The ledger gives one balance; it is shown against the only director, or the first named
-    balanceOf: (surname: string) => (directors.length <= 1 || directors[0]?.name?.toLowerCase().includes(surname.toLowerCase()) ? r.closing : null),
+    balanceOf: (surname: string) => {
+      if (directors.length <= 1) return r.closing;
+      const d = directors.find((x) => surname && x.name?.toLowerCase().includes(surname.toLowerCase()));
+      return d ? dlaReview({ ...ctx, wpId: wp.id, data: wp.data_json }, d.id).closing : null;
+    },
   };
 }

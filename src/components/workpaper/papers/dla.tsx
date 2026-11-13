@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
@@ -8,21 +8,26 @@ import { CENTRAL_TAX_RATES } from '@/lib/tax-rates';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { btnPrimary, btnSecondary, card, contextOf, ExpandButton, JournalPanel, money, newId, Pill, SuggestionRow, th, Tiles, useOpen } from '../kit';
-import { advancesNote, dlaReview } from '@/lib/workpapers/dla';
+import { advancesNote, dlaAccounts, dlaReview } from '@/lib/workpapers/dla';
 
 const owed = (p: bigint) => (p > 0n ? `${formatPence(p)} owed by the director` : p < 0n ? `${formatPence(-p)} owed to the director` : 'nil');
 
 export function DlaSchedule({ data, result, locked, save, filesFor, attachTo, preview, live }: ScheduleProps) {
   const { isOpen, toggle } = useOpen();
+  const [tab, setTab] = useState('');
   const ctx = contextOf(result);
   if (!ctx) return null;
-  const r = dlaReview(ctx);
+  const multi = (data.directors ?? []).length > 1;
+  // Each director is their own loan; 'All' adds them together
+  const r = dlaReview(ctx, multi && (data.directors ?? []).some((d: any) => d.id === tab) ? tab : undefined);
+  const accounts = dlaAccounts(ctx.engagementId);
+  const setDirector = (id: string, patch: Record<string, unknown>) => save({ directors: (live().directors ?? []).map((x: any) => (x.id === id ? { ...x, ...patch } : x)) });
   const decide = (id: string, d: 'personal' | 'business' | undefined) => save({ tx_decisions: { ...(live().tx_decisions ?? {}), [id]: d } });
   const overdrawnMonths = r.months.filter((m) => m.balance > 0n).length;
   const peakMonth = r.months.reduce<(typeof r.months)[number] | null>((p, m) => (!p || m.balance > p.balance ? m : p), null);
   const max = r.months.reduce((m, x) => (x.balance > m ? x.balance : -x.balance > m ? -x.balance : m), 1n);
-  const note = advancesNote(r, ctx.periodEnd, r.directors[0]?.name ?? '');
-  const name = r.directors.map((d) => d.name).filter(Boolean).join(', ') || 'the director';
+  const note = r.director || !multi ? advancesNote(r, ctx.periodEnd, r.director?.name || r.directors[0]?.name || '') : r.directors.map((d) => advancesNote(dlaReview(ctx, d.id), ctx.periodEnd, d.name)).filter(Boolean).join(' ');
+  const name = r.director?.name || r.directors.map((d) => d.name).filter(Boolean).join(', ') || 'the director';
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,18 +68,66 @@ export function DlaSchedule({ data, result, locked, save, filesFor, attachTo, pr
             <label className="flex items-center gap-1">
               Opening
               <span className="w-28">
-                <MoneyInput label="Opening balance" value={data.opening_p} disabled={locked} onCommit={(p) => save({ opening_p: p })} />
+                <MoneyInput label="Opening balance" value={r.director ? (data.directors ?? []).find((d: any) => d.id === r.director!.id)?.opening_p : data.opening_p} disabled={locked} onCommit={(p) => (r.director ? setDirector(r.director.id, { opening_p: p }) : save({ opening_p: p }))} />
               </span>
             </label>
             <label className="flex items-center gap-1">
               Closing
               <span className="w-28">
-                <MoneyInput label="Closing balance" value={data.closing_p} disabled={locked} onCommit={(p) => save({ closing_p: p })} />
+                <MoneyInput label="Closing balance" value={r.director ? (data.directors ?? []).find((d: any) => d.id === r.director!.id)?.closing_p : data.closing_p} disabled={locked} onCommit={(p) => (r.director ? setDirector(r.director.id, { closing_p: p }) : save({ closing_p: p }))} />
               </span>
             </label>
           </div>
         )}
       </div>
+
+      {multi && (
+        <div className="flex flex-col gap-2">
+          <div className="inline-flex self-start rounded-[8px] border border-[#D3DCEE] overflow-hidden" role="tablist" aria-label="Director">
+            {[{ id: '', name: 'All directors' }, ...r.directors].map((d) => (
+              <button key={d.id || 'all'} type="button" role="tab" aria-selected={(r.director?.id ?? '') === d.id} onClick={() => setTab(d.id)} className={`px-3 py-1.5 text-xs font-bold ${(r.director?.id ?? '') === d.id ? 'bg-[#122654] text-white' : 'bg-white text-[#122654]'}`}>
+                {d.name || 'Unnamed director'}
+              </button>
+            ))}
+          </div>
+          {r.director && (
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#4A5878]">
+              {accounts.length > 1 && (
+                <label className="flex items-center gap-1">
+                  Loan account in the ledger
+                  <select
+                    aria-label={`Loan account for ${r.director.name}`}
+                    disabled={locked}
+                    value={Object.keys(r.owners).find((c) => r.owners[c] === r.director!.id) ?? ''}
+                    onChange={(e) => setDirector(r.director!.id, { account: e.target.value })}
+                    className="px-2 py-1 border border-[#D3DCEE] rounded-[6px] bg-white text-[#122654]"
+                  >
+                    <option value="">Shared, split by contact name</option>
+                    {accounts.map((m) => (
+                      <option key={m.source_code} value={m.source_code}>
+                        {m.source_code} {m.source_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!Object.values(r.owners).includes(r.director.id) && r.hasLedger && (
+                <label className="flex items-center gap-1">
+                  Brought forward for {r.director.name || 'this director'}
+                  <span className="w-28">
+                    <MoneyInput label={`Brought forward for ${r.director.name}`} value={(data.directors ?? []).find((d: any) => d.id === r.director!.id)?.bf_p ?? r.opening.toString()} disabled={locked} onCommit={(p) => setDirector(r.director!.id, { bf_p: p })} />
+                  </span>
+                </label>
+              )}
+              <span>
+                {Object.values(r.owners).includes(r.director.id)
+                  ? 'Balances from their own loan account in the ledger.'
+                  : 'Shares a loan account: transactions go to the director named in the contact, and the brought forward is split by what you enter.'}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {r.hasLedger && (
         <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">

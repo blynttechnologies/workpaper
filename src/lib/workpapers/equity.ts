@@ -27,11 +27,13 @@ export interface Dividend {
 
 const PL_TYPES = ['Revenue', 'Cost of Sales', 'Overhead'];
 const plCodes = () => db.blynt_accounts.filter((a) => PL_TYPES.includes(a.type)).map((a) => a.code);
+/** Tax on profit: corporation tax 5500-5590 and deferred tax 5600. */
+const isTax = (c: string) => c.startsWith('55') || c.startsWith('56');
 
 /** Profit before tax for an engagement from the trial balance (credit-positive), excluding the tax charge. */
 export function profitBeforeTax(ctx: Pick<PaperContext, 'tb'>, engagementId: string) {
   return -plCodes()
-    .filter((c) => c !== '5500' && c !== '5600')
+    .filter((c) => !isTax(c))
     .reduce((a, c) => a + ctx.tb(c, engagementId).final, 0n);
 }
 
@@ -45,7 +47,7 @@ const taxOn = (profit: bigint, ratePct: number) => (profit > 0n ? (profit * BigI
 /** Profit before tax from the start of the year to a date, from the ledger; pro rata by days when the ledger has no P&L detail. */
 function profitTo(ctx: PaperContext, date: string, yearProfit: bigint) {
   const tx = db.transactions.filter((t) => t.engagement_id === ctx.engagementId && t.date >= ctx.periodStart && t.date <= ctx.periodEnd);
-  const pl = new Set(plCodes().filter((c) => c !== '5500' && c !== '5600'));
+  const pl = new Set(plCodes().filter((c) => !isTax(c)));
   const plTx = tx.filter((t) => pl.has(chartCodeOf(ctx.engagementId, t.account_code) ?? ''));
   if (plTx.length) return { profit: -plTx.filter((t) => t.date <= date).reduce((a, t) => a + asPence(t.amount_p), 0n), source: 'ledger' as const };
   const days = daysBetween(ctx.periodStart, ctx.periodEnd) + 1;
@@ -62,11 +64,13 @@ export function equityReview(ctx: PaperContext) {
   const shares = classes.reduce((a, c) => a + BigInt(Math.round(Number(c.shares) || 0)), 0n);
   const capitalTb = -(ctx.tb('8500').draft + ctx.tb('8600').draft);
   const pbt = profitBeforeTax(ctx, ctx.engagementId);
-  const taxPosted = ctx.tb('5500').final;
+  const taxPosted = ctx.tb('55').final + ctx.tb('56').final;
   const tax = taxPosted !== 0n ? taxPosted : taxOn(pbt, rate);
   const pat = pbt - tax;
-  const bf = data.bf_p != null && data.bf_p !== '' ? asPence(data.bf_p) : ctx.priorId ? reservesPerTb(ctx, ctx.priorId) : -ctx.tb('8900').draft;
-  const bfSource = data.bf_p != null && data.bf_p !== '' ? 'entered' : ctx.priorId ? "last year's accounts" : 'retained earnings in the TB';
+  // Entered here, or on the Reserves movement paper, before last year's accounts or the TB
+  const opening = [data.bf_p, db.workpapers.find((w) => w.engagement_id === ctx.engagementId && w.ref === 'E-20')?.data_json?.opening_p].find((v) => v != null && v !== '');
+  const bf = opening != null ? asPence(opening) : ctx.priorId ? reservesPerTb(ctx, ctx.priorId) : -ctx.tb('8900').draft;
+  const bfSource = opening != null ? 'entered' : ctx.priorId ? "last year's accounts" : ctx.tb('8900').mapped ? 'retained earnings in the TB' : 'retained earnings not mapped in the TB';
   let paid = 0n;
   const tested = dividends.map((d) => {
     const amount = asPence(d.amount_p);

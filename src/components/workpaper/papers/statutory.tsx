@@ -1,14 +1,14 @@
 'use client';
 
-import React from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, Plus, Trash2 } from 'lucide-react';
 import { formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
 import { TextInput } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { btnAdd, card, contextOf, newId, Pill, SuggestionRow, th, Tiles } from '../kit';
-import { fullName, statutoryReview, type Officer } from '@/lib/workpapers/statutory';
+import { fullName, mergeOfficers, statutoryReview, type Officer } from '@/lib/workpapers/statutory';
 
 const COMPANY_FIELDS = [
   ['registered_office', 'Registered office'],
@@ -19,9 +19,25 @@ const COMPANY_FIELDS = [
 ] as const;
 
 export function StatutoryInfoSchedule({ data, result, locked, save, live }: ScheduleProps) {
+  const [ch, setCh] = useState<{ busy: boolean; note?: string; bad?: boolean }>({ busy: false });
   const ctx = contextOf(result);
   if (!ctx) return null;
   const r = statutoryReview(ctx);
+  const pullCh = async () => {
+    setCh({ busy: true });
+    try {
+      const res = await fetch(`/api/v1/engagements/${encodeURIComponent(ctx.engagementId)}/companies-house`, { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) return setCh({ busy: false, note: body.error ?? 'Companies House could not be read.', bad: true });
+      const m = mergeOfficers(live().officers ?? [], body.people, () => newId('o'));
+      const company = { ...(live().company ?? {}), ...Object.fromEntries(Object.entries(body.company).filter(([, v]) => v)) };
+      save({ officers: m.officers, company, ch_pulled_at: new Date().toISOString() });
+      const bands = (body.people as { first_name: string; surname: string; ownership?: string }[]).filter((p) => p.ownership).map((p) => `${p.first_name} ${p.surname} ${p.ownership}`);
+      setCh({ busy: false, note: `From Companies House: ${m.added} added, ${m.updated} updated, company details filled.${bands.length ? ` Shareholdings on the PSC register: ${bands.join(', ')}. Enter the number of shares from the confirmation statement.` : ''}` });
+    } catch {
+      setCh({ busy: false, note: 'Companies House could not be reached.', bad: true });
+    }
+  };
   const eng = db.engagements.find((e) => e.id === result.engagementId);
   const client = db.clients.find((c) => c.id === eng?.client_id);
   const company: Record<string, string> = data.company ?? {};
@@ -58,11 +74,17 @@ export function StatutoryInfoSchedule({ data, result, locked, save, live }: Sche
         <div className="flex items-center justify-between mb-2">
           <span className="font-bold">Officers and shareholders</span>
           {!locked && (
-            <button type="button" className={btnAdd} onClick={() => save({ officers: [...(live().officers ?? []), { id: newId('o'), share_type: 'ORDINARY', is_director: true }] })}>
-              <Plus className="w-3.5 h-3.5" /> Add person
-            </button>
+            <span className="flex gap-2">
+              <button type="button" className={btnAdd} disabled={ch.busy} onClick={() => void pullCh()}>
+                <Download className="w-3.5 h-3.5" /> {ch.busy ? 'Reading Companies House…' : 'Pull from Companies House'}
+              </button>
+              <button type="button" className={btnAdd} onClick={() => save({ officers: [...(live().officers ?? []), { id: newId('o'), share_type: 'ORDINARY', is_director: true }] })}>
+                <Plus className="w-3.5 h-3.5" /> Add person
+              </button>
+            </span>
           )}
         </div>
+        {ch.note && <div className={`mb-2 text-[11px] ${ch.bad ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{ch.note}</div>}
         <div className="overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
@@ -201,7 +223,7 @@ export function StatutoryInfoSchedule({ data, result, locked, save, live }: Sche
               ))}
             </tbody>
           </table>
-          <div className="mt-1 text-[10px] text-[#4A5878]">Enter these from the Companies House register; the accounts&apos; company information page uses them.</div>
+          <div className="mt-1 text-[10px] text-[#4A5878]">Pulled from the Companies House register, or typed in; the accounts&apos; company information page uses them.</div>
         </div>
         <div className={card}>
           <div className="font-bold mb-2">Shares</div>

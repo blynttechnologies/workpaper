@@ -44,7 +44,7 @@ export function plAnalysis(ctx: PaperContext) {
   const pct = Number(data.threshold_pct ?? 10);
   const minimum = asPence(data.threshold_p ?? '100000');
   const journals = db.adjustments.filter((a) => a.engagement_id === ctx.engagementId && LIVE.includes(a.status));
-  const codes = db.blynt_accounts.filter((a) => ['Revenue', 'Cost of Sales', 'Overhead'].includes(a.type) && a.code !== '5500' && a.code !== '5600');
+  const codes = db.blynt_accounts.filter((a) => ['Revenue', 'Cost of Sales', 'Overhead'].includes(a.type) && !a.code.startsWith('55') && !a.code.startsWith('56'));
   const rows: PlRow[] = [];
   for (const a of codes) {
     const group = PL_GROUPS.find((g) => g.codes(a.code))?.key;

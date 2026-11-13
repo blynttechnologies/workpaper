@@ -10,6 +10,8 @@ import { getActor } from '@/lib/session';
 import { Adjustment } from '@/lib/types/models';
 import { registerTotals } from '@/lib/workpapers/engine';
 import { ukDate } from '@/lib/dates';
+import { PreviewModal } from '@/components/workpaper/parts';
+import type { Attachment } from '@/lib/types/models';
 
 /**
  * Journals (JNL-01, JNL-02, JNL-04): the register of every journal, its effect on profit and net
@@ -70,6 +72,11 @@ const total = (j: Adjustment) => j.lines.reduce((a, l) => a + BigInt(l.debit_p),
 const schedulesTouched = (codes: string[]) =>
   TEMPLATES.filter((t) => t.leads.some((l) => codes.some((c) => c.startsWith(l.code)))).map((t) => t.ref);
 
+const MIME: Record<string, string> = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', csv: 'text/csv', txt: 'text/plain' };
+/** Journal evidence as a file the shared preview can show. */
+const evidenceFile = (e: { file_key: string; filename: string }) =>
+  ({ id: e.file_key, engagement_id: '', workpaper_id: null, file_key: e.file_key, filename: e.filename, mime: MIME[e.filename.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream', size: 0, sha256: '', category: 'Other', is_permanent: false }) as Attachment;
+
 export default function JournalsPage() {
   const params = useParams();
   const search = useSearchParams();
@@ -79,6 +86,7 @@ export default function JournalsPage() {
   const canApprove = REVIEWER_UP.includes(actor.role);
 
   const [rev, setRev] = useState(0);
+  const [preview, setPreview] = useState<Attachment | null>(null);
   const [tab, setTab] = useState<'all' | Adjustment['status']>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -159,6 +167,7 @@ export default function JournalsPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <PreviewModal file={preview} onClose={() => setPreview(null)} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[#122654]">Journals</h1>
@@ -261,9 +270,9 @@ export default function JournalsPage() {
                     {j.reject_reason && <span className="block text-[11px] text-[#4A5878]">Rejected: {j.reject_reason}</span>}
                     {j.auto_reverse && <span className="block text-[11px] text-[#1D4E89]">Auto-reverses next period</span>}
                     {(j.evidence ?? []).map((e) => (
-                      <a key={e.file_key} href={`/api/v1/files/${encodeURIComponent(e.file_key)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline mr-2">
+                      <button key={e.file_key} type="button" onClick={() => setPreview(evidenceFile(e))} className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline mr-2">
                         <Paperclip className="w-3 h-3" /> {e.filename}
-                      </a>
+                      </button>
                     ))}
                   </td>
                   <td className="py-2.5 px-3">

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Upload,
   Sparkles,
   MessageSquare,
@@ -29,7 +31,7 @@ import { asPence, formatPence } from '@/lib/money';
 import { getActor } from '@/lib/session';
 import { StatusBadge } from '@/components/ui/StatusPill';
 import { PAPER_SCREENS } from '@/components/workpaper/papers';
-import { evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts, type BalanceOption, type ReconAccount } from '@/lib/workpapers/engine';
+import { accountKind, evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts, type BalanceOption, type ReconAccount } from '@/lib/workpapers/engine';
 import { diffData } from '@/lib/workpapers/diff';
 import { TEMPLATES, templateFor, templateOf } from '@/lib/workpapers/templates';
 import type { Attachment, AttachmentCategory } from '@/lib/types/models';
@@ -109,6 +111,8 @@ export default function WorkpaperPage() {
   const [fileFilter, setFileFilter] = useState<'all' | 'permanent' | 'archived' | AttachmentCategory>('all');
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [previewLarge, setPreviewLarge] = useState(false);
+  // The review panel folds away while a file is open, unless someone opens it again for that file
+  const [railFor, setRailFor] = useState<{ id: string | null; open: boolean } | null>(null);
   // Bank and cash: what the AI read off the statement open in the preview, shown above it to pick from
   const [aiRead, setAiRead] = useState<{ attId: string; rowId: string; state: 'reading' | 'done' | 'failed'; bank?: string; options: BalanceOption[] } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -135,6 +139,12 @@ export default function WorkpaperPage() {
       return next;
     });
   };
+
+  // Folded or open is remembered across papers; with a file open the panel folds under it unless opened for that file
+  const railOpen = preview ? railFor?.id === preview.id && railFor.open : showComments;
+  const setRail = (open: boolean) => (preview ? setRailFor({ id: preview.id, open }) : open !== showComments && toggleComments());
+  // With no file open, folding tucks the panel into a slim strip at the right and the paper takes the width
+  const sideFolded = !railOpen && !preview;
 
   const engagement = db.engagements.find((e) => e.id === engagementId);
   const client = engagement ? db.clients.find((c) => c.id === engagement.client_id) : undefined;
@@ -181,6 +191,20 @@ export default function WorkpaperPage() {
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
+  });
+
+  // Bank and cash: a statement attached but never read (or read before the AI was on) is read once when the paper opens
+  const autoRead = useRef(new Set<string>());
+  useEffect(() => {
+    if (!workpaper || !engagement || engagement.status === 'locked' || templateOf(workpaper)?.kind !== 'reconciliation') return;
+    const rows: ReconAccount[] = Array.isArray(workpaper.data_json?.accounts) ? workpaper.data_json.accounts : [];
+    for (const a of rows) {
+      const file = linkedFiles(workpaper.id, a.id).at(-1);
+      if (!file || autoRead.current.has(a.id) || a.ai_balances?.length || accountKind(a.code) === 'cash') continue;
+      if (a.statement_p && asPence(a.statement_p) !== 0n) continue;
+      autoRead.current.add(a.id);
+      void readStatementFor(file, a.id, false);
+    }
   });
 
   const actor = getActor();
@@ -498,8 +522,8 @@ export default function WorkpaperPage() {
   const openChecks = result.checks.filter((c) => !c.passed && !c.explanation);
   const openNotes = comments.filter((c) => c.type === 'review_note' && c.status === 'open');
   const conclusionText: string = data.conclusion?.text || '';
-  // Bank and cash is signed off on the reconciliation itself, so it has no written conclusion
-  const noConclusion = t.kind === 'reconciliation';
+  // Schedule papers are signed off on their checks; only the planning, completion and analytical papers keep a written conclusion
+  const noConclusion = t.kind !== 'checklist' && t.kind !== 'analytical';
   const leadsAgreed = result.leads.length === 0 || result.leads.some((l) => l.mapped);
   const prepLeft = [
     pending.length && `${pending.length} procedure${pending.length === 1 ? '' : 's'}`,
@@ -649,6 +673,19 @@ export default function WorkpaperPage() {
   const missingRefs = TEMPLATES.filter((tp) => !papers.some((p) => p.ref === tp.ref));
   const botDraft = !data.conclusion?.bot_dismissed && !conclusionText.trim() ? result.draftConclusion : '';
   const reviewItems = result.checks.filter((c) => !c.passed);
+  const railTabs = checksOnly
+                  ? [
+                      { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
+                      { id: 'comments' as const, label: `Comments (${comments.filter((c) => c.status === 'open').length})`, icon: MessageSquare },
+                      { id: 'evidence' as const, label: `Files (${attachments.length})`, icon: FileText },
+                      { id: 'history' as const, label: 'History', icon: History },
+                    ]
+                  : [
+                  { id: 'evidence' as const, label: `Evidence ${attachments.length}`, icon: FileText },
+                  { id: 'comments' as const, label: `Comments ${comments.filter((c) => c.status === 'open').length}`, icon: MessageSquare },
+                  { id: 'ai_review' as const, label: `AI Review ${db.ai_review_findings.filter((f) => (f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref) && f.status === 'open').length}`, icon: Sparkles },
+                  { id: 'history' as const, label: 'History', icon: History },
+                ];
   const explainCheck = (id: string) => {
     const reason = prompt('Why is this acceptable?')?.trim();
     if (reason) saveData({ explanations: { ...(live().explanations ?? {}), [id]: reason } });
@@ -749,56 +786,6 @@ export default function WorkpaperPage() {
           e.target.value = '';
           if (files.length) void doUpload(files, row);
         }}
-      />
-      <PreviewModal
-        file={preview}
-        expanded={previewLarge}
-        onToggleSize={() => setPreviewLarge((v) => !v)}
-        onClose={() => {
-          setPreview(null);
-          setAiRead(null);
-        }}
-        top={
-          aiRead && preview?.id === aiRead.attId ? (
-            <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
-              <div className="flex items-center gap-1.5 font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
-                <span className="ml-auto font-normal text-[10px] text-[#4A5878]">for {anchorLabel(aiRead.rowId)}</span>
-              </div>
-              {aiRead.state === 'reading' && <p className="mt-1.5 text-[#4A5878]">Reading the statement…</p>}
-              {aiRead.state === 'failed' && <p className="mt-1.5 text-[#8A5A00]">The AI could not read a balance from this file. Type the balance on the row.</p>}
-              {aiRead.state === 'done' && (
-                <ul className="mt-2 flex flex-col gap-1">
-                  {aiRead.options.map((b) => {
-                    const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
-                    const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
-                    return (
-                      <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">
-                        <span className="flex-1 min-w-0">
-                          <span className="font-semibold">{b.label}</span>
-                          <span className="text-[#4A5878]">
-                            {b.date ? ` · ${ukDate(b.date)}` : ''}
-                            {b.page ? ` · page ${b.page}` : ''}
-                          </span>
-                        </span>
-                        <span className="font-mono font-bold">{formatPence(asPence(b.balance_p))}</span>
-                        <button
-                          type="button"
-                          disabled={isLocked || inUse}
-                          onClick={() => applyBalance(aiRead.rowId, b)}
-                          className="min-w-[64px] px-2 py-1 text-[11px] font-bold rounded-[6px] bg-[#122654] text-white disabled:bg-[#E6F4EF] disabled:text-[#0B6B52]"
-                        >
-                          {inUse ? '✓ In use' : 'Use'}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
-            </div>
-          ) : null
-        }
       />
 
       {/* Unreview Modal (REV-02) */}
@@ -1189,7 +1176,7 @@ export default function WorkpaperPage() {
 
       <div
         className={`grid gap-5 transition-all ${
-          showComments || checksOnly ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]' : 'grid-cols-1'
+          sideFolded ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_52px]' : 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]'
         }`}
       >
         {/* On smaller screens, where the previous and next buttons are harder to use */}
@@ -1940,34 +1927,111 @@ export default function WorkpaperPage() {
 
         {/* Right rail: comments and history */}
         {(showComments || checksOnly) && (
-          <aside className="blynt-card p-4 h-fit xl:sticky xl:top-20">
-            <div className="flex items-center justify-between mb-3 border-b border-[#E3E7EF]">
-              <div role="tablist" className="flex gap-1 overflow-x-auto pb-1">
-                {(checksOnly
-                  ? [
-                      { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
-                      { id: 'comments' as const, label: `Comments (${comments.filter((c) => c.status === 'open').length})`, icon: MessageSquare },
-                      { id: 'evidence' as const, label: `Files (${attachments.length})`, icon: FileText },
-                      { id: 'history' as const, label: 'History', icon: History },
-                    ]
-                  : [
-                  { id: 'evidence' as const, label: `Evidence ${attachments.length}`, icon: FileText },
-                  { id: 'comments' as const, label: `Comments ${comments.filter((c) => c.status === 'open').length}`, icon: MessageSquare },
-                  { id: 'ai_review' as const, label: `AI Review ${db.ai_review_findings.filter((f) => (f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref) && f.status === 'open').length}`, icon: Sparkles },
-                  { id: 'history' as const, label: 'History', icon: History },
-                ]).map((tab) => (
+          // An open file sits at the top, above the review panel, so the paper stays in view beside it
+          <div className={`flex flex-col gap-4 h-fit ${preview && !previewLarge ? '' : 'xl:sticky xl:top-20'}`}>
+          <PreviewModal
+            docked
+            file={preview}
+            expanded={previewLarge}
+            onToggleSize={() => setPreviewLarge((v) => !v)}
+            onClose={() => {
+              setPreview(null);
+              setAiRead(null);
+            }}
+            top={
+              aiRead && preview?.id === aiRead.attId ? (
+                <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
+                    <span className="ml-auto font-normal text-[10px] text-[#4A5878]">for {anchorLabel(aiRead.rowId)}</span>
+                  </div>
+                  {aiRead.state === 'reading' && <p className="mt-1.5 text-[#4A5878]">Reading the statement…</p>}
+                  {aiRead.state === 'failed' && <p className="mt-1.5 text-[#8A5A00]">The AI could not read a balance from this file. Type the balance on the row.</p>}
+                  {aiRead.state === 'done' && (
+                    <ul className="mt-2 flex flex-col gap-1">
+                      {aiRead.options.map((b) => {
+                        const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
+                        const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
+                        return (
+                          <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">
+                            <span className="flex-1 min-w-0">
+                              <span className="font-semibold">{b.label}</span>
+                              <span className="text-[#4A5878]">
+                                {b.date ? ` · ${ukDate(b.date)}` : ''}
+                                {b.page ? ` · page ${b.page}` : ''}
+                              </span>
+                            </span>
+                            <span className="font-mono font-bold">{formatPence(asPence(b.balance_p))}</span>
+                            <button
+                              type="button"
+                              disabled={isLocked || inUse}
+                              onClick={() => applyBalance(aiRead.rowId, b)}
+                              className="min-w-[64px] px-2 py-1 text-[11px] font-bold rounded-[6px] bg-[#122654] text-white disabled:bg-[#E6F4EF] disabled:text-[#0B6B52]"
+                            >
+                              {inUse ? '✓ In use' : 'Use'}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
+                </div>
+              ) : null
+            }
+          />
+          {sideFolded ? (
+            <aside aria-label="Review panel (folded)" className="blynt-card p-1.5 h-fit flex xl:flex-col items-center gap-1">
+              <button type="button" onClick={() => setRail(true)} aria-expanded={false} aria-label="Open the review panel" title="Open" className="p-1.5 text-[#7E8DA6] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {railTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  title={tab.label}
+                  aria-label={tab.label}
+                  onClick={() => {
+                    setSideTab(tab.id);
+                    setRail(true);
+                  }}
+                  className="flex flex-col items-center gap-0.5 p-1.5 text-[10px] font-bold text-[#4A5878] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]"
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {/\((\d+)\)|\s(\d+)$/.exec(tab.label)?.slice(1).find(Boolean)}
+                </button>
+              ))}
+            </aside>
+          ) : (
+          <aside className={`blynt-card p-4 h-fit ${railOpen ? '' : '[&>*:not(:first-child)]:hidden'}`}>
+            <div className={`flex items-center justify-between border-b border-[#E3E7EF] ${railOpen ? 'mb-3' : ''}`}>
+              <div role="tablist" className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {railTabs.map((tab) => (
                   <button
                     key={tab.id}
                     role="tab"
                     type="button"
                     aria-selected={activeTab === tab.id}
-                    onClick={() => setSideTab(tab.id)}
+                    onClick={() => {
+                      setSideTab(tab.id);
+                      if (!railOpen) setRail(true);
+                    }}
                     className={`flex items-center gap-1 px-2.5 py-2 text-xs font-bold border-b-2 -mb-px whitespace-nowrap ${activeTab === tab.id ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}
                   >
                     {!checksOnly && <tab.icon className="w-3.5 h-3.5" />} {tab.label}
                   </button>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={() => setRail(!railOpen)}
+                aria-expanded={railOpen}
+                aria-label={railOpen ? 'Fold the review panel' : 'Open the review panel'}
+                title={railOpen ? 'Fold' : 'Open'}
+                className="p-1 -mt-1 shrink-0 text-[#7E8DA6] hover:text-[#122654] hover:bg-[#F5F8FD] rounded-[6px]"
+              >
+                {!preview ? <ChevronRight className="w-4 h-4" /> : railOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
               {!checksOnly && (
               <button
                 type="button"
@@ -2311,6 +2375,8 @@ export default function WorkpaperPage() {
               {result.totals.nbv !== undefined && <div className="mt-1">NBV {formatPence(result.totals.nbv)}</div>}
             </div>
           </aside>
+          )}
+          </div>
         )}
       </div>
     </div>
