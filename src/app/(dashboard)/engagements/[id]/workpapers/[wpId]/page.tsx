@@ -39,6 +39,7 @@ import {
   SectionState,
   CATEGORIES,
   PreviewModal,
+  PREVIEW_ROOM,
   uploadToPaper,
   fileKind,
   fileUrl,
@@ -105,7 +106,7 @@ export default function WorkpaperPage() {
   const [uploadCategory, setUploadCategory] = useState<AttachmentCategory>('Other');
   const [uploadLink, setUploadLink] = useState('paper');
   const [uploadPermanent, setUploadPermanent] = useState(false);
-  const [fileFilter, setFileFilter] = useState<'all' | 'permanent' | AttachmentCategory>('all');
+  const [fileFilter, setFileFilter] = useState<'all' | 'permanent' | 'archived' | AttachmentCategory>('all');
   const [preview, setPreview] = useState<Attachment | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const pendingRow = useRef<string | null>(null);
@@ -231,7 +232,9 @@ export default function WorkpaperPage() {
   const activeTab = sideTab ?? 'ai_review';
   const procedures = [] as any[];
   const comments = db.comments.filter((c) => c.workpaper_id === workpaper.id);
-  const attachments = db.attachments.filter((a) => a.workpaper_id === workpaper.id);
+  // Deleted files sit in the bin and archived ones are kept off the paper; neither counts as evidence
+  const attachments = db.attachments.filter((a) => a.workpaper_id === workpaper.id && !a.deleted_at && !a.archived_at);
+  const archivedFiles = db.attachments.filter((a) => a.workpaper_id === workpaper.id && !a.deleted_at && a.archived_at);
   const signoffs = db.signoffs.filter((s) => s.workpaper_id === workpaper.id);
   const latestSignoff = (role: string) => signoffs.filter((s) => s.role === role && !s.stale_at).pop();
   const staleSignoffs = signoffs.filter((s) => s.stale_at);
@@ -280,7 +283,11 @@ export default function WorkpaperPage() {
         for (const att of added) {
           try {
             // The AI reads the statement on the server; with no read, the balance stays blank for someone to type
-            const res = await fetch(`/api/v1/files/${encodeURIComponent(att.file_key)}/read-statement`, { method: 'POST' });
+            const res = await fetch(`/api/v1/files/${encodeURIComponent(att.file_key)}/read-statement`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ period_end: engagement!.period_end }),
+            });
             const read = res.ok ? (await res.json()).read : null;
             if (read) att.extracted_data = read;
             services.fillScheduleFromDocument(engagement!.firm_id, actor, att.id, workpaper!.id, linkRow);
@@ -316,14 +323,26 @@ export default function WorkpaperPage() {
   };
 
   const removeFile = (att: Attachment) => {
-    if (!confirm(`Remove ${att.filename} from this paper?`)) return;
+    if (!confirm(`Delete ${att.filename}? It goes to the bin for 30 days.`)) return;
     try {
       services.deleteAttachment(engagement.firm_id, actor, att.id);
       touchPaper();
-      setMessage({ kind: 'ok', text: `${att.filename} removed.` });
+      setMessage({ kind: 'ok', text: `${att.filename} deleted. It stays in the bin for 30 days.` });
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err?.message || 'Could not remove the file.' });
+      setMessage({ kind: 'error', text: err?.message || 'Could not delete the file.' });
     }
+    refresh();
+  };
+
+  const archiveFile = (att: Attachment, archived: boolean) => {
+    try {
+      services.archiveAttachment(engagement.firm_id, actor, att.id, archived);
+      touchPaper();
+      setMessage({ kind: 'ok', text: archived ? `${att.filename} archived. Find it under Archived in Files.` : `${att.filename} restored to the paper.` });
+    } catch (err: any) {
+      setMessage({ kind: 'error', text: err?.message || 'Could not change the file.' });
+    }
+    if (preview?.id === att.id) setPreview(null);
     refresh();
   };
 
@@ -451,12 +470,14 @@ export default function WorkpaperPage() {
   const openChecks = result.checks.filter((c) => !c.passed && !c.explanation);
   const openNotes = comments.filter((c) => c.type === 'review_note' && c.status === 'open');
   const conclusionText: string = data.conclusion?.text || '';
+  // Bank and cash is signed off on the reconciliation itself, so it has no written conclusion
+  const noConclusion = t.kind === 'reconciliation';
   const leadsAgreed = result.leads.length === 0 || result.leads.some((l) => l.mapped);
   const prepLeft = [
     pending.length && `${pending.length} procedure${pending.length === 1 ? '' : 's'}`,
     openChecks.length && `${openChecks.length} check${openChecks.length === 1 ? '' : 's'}`,
     openNotes.length && `${openNotes.length} review note${openNotes.length === 1 ? '' : 's'}`,
-    !conclusionText.trim() && 'conclusion',
+    !noConclusion && !conclusionText.trim() && 'conclusion',
   ].filter(Boolean) as string[];
 
   const unconfirmedAiCount = Number(data.values_to_confirm_count || 0);
@@ -571,9 +592,10 @@ export default function WorkpaperPage() {
       refresh();
     },
   };
-  const shownFiles = attachments.filter((a) =>
-    fileFilter === 'all' ? true : fileFilter === 'permanent' ? a.is_permanent : a.category === fileFilter
-  );
+  const shownFiles =
+    fileFilter === 'archived'
+      ? archivedFiles
+      : attachments.filter((a) => (fileFilter === 'all' ? true : fileFilter === 'permanent' ? a.is_permanent : a.category === fileFilter));
   const allCategories = Array.from(
     new Set([...CATEGORIES, ...db.attachments.map((a) => a.category), ...((data.custom_categories ?? []) as string[])])
   ) as AttachmentCategory[];
@@ -680,7 +702,7 @@ export default function WorkpaperPage() {
     );
 
   return (
-    <div className="flex flex-col gap-4 max-w-[1500px] mx-auto pb-16">
+    <div className={`flex flex-col gap-4 max-w-[1500px] mx-auto pb-16 ${preview ? PREVIEW_ROOM : ''}`}>
       <input
         ref={fileInput}
         type="file"
@@ -1615,11 +1637,18 @@ export default function WorkpaperPage() {
               </div>
             )}
 
-            {attachments.length > 0 && (
+            {(attachments.length > 0 || archivedFiles.length > 0) && (
               <>
                 <div className="flex flex-wrap gap-1.5 mt-4 mb-2">
-                  {(['all', ...usedCategories, ...(attachments.some((a) => a.is_permanent) ? ['permanent' as const] : [])] as const).map((f) => {
-                    const n = f === 'all' ? attachments.length : f === 'permanent' ? attachments.filter((a) => a.is_permanent).length : attachments.filter((a) => a.category === f).length;
+                  {(['all', ...usedCategories, ...(attachments.some((a) => a.is_permanent) ? ['permanent' as const] : []), ...(archivedFiles.length ? ['archived' as const] : [])] as const).map((f) => {
+                    const n =
+                      f === 'all'
+                        ? attachments.length
+                        : f === 'permanent'
+                          ? attachments.filter((a) => a.is_permanent).length
+                          : f === 'archived'
+                            ? archivedFiles.length
+                            : attachments.filter((a) => a.category === f).length;
                     return (
                       <button
                         key={f}
@@ -1628,7 +1657,7 @@ export default function WorkpaperPage() {
                         onClick={() => setFileFilter(f as typeof fileFilter)}
                         className={`px-2.5 py-1 text-[11px] font-bold rounded-full border ${fileFilter === f ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white border-[#D3DCEE] text-[#122654]'}`}
                       >
-                        {f === 'all' ? 'All' : f === 'permanent' ? 'Permanent' : f} {n}
+                        {f === 'all' ? 'All' : f === 'permanent' ? 'Permanent' : f === 'archived' ? 'Archived' : f} {n}
                       </button>
                     );
                   })}
@@ -1687,9 +1716,14 @@ export default function WorkpaperPage() {
                                 Download
                               </a>
                               {!isLocked && (
-                                <button type="button" onClick={() => removeFile(a)} className="font-bold text-[#B42318] hover:underline">
-                                  Remove
-                                </button>
+                                <>
+                                  <button type="button" onClick={() => archiveFile(a, !a.archived_at)} className="font-bold text-[#122654] hover:underline mr-3">
+                                    {a.archived_at ? 'Restore' : 'Archive'}
+                                  </button>
+                                  <button type="button" onClick={() => removeFile(a)} className="font-bold text-[#B42318] hover:underline">
+                                    Delete
+                                  </button>
+                                </>
                               )}
                             </td>
                           </tr>
@@ -1708,6 +1742,7 @@ export default function WorkpaperPage() {
 
           {checksOnly ? (
             <>
+              {!noConclusion && (
               <fieldset id="conclusion" disabled={readOnly} className="min-w-0 border-0 p-0 m-0 scroll-mt-24">
                 <div className="p-4 bg-white border border-[#E3E7EF] rounded-[12px] text-xs text-[#122654]">
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -1747,7 +1782,8 @@ export default function WorkpaperPage() {
                   </div>
                 </div>
               </fieldset>
-              <CheckChips checks={[...result.checks, { id: 'conclusion', label: 'Conclusion written', detail: '', passed: !!conclusionText.trim() }]} />
+              )}
+              <CheckChips checks={noConclusion ? result.checks : [...result.checks, { id: 'conclusion', label: 'Conclusion written', detail: '', passed: !!conclusionText.trim() }]} />
             </>
           ) : (
           <Section id="signoff" num={4} title="Conclusion" state={stateOf('signoff')}>
@@ -1938,6 +1974,16 @@ export default function WorkpaperPage() {
                           <span>{fmtDate(a.uploaded_at)}</span>
                           <span className="text-[#0B6B52] font-semibold">✓ Linked to paper</span>
                         </div>
+                        {!isLocked && (
+                          <div className="flex justify-end gap-3 text-[10px] font-bold" onClick={(e) => e.stopPropagation()}>
+                            <button type="button" onClick={() => archiveFile(a, true)} aria-label={`Archive ${a.filename}`} className="text-[#122654] hover:underline">
+                              Archive
+                            </button>
+                            <button type="button" onClick={() => removeFile(a)} aria-label={`Delete ${a.filename}`} className="text-[#B42318] hover:underline">
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

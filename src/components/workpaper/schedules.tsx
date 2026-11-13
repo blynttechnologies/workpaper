@@ -66,6 +66,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const accounts = reconAccounts(data, leads);
   const tolerance = result.totals.tolerance ?? 100n;
   const tot = (key: string) => result.totals[key] ?? 0n;
+  const periodEnd = db.engagements.find((e) => e.id === result.engagementId)?.period_end ?? '';
 
   // Writes always store the full account list, built on the latest data
   const saveAccounts = (fn: (as: ReconAccount[]) => ReconAccount[]) => save({ accounts: fn(reconAccounts(live(), leads)) });
@@ -271,7 +272,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                         value={a.statement_p}
                         placeholder={kind === 'cash' ? 'Enter count' : 'Enter balance'}
                         disabled={locked}
-                        onCommit={(p) => updateAcc(a.id, { statement_p: p, source: 'manual', synced_at: undefined })}
+                        onCommit={(p) => updateAcc(a.id, { statement_p: p, statement_date: undefined, source: 'manual', synced_at: undefined })}
                       />
                       <div className="mt-0.5 text-right text-[10px] text-[#4A5878]">
                         {!entered
@@ -281,9 +282,12 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           : a.source === 'open_banking'
                             ? `Open Banking${a.synced_at ? ` · ${new Date(a.synced_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`
                             : a.source === 'upload'
-                              ? 'Read from the statement'
+                              ? `Read from the statement${a.statement_date ? ` · ${ukDate(a.statement_date)}` : ''}`
                               : 'Entered manually'}
                       </div>
+                      {entered && a.statement_date && periodEnd && a.statement_date !== periodEnd && (
+                        <div className="text-right text-[10px] font-semibold text-[#8A5A00]">Not the year end ({ukDate(periodEnd)})</div>
+                      )}
                     </td>
                     <td className="p-2 align-top text-right">
                       <div className="font-mono font-bold">{items ? formatPence(add - less) : 'None'}</div>
@@ -319,15 +323,35 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                               {ai.confirmed ? '' : ' · confirm above'}
                             </div>
                           )}
+                          {/* Balances read off the statement: one click swaps in the year-end figure, or the date before or after it */}
+                          {!locked && (a.ai_balances ?? []).some((b) => asPence(b.balance_p) !== asPence(a.statement_p || '0') || b.date !== a.statement_date) && (
+                            <div className="flex flex-col gap-0.5 text-[10px]">
+                              <span className="text-[#4A5878]">
+                                <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
+                                {asPence(a.ai_balances![0].balance_p) === asPence(a.statement_p || '0') ? 'Other balances on the statement:' : 'AI suggests:'}
+                              </span>
+                              {a.ai_balances!
+                                .filter((b) => asPence(b.balance_p) !== asPence(a.statement_p || '0') || b.date !== a.statement_date)
+                                .map((b) => (
+                                  <button
+                                    key={`${b.date}:${b.balance_p}`}
+                                    type="button"
+                                    onClick={() => updateAcc(a.id, { statement_p: b.balance_p, statement_date: b.date || undefined, source: 'upload', synced_at: undefined })}
+                                    title={`${b.label}${b.page ? `, page ${b.page}` : ''}`}
+                                    className="text-left text-[#1D4E89] hover:underline"
+                                  >
+                                    Use {formatPence(asPence(b.balance_p))}
+                                    {b.date ? ` · ${ukDate(b.date)}` : ''} <span className="text-[#7E8DA6]">({b.label})</span>
+                                  </button>
+                                ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
                     <td className="p-1 align-top text-right">
-                      {ledger.final !== 0n && a.code !== '*' ? (
-                        !locked && <span title="It has a balance in the trial balance, so it can only come off this paper by remapping the account" className="text-[10px] text-[#7E8DA6] cursor-help">🔒</span>
-                      ) : (
-                        <RemoveButton onClick={() => removeAccount(a)} label={`Remove ${name}`} disabled={locked} />
-                      )}
+                      {/* An account with a trial balance figure comes off this paper only by remapping it, so it has no remove button */}
+                      {(ledger.final === 0n || a.code === '*') && <RemoveButton onClick={() => removeAccount(a)} label={`Remove ${name}`} disabled={locked} />}
                     </td>
                   </tr>
                   {isOpen && (
@@ -338,7 +362,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           {(
                             [
                               // One list: a deposit in transit is entered as a negative payment
-                              ['less', 'Less: unpresented payments', less, 'payment'],
+                              ['less', 'Reconciliation:', less, 'payment'],
                             ] as const
                           ).map(([side, title, total, noun]) => (
                             <div key={side} className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">

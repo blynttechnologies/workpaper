@@ -545,6 +545,8 @@ export interface Attachment {
   /** First 1,000 characters of a text upload, for reading figures without AI. */
   text_sample?: string;
   linked_schedule_ref?: string;
+  /** Kept on file but off the paper: not shown as evidence until restored */
+  archived_at?: string | null;
   deleted_at?: string | null;
   uploaded_by: string;
   uploaded_by_name: string;

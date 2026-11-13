@@ -90,7 +90,7 @@ const tie = (id: string, label: string, schedule: bigint, tb: bigint | null, tbL
 /** Attachments linked to a schedule row of this paper. */
 export function linkedFiles(workpaperId: string, rowId: string) {
   return db.attachments.filter(
-    (a) => a.workpaper_id === workpaperId && (a.links ?? []).some((l: any) => l.anchor_json?.row === rowId)
+    (a) => a.workpaper_id === workpaperId && !a.deleted_at && !a.archived_at && (a.links ?? []).some((l: any) => l.anchor_json?.row === rowId)
   );
 }
 
@@ -110,6 +110,10 @@ export interface ReconAccount {
   name: string;
   detail?: string;
   statement_p: string; // '' until a statement balance or cash count is entered
+  /** Date of the statement balance used (YYYY-MM-DD) */
+  statement_date?: string;
+  /** Balances the AI read off the attached statement, best first, offered when the figure entered looks wrong */
+  ai_balances?: { date: string; balance_p: string; label: string; page?: number }[];
   source?: 'manual' | 'upload' | 'open_banking';
   synced_at?: string;
   confirmation_p?: string;

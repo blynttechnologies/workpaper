@@ -701,6 +701,17 @@ export const services = {
     return { success: true, message: 'Document moved to bin for 30 days' };
   },
 
+  /** Archive takes a file off the paper but keeps it on record; restoring puts it back as it was. */
+  archiveAttachment(firmId: string, actor: { id: string; name: string; role: UserRole }, attachmentId: string, archived: boolean) {
+    const att = db.attachments.find((a) => a.id === attachmentId && !a.deleted_at);
+    if (!att) throw new ServiceError('Attachment not found', 404);
+    if (actor.role === 'readonly') throw new ServiceError('Your access is read-only.', 403);
+    const before = { ...att };
+    att.archived_at = archived ? new Date().toISOString() : null;
+    db.logAudit(firmId, actor, archived ? 'ARCHIVE_ATTACHMENT' : 'RESTORE_ATTACHMENT', 'attachments', attachmentId, before, att);
+    return att;
+  },
+
   // DOC-06: Evidence linking to schedule lines, journals and checklist items
   linkEvidence(
     firmId: string,
