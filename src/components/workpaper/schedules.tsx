@@ -334,11 +334,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                     <tr className="bg-[#FAFBFD]">
                       <td />
                       <td colSpan={7} className="p-3">
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 gap-3 max-w-2xl">
                           {(
                             [
+                              // One list: a deposit in transit is entered as a negative payment
                               ['less', 'Less: unpresented payments', less, 'payment'],
-                              ['add', 'Add: deposits in transit', add, 'deposit'],
                             ] as const
                           ).map(([side, title, total, noun]) => (
                             <div key={side} className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
@@ -361,14 +361,14 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                                     label={`Description of ${noun}`}
                                     value={r.desc}
                                     disabled={locked}
-                                    placeholder={side === 'less' ? 'e.g. Cheque 001042' : 'e.g. Customer receipt'}
+                                    placeholder="e.g. Cheque 001042, or a deposit as a minus"
                                     onCommit={(v) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, desc: v } : x)))}
                                   />
                                   <MoneyInput
                                     label={`${r.desc || noun} amount`}
                                     value={r.amount_p}
                                     disabled={locked}
-                                    allowNegative={false}
+                                    allowNegative
                                     onCommit={(p) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, amount_p: p } : x)))}
                                   />
                                   <div className="flex items-center gap-1">
@@ -388,11 +388,6 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                               )}
                             </div>
                           ))}
-                        </div>
-                        <div className="mt-2 text-[11px] text-[#4A5878] font-mono">
-                          {kind === 'cash' ? 'Count' : 'Statement'} {entered ? formatPence(asPence(a.statement_p)) : '—'} − payments {formatPence(less)} + deposits {formatPence(add)} = adjusted{' '}
-                          {formatPence(tot(`${a.id}_adjusted`))} · ledger {formatPence(ledger.final)} · difference{' '}
-                          <span className={abs(diff) > tolerance ? 'text-[#B42318] font-bold' : 'text-[#0B6B52] font-bold'}>{formatPence(diff)}</span>
                         </div>
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl text-xs">
                           <label className="flex flex-col gap-1">

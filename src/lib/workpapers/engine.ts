@@ -126,12 +126,19 @@ export const statementEntered = (a: ReconAccount) => a.statement_p !== '' && a.s
  * single statement as one row covering every account; untouched papers start with one row
  * per bank, card and cash account in the trial balance.
  */
+/** One list of reconciling items: a deposit in transit is a negative unpresented payment, so older 'add' rows fold in with the sign flipped and the totals stay the same. */
+function foldAdd(a: any): ReconAccount {
+  if (!(a.add ?? []).length) return { ...a, add: [] };
+  const flipped = a.add.map((r: any) => ({ ...r, amount_p: String(-asPence(r.amount_p)) }));
+  return { ...a, less: [...(a.less ?? []), ...flipped], add: [] };
+}
+
 export function reconAccounts(data: Record<string, any>, leads: LeadFigure[]): ReconAccount[] {
-  if (Array.isArray(data.accounts)) return data.accounts;
+  if (Array.isArray(data.accounts)) return data.accounts.map(foldAdd);
   const sections: any[] = data.sections ?? [];
   const rowsOf = (neg: boolean) => sections.filter((s) => Number(s.sign) < 0 === neg).flatMap((s) => s.rows ?? []);
   if (asPence(data.statement_p) !== 0n || sections.some((s) => s.rows?.length)) {
-    return [{ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) }];
+    return [foldAdd({ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) })];
   }
   return leads
     .filter((l) => l.mapped || l.final !== 0n)

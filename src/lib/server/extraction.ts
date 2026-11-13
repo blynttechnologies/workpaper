@@ -239,8 +239,13 @@ export class AiExtractionService {
       case 'Bank statement': {
         const isStarling = fn.includes('starling');
         const isBarclays = fn.includes('barclays');
-        const bankName = isStarling ? 'Starling Bank Business Account' : 'Barclays Operating Current';
-        const balanceP = isStarling ? '1845000' : '11840217'; // £18,450.00 or £118,402.17
+        const isHsbc = fn.includes('hsbc');
+        const bankName = isStarling ? 'Starling Bank Business Account' : isHsbc ? 'HSBC Business Savings' : isBarclays ? 'Barclays Operating Current' : '';
+        // The closing balance comes only from the statement's own text (PDFs and scans are read by
+        // statement-reader.ts on the server); with no text it stays blank, never a made-up figure.
+        const text = attachment.text_sample ?? '';
+        const closing = /closing balance\D{0,5}([\d,]+\.\d{2})/i.exec(text) ?? /balance\D{0,5}([\d,]+\.\d{2})/i.exec(text);
+        const balanceP = closing ? toPence(closing[1]).toString() : '';
         const stmtDate = '2026-09-30';
 
         const data: BankStatementExtraction = {
@@ -267,7 +272,9 @@ export class AiExtractionService {
         const bullets: DocumentBullet[] = [
           { text: `Bank Account: ${bankName} (${data.sort_code.value} ${data.account_number.value})`, page: 1, clause: 'Header', confidence: 98, gate: 'ready' },
           { text: `Statement Period: Month ended ${stmtDate}`, page: 1, clause: 'Period', confidence: 96, gate: 'ready' },
-          { text: `Closing Balance: £${(Number(balanceP) / 100).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, page: 2, clause: 'Summary', confidence: 96, gate: 'ready' },
+          balanceP
+            ? { text: `Closing Balance: £${(Number(balanceP) / 100).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, page: 2, clause: 'Summary', confidence: 96, gate: 'ready' }
+            : { text: 'Closing Balance: not read, enter it from the statement', page: 2, clause: 'Summary', confidence: 0, gate: 'check' },
           { text: 'Identified 142 statement lines agreeing with debits and credits control totals', page: 2, clause: 'Totals', confidence: 92, gate: 'ready' },
           { text: 'Uncleared items: 1 cheque older than 30 days flagged for review', page: 2, clause: 'Analysis', confidence: 90, gate: 'check' },
         ];
@@ -551,8 +558,9 @@ export class AiExtractionService {
       const stmtBal = extracted.statement_balance_p?.value;
       const account = Array.isArray(wpData.accounts) ? wpData.accounts.find((a: any) => a.id === accountId) : undefined;
       if (account) {
-        // Only fill a blank balance: a figure someone entered is never overwritten by the AI
-        if (stmtBal !== undefined && !account.statement_p) {
+        // Only fill a blank balance: a figure someone entered is never overwritten by the AI,
+        // and a balance the AI could not read stays blank rather than guessing
+        if (stmtBal && !account.statement_p) {
           wpData.accounts = wpData.accounts.map((a: any) => (a.id === account.id ? { ...a, statement_p: String(stmtBal), source: 'upload' } : a));
           addGateItem(
             `accounts.${account.id}.statement_p`,
@@ -564,7 +572,7 @@ export class AiExtractionService {
             extracted.statement_balance_p.reason
           );
         }
-      } else if (stmtBal !== undefined) {
+      } else if (stmtBal) {
         wpData.statement_p = String(stmtBal);
         wpData.statement_source = 'Upload';
         wpData.statement_date = extracted.statement_date?.value || '2026-09-30';

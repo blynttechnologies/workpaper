@@ -666,6 +666,8 @@ export const services = {
       };
       db.attachments.push(attachment);
     }
+    attachment.text_sample = contentSample;
+    attachment.extracted_data = undefined; // a new version is read afresh, never with the old version's figures
 
     db.logAudit(firmId, actor, existingFile ? 'UPLOAD_DOCUMENT_VERSION' : 'UPLOAD_ATTACHMENT', 'attachments', attachment.id, null, {
       filename: attachment.filename,

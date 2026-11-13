@@ -28,3 +28,10 @@ export function periodLabel(e: { period_start: string; period_end: string; frequ
 
 /** The same date a year earlier; 29 February falls back to the 28th. */
 export const sameDayLastYear = (d: string) => `${Number(d.slice(0, 4)) - 1}${d.slice(4).replace('-02-29', '-02-28')}`;
+
+/** UK records (HMRC, Companies Act) are kept 6 years after the year end, beyond the 5 years the money-laundering rules ask. */
+export const RETENTION_YEARS = 6;
+
+/** True while a period's records must still be kept, so it cannot be deleted (archive the client instead). */
+export const mustKeep = (periodEnd: string, today = new Date().toISOString().slice(0, 10)) =>
+  `${Number(periodEnd.slice(0, 4)) + RETENTION_YEARS}${periodEnd.slice(4)}` > today;

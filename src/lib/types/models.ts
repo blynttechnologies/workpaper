@@ -540,6 +540,8 @@ export interface Attachment {
   versions?: AttachmentVersion[];
   ai_summary?: AiDocumentSummary;
   extracted_data?: Record<string, any>;
+  /** First 1,000 characters of a text upload, for reading figures without AI. */
+  text_sample?: string;
   linked_schedule_ref?: string;
   deleted_at?: string | null;
   uploaded_by: string;

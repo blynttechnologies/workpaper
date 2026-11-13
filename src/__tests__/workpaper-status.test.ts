@@ -73,6 +73,16 @@ describe('status engine (WPS-04)', () => {
     expect(accounts).toEqual([expect.objectContaining({ id: 'statement', code: '*', statement_p: '1' })]);
   });
 
+  it('bank and cash: an old deposit in transit folds into the one list as a minus, totals unchanged', () => {
+    const wp = bankPaper();
+    const [a] = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads);
+    wp.data_json = { ...wp.data_json, accounts: [{ ...a, statement_p: '10000', less: [{ id: 'p', amount_p: '3000' }], add: [{ id: 'd', amount_p: '1000' }] }] };
+    const [folded] = reconAccounts(wp.data_json, []);
+    expect(folded.add).toEqual([]);
+    expect(folded.less.map((r) => r.amount_p)).toEqual(['3000', '-1000']);
+    expect(evaluatePaper(wp)!.totals[`${a.id}_adjusted`]).toBe(8000n); // 10000 - 3000 + 1000
+  });
+
   it('never overrides a sign-off status', () => {
     const wp = bankPaper();
     wp.status = 'prepared';
