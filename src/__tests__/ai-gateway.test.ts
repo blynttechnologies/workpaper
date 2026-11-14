@@ -65,6 +65,7 @@ beforeEach(() => {
   O = fake('openai', 'gpt-test');
   providers.anthropic = A.p;
   providers.openai = O.p;
+  providers.gemini = { ...O.p, id: 'gemini', configured: () => false };
 });
 
 const setAi = (ai: any) => {
@@ -261,6 +262,32 @@ describe('OpenAI adapter errors', () => {
     await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'provider', retryable: false, message: expect.stringMatching(/no credit left/) });
     reply(429, { error: { type: 'requests', message: 'Rate limit reached' } });
     await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'rate_limited', retryable: true });
+    vi.restoreAllMocks();
+  });
+});
+
+describe('Gemini adapter', () => {
+  it('skips thought text, bills thinking as output, hands tool calls back with their name, and maps a bad key', async () => {
+    const { geminiProvider } = await import('@/lib/server/ai/providers/gemini');
+    const spy = vi.spyOn(globalThis, 'fetch');
+    const reply = (status: number, body: unknown) => spy.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
+    const c = { model: 'gemini-4-hydrogen', system: 's', messages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'hi' }] }], maxTokens: 10, effort: 'low' as const, timeoutMs: 1000 };
+
+    const modelContent = { role: 'model', parts: [{ text: 'thinking…', thought: true }, { functionCall: { id: 'fc1', name: 'search_standards', args: { q: 'leases' } }, thoughtSignature: 'sig' }] };
+    reply(200, { candidates: [{ content: modelContent, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 3, thoughtsTokenCount: 7 } });
+    const r = await geminiProvider.call(c);
+    expect(r).toMatchObject({ text: '', stop: 'tool', inputTokens: 5, outputTokens: 10, toolCalls: [{ id: 'fc1', name: 'search_standards', input: { q: 'leases' } }] });
+
+    reply(200, { candidates: [{ content: { role: 'model', parts: [{ text: '{"a":1}' }] }, finishReason: 'STOP' }] });
+    await geminiProvider.call({ ...c, messages: [...c.messages, { role: 'assistant', text: '', toolCalls: r.toolCalls, raw: r.raw }, { role: 'tool', results: [{ id: 'fc1', output: 'IAS 16' }] }] });
+    const sent = JSON.parse(String(spy.mock.calls[1][1]!.body));
+    expect(sent.contents[1]).toEqual(modelContent); // thought signature kept
+    expect(sent.contents[2].parts[0]).toEqual({ functionResponse: { id: 'fc1', name: 'search_standards', response: { output: 'IAS 16' } } });
+
+    reply(400, { error: { status: 'INVALID_ARGUMENT', message: 'API key not valid.', details: [{ reason: 'API_KEY_INVALID' }] } });
+    await expect(geminiProvider.call(c)).rejects.toMatchObject({ code: 'not_configured' });
+    reply(200, { candidates: [{ finishReason: 'SAFETY' }] });
+    expect((await geminiProvider.call(c)).stop).toBe('refusal');
     vi.restoreAllMocks();
   });
 });

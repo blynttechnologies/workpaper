@@ -54,6 +54,7 @@ beforeEach(() => {
   tuning.retryDelayMs = 0;
   providers.anthropic = claude;
   providers.openai = off;
+  providers.gemini = { ...off, id: 'gemini' };
 });
 
 function storedDoc(category: any, filename: string, mime = 'application/pdf') {

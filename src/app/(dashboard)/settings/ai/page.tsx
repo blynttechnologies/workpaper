@@ -137,7 +137,7 @@ export default function AiControlCentre() {
       <section className={card}>
         <h2 className={h2}>Providers</h2>
         <p className={`${muted} mt-1`}>API keys are stored in the server&apos;s secrets, never in Workpaper. A provider is used when its key is set and it is switched on here.</p>
-        <div className="mt-4 grid md:grid-cols-2 gap-4">
+        <div className="mt-4 grid md:grid-cols-3 gap-4">
           {data.providers.map((p) => {
             const t = tests[p.id];
             return (

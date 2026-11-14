@@ -41,6 +41,7 @@ beforeEach(() => {
   // No model calls in these tests
   providers.anthropic = { ...providers.anthropic, configured: () => false };
   providers.openai = { ...providers.openai, configured: () => false };
+  providers.gemini = { ...providers.gemini, configured: () => false };
 });
 
 describe('OAuth for outside assistants', () => {

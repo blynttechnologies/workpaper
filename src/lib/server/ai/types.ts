@@ -1,7 +1,7 @@
 /** Shapes shared by the AI gateway, its tasks and its provider adapters. Modules never see provider types. */
 
-export type ProviderId = 'anthropic' | 'openai';
-export const PROVIDER_IDS: ProviderId[] = ['anthropic', 'openai'];
+export type ProviderId = 'anthropic' | 'openai' | 'gemini';
+export const PROVIDER_IDS: ProviderId[] = ['anthropic', 'openai', 'gemini'];
 export type Mode = 'single' | 'review' | 'collaborate';
 /** Where the request came from: the Workpaper app, or an outside assistant through the MCP server. */
 export type Channel = 'app' | 'chatgpt' | 'copilot' | 'mcp';

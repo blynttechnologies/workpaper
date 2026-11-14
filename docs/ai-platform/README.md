@@ -15,6 +15,7 @@ Status at 14 November 2026: built and tested on branch `feat/ai-platform`, **not
 | B: AI gateway | `src/lib/server/ai/`. Includes: one `run(task, input, ctx)` for every model call; a provider interface; task registry; routing per task and per practice; retries with backoff; provider fallback; structured-output validation; a read-only tool-calling loop; timeouts; per-practice monthly spending limit; request, usage and cost logging (`ai_requests` table) | Tested |
 | C: Claude | Anthropic adapter (SDK, streaming, server-side refusal fallback). The bank statement read moved onto the gateway with the same prompt, schema and year-end picking | Tested with a stand-in provider. **Live check: needs `ANTHROPIC_API_KEY` locally** |
 | D: OpenAI API | Responses API adapter over HTTPS (`store: false`), with structured output, PDF and image input, function calling, and errors mapped for retry and fallback. Independent of ChatGPT | Tested with a stand-in. **Live check: needs `OPENAI_API_KEY` and `OPENAI_MODEL`** |
+| D2: Google Gemini API | Third provider: `generateContent` over HTTPS (key in a header, not the URL), with structured output (JSON Schema), PDF and image input, function calling (thought signatures handed back), and thinking tokens billed as output. Default model `gemini-4-hydrogen` (`GEMINI_MODEL` overrides) | **Live checked 14 Nov 2026**: connection, structured output, PDF statement read (injection line ignored), research tool loop, mapping, all passing |
 | E: Microsoft Copilot | Served by the shared MCP server and Workpaper OAuth (section 4). Copilot is recognised from its registration name | Tested over HTTP. **Live check: needs your Microsoft 365 tenant with Copilot Studio** |
 | F: ChatGPT | MCP server at `/api/mcp` with the 8 required tools, OAuth 2.1 (dynamic registration, PKCE, rotating refresh tokens), a consent page, role, client and practice checks, and draft-only writes | Tested over HTTP. **Live check: needs a ChatGPT account with developer mode** |
 | G: shared AI services | `src/lib/server/ai/services.ts` and `ai/documents.ts`. **Document intelligence:** classify, then read fields per document type; the hard-coded sample extraction is removed. **Accounting:** mapping help after the rules. **Risk:** unusual balances, and a review of each paper that raises findings. **Reporting:** conclusion drafts, plus status, exceptions and management summaries. **Workflow:** engagement facts and outstanding work. **Research:** answers from the standards library through a read-only tool | Tested with stand-ins |
@@ -33,7 +34,7 @@ Status at 14 November 2026: built and tested on branch `feat/ai-platform`, **not
 src/lib/server/ai/
   gateway.ts        run(), routing, retries, fallback, modes, logging, testProvider()
   types.ts          shared shapes; modules never see provider types
-  providers/        anthropic.ts (SDK), openai.ts (Responses API over fetch)
+  providers/        anthropic.ts (SDK), openai.ts (Responses API over fetch), gemini.ts (generateContent over fetch)
   tasks/            statement.ts, documents.ts, accounting.ts: prompt, version, schema, defaults per task
   services.ts       mapping, review, conclusion, summaries, risk, research
   documents.ts      extractWithAi: classify and read a stored document
@@ -94,6 +95,7 @@ Pushing any branch deploys. Do these in order.
 
 1. **Secrets.** Add to Secrets Manager `workpaper/app`, then to the CodeBuild buildspec's `secrets-manager:` block **and** its `jq` Variables list:
    - `OPENAI_API_KEY` and `OPENAI_MODEL`, when OpenAI is wanted
+   - `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-4-hydrogen`), when Gemini is wanted
    - `AI_PRICES`, for OpenAI model prices, e.g. `{"<model>":[input,output]}` in USD per million tokens
    - `MCP_ENABLED`: leave it out, or set `0`, for the first release
    - `ANTHROPIC_API_KEY` is already there
@@ -118,7 +120,8 @@ Pushing any branch deploys. Do these in order.
 
 ## 6. Known limits
 
-- OpenAI is called over HTTPS following the Responses API as documented. It has not been run against the live service yet.
+- OpenAI is called over HTTPS following the Responses API as documented. It has not been run against the live service yet (the account had no credit).
+- Gemini 4 Argon and Carbon are priced at the rate from 1 December 2026; until then the real charge is half what the Control Centre shows. Gemini models other than the three Gemini 4 ones need a row in `AI_PRICES` to show a cost.
 - The MCP rate limit is per server instance.
 - AI request logs without a database (local development) are kept in memory only.
 - Writes from outside assistants share the whole-workspace save lock, and retry once on a conflict.

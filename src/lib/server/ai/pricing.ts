@@ -16,6 +16,10 @@ const BUILT_IN: Record<string, [number, number]> = {
   'gpt-6-sol': [2, 10],
   'gpt-6-luna': [0.1, 0.5],
   'gpt-6.1-sol': [2, 10],
+  // Gemini: blog.google launch posts; Argon and Carbon at the rate from 1 December 2026 (the introductory $2/$10 ends 30 November)
+  'gemini-4-hydrogen': [1.5, 7.5],
+  'gemini-4-argon': [4, 20],
+  'gemini-4-carbon': [4, 20],
 };
 
 function prices(): Record<string, [number, number]> {

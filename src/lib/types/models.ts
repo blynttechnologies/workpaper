@@ -134,9 +134,9 @@ export interface Firm {
 /** AI Control Centre settings for one practice. No secrets: API keys live only in the server's environment. */
 export interface AiSettings {
   /** A provider is on when its key is set on the server, unless switched off here. */
-  providers?: Partial<Record<'anthropic' | 'openai', { enabled?: boolean; model?: string }>>;
+  providers?: Partial<Record<'anthropic' | 'openai' | 'gemini', { enabled?: boolean; model?: string }>>;
   /** Per task: which provider goes first, single / review (two read independently) / collaborate (one drafts, one checks), and whether to fall back. */
-  routes?: Record<string, { provider?: 'anthropic' | 'openai'; mode?: 'single' | 'review' | 'collaborate'; fallback?: boolean }>;
+  routes?: Record<string, { provider?: 'anthropic' | 'openai' | 'gemini'; mode?: 'single' | 'review' | 'collaborate'; fallback?: boolean }>;
   monthly_limit_usd?: number | null;
   /** Outside assistants (ChatGPT, Microsoft Copilot): off until an admin turns them on. */
   mcp?: { enabled?: boolean; disabled_tools?: string[] };

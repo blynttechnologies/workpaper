@@ -22,7 +22,7 @@ describe('AI Control Centre settings', () => {
       monthly_limit_usd: 250,
       mcp: { enabled: true, disabled_tools: ['generate_report'] },
     });
-    expect(() => parseSettings({ providers: { gemini: {} } })).toThrow(/Unknown provider/);
+    expect(() => parseSettings({ providers: { mistral: {} } })).toThrow(/Unknown provider/);
     expect(() => parseSettings({ routes: { drop_tables: {} } })).toThrow(/Unknown task/);
     expect(() => parseSettings({ routes: { research: { mode: 'all' } } })).toThrow(/Mode/);
     expect(() => parseSettings({ monthly_limit_usd: -1 })).toThrow(/monthly limit/);

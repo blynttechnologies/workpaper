@@ -22,7 +22,7 @@ import { run, testProvider } from '@/lib/server/ai/gateway';
 import { memoryRequests } from '@/lib/server/ai/usage';
 import { readStatement } from '@/lib/server/statement-reader';
 import { research, suggestMappings } from '@/lib/server/ai/services';
-import type { ProviderId, TaskDef } from '@/lib/server/ai/types';
+import { PROVIDER_IDS, type ProviderId, type TaskDef } from '@/lib/server/ai/types';
 
 const live = process.env.LIVE_AI === '1';
 const firmId = 'firm_blynt_uk';
@@ -81,18 +81,22 @@ const echoTask: TaskDef<{ q: string }, { answer: string; total_p: string }> = {
 
 function routeAllTo(p: ProviderId) {
   const firm = db.firms.find((f) => f.id === firmId)!;
-  const other: ProviderId = p === 'openai' ? 'anthropic' : 'openai';
-  firm.settings = { ...firm.settings, ai: { providers: { [other]: { enabled: false } } } };
+  const others = PROVIDER_IDS.filter((x) => x !== p).map((x) => [x, { enabled: false }]);
+  firm.settings = { ...firm.settings, ai: { providers: Object.fromEntries(others) } };
 }
+const KEYED: Record<ProviderId, boolean> = {
+  openai: !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL),
+  anthropic: !!process.env.ANTHROPIC_API_KEY,
+  gemini: !!process.env.GEMINI_API_KEY,
+};
 
 beforeEach(() => {
   db.seed(true);
   memoryRequests.length = 0;
 });
 
-for (const p of ['openai', 'anthropic'] as ProviderId[]) {
-  const keyed = p === 'openai' ? !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL) : !!process.env.ANTHROPIC_API_KEY;
-  describe.skipIf(!live || !keyed)(`live: ${p}`, () => {
+for (const p of PROVIDER_IDS) {
+  describe.skipIf(!live || !KEYED[p])(`live: ${p}`, () => {
     beforeEach(() => routeAllTo(p));
 
     it('connection test', async () => {
@@ -134,10 +138,11 @@ for (const p of ['openai', 'anthropic'] as ProviderId[]) {
   });
 }
 
-describe.skipIf(!live || !(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL && process.env.ANTHROPIC_API_KEY))('live: both providers', () => {
+describe.skipIf(!live || PROVIDER_IDS.filter((p) => KEYED[p]).length < 2)('live: two providers', () => {
   it('review mode on the statement read: both read it and agree', async () => {
     const firm = db.firms.find((f) => f.id === firmId)!;
-    firm.settings = { ...firm.settings, ai: { routes: { read_bank_statement: { mode: 'review' } } } };
+    const [first] = PROVIDER_IDS.filter((p) => KEYED[p]);
+    firm.settings = { ...firm.settings, ai: { routes: { read_bank_statement: { provider: first, mode: 'review' } } } };
     const read = await readStatement({ mime: 'application/pdf', bytes: STATEMENT }, '2026-09-30', ctx);
     console.log(JSON.stringify(read?.source));
     expect(read?.source.agreement).toBe(true);

@@ -3,7 +3,7 @@ import { ServiceError } from '../services';
 import { providerStatus } from './gateway';
 import { TASK_CATALOG } from './catalog';
 import { listRequests, monthSpendUsd, summarise, type AiRequestRow } from './usage';
-import { PROVIDER_IDS } from './types';
+import { PROVIDER_IDS, type ProviderId } from './types';
 import { TOOLS } from '../mcp/tools';
 import { mcpServerEnabled } from '../mcp/oauth';
 import type { AiSettings, UserRole } from '../../types/models';
@@ -51,7 +51,7 @@ export function parseSettings(body: any): AiSettings {
       if (!PROVIDER_IDS.includes(id as never)) bad(`Unknown provider ${id}`);
       if (p.enabled !== undefined && typeof p.enabled !== 'boolean') bad('enabled must be true or false');
       if (p.model && !MODEL.test(p.model)) bad('That model name is not valid');
-      out.providers[id as 'anthropic' | 'openai'] = { ...(p.enabled !== undefined ? { enabled: p.enabled } : {}), ...(p.model ? { model: p.model } : {}) };
+      out.providers[id as ProviderId] = { ...(p.enabled !== undefined ? { enabled: p.enabled } : {}), ...(p.model ? { model: p.model } : {}) };
     }
   }
   if (body.routes !== undefined) {

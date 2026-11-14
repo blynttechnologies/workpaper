@@ -3,6 +3,7 @@ import { db } from '../db';
 import type { AiSettings } from '../../types/models';
 import { anthropicProvider } from './providers/anthropic';
 import { openaiProvider } from './providers/openai';
+import { geminiProvider } from './providers/gemini';
 import { validate } from './validate';
 import { costUsd } from './pricing';
 import { logRequest, monthSpendUsd } from './usage';
@@ -20,7 +21,7 @@ import { AiError, PROVIDER_IDS, type Mode, type Msg, type Provider, type Provide
  */
 
 // Replaceable in tests
-export const providers: Record<ProviderId, Provider> = { anthropic: anthropicProvider, openai: openaiProvider };
+export const providers: Record<ProviderId, Provider> = { anthropic: anthropicProvider, openai: openaiProvider, gemini: geminiProvider };
 export const tuning = { maxAttempts: 3, retryDelayMs: 400, maxToolRounds: 6, timeoutMs: Number(process.env.AI_TIMEOUT_MS) || 120_000 };
 
 export function aiSettings(firmId: string): AiSettings {
