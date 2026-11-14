@@ -7,6 +7,7 @@ import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, Re
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
+import { services } from '@/lib/server/services';
 import { reconAccounts, leadSources, rowCode, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
@@ -56,9 +57,17 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [splitting, setSplitting] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // Nil bank, card and cash accounts from the trial balance that were never mapped get a mapping, so every one shows here
+  const [, setBackfilled] = useState(0);
+  React.useEffect(() => {
+    const firmId = db.engagements.find((e) => e.id === result.engagementId)?.firm_id;
+    if (!locked && firmId && services.addNilCashMappings(firmId, result.engagementId)) setBackfilled((n) => n + 1);
+  }, [locked, result.engagementId]);
   const leads = result.leads;
   const accounts = reconAccounts(data, leads, result.engagementId);
-  const sourcesOf = (code: string) => leadSources(result.engagementId, code);
+  const sourcesOf = (code: string) => leadSources(result.engagementId, code, true);
+  const waiting = (a: ReconAccount) =>
+    !!a.client_code && db.account_mappings.some((m) => m.engagement_id === result.engagementId && m.source_code === a.client_code && m.status !== 'confirmed' && inLead(m.blynt_code, a.code));
   // Mapped here but not confirmed: not in the trial balance, so not on this paper until confirmed
   const pending = db.account_mappings.filter((m) => m.engagement_id === result.engagementId && m.status !== 'confirmed' && result.template.leads.some((l) => inLead(m.blynt_code, l.code)));
   const tolerance = result.totals.tolerance ?? 100n;
@@ -327,7 +336,13 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                       <div className="font-mono font-bold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
                         {signed(ledger.final)}
                       </div>
-                      <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
+                      {waiting(a) ? (
+                        <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="text-[10px] font-semibold text-[#8A5A00] underline">
+                          Not confirmed on Mapping
+                        </Link>
+                      ) : (
+                        <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
+                      )}
                     </td>
                     <td className="p-1.5 align-top">
                       <MoneyInput
