@@ -26,8 +26,8 @@ export interface ScheduleProps {
   live: () => Record<string, any>;
   /** Upload files and link them to a row (null: the whole paper). */
   dropFiles?: (files: File[], rowId: string | null) => void;
-  /** Bank and cash: pull the Open Banking balance onto the schedule. */
-  pullFeed?: () => void;
+  /** Swap the files linked to two rows. */
+  swapEvidence?: (rowA: string, rowB: string) => void;
   /** Bank and cash: read the row's statement with AI and show what it found beside the paper. */
   readStatement?: (rowId: string) => void;
 }
@@ -52,22 +52,10 @@ const KIND_LABEL = { bank: 'Bank', cash: 'Cash', card: 'Credit card' } as const;
 const signed = (p: bigint) => (p === 0n ? formatPence(p) : `${p < 0n ? '−' : '+'}${formatPence(p < 0n ? -p : p)} ${p < 0n ? 'Cr' : 'Dr'}`);
 const abs = (x: bigint) => (x < 0n ? -x : x);
 
-/** Which account a statement file is for, from the account code or name in its file name. */
-function matchAccount(filename: string, accounts: ReconAccount[]): ReconAccount | undefined {
-  const f = filename.toLowerCase();
-  const words = (a: ReconAccount) => `${a.name} ${a.detail ?? ''}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !['account', 'bank', 'business'].includes(w));
-  return (
-    accounts.find((a) => a.code !== '*' && new RegExp(`(^|\\D)${a.code}(\\D|$)`).test(f)) ??
-    accounts.find((a) => words(a).some((w) => f.includes(w))) ??
-    accounts.find((a) => (accountKind(a.code) === 'cash' && /petty|cash count|till/.test(f)) || (accountKind(a.code) === 'card' && /card|amex|visa|mastercard/.test(f))) ??
-    (accounts.length === 1 ? accounts[0] : undefined)
-  );
-}
-
-export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, pullFeed, readStatement }: ScheduleProps) {
+export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, readStatement, swapEvidence }: ScheduleProps) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [splitting, setSplitting] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
-  const uploadInput = React.useRef<HTMLInputElement | null>(null);
   const leads = result.leads;
   const accounts = reconAccounts(data, leads, result.engagementId);
   const sourcesOf = (code: string) => leadSources(result.engagementId, code);
@@ -89,16 +77,31 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const m = source ? sourcesOf(code).find((x) => x.source_code === source) : undefined;
     saveAccounts((as) => [...as, { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] }]);
   };
-  // Several client accounts on one code: one row each, and what was entered on the combined row stays with the first
-  const splitAccount = (a: ReconAccount) => {
+  // Several client accounts on one code: one row each. What was entered on the combined row, and its files, go to the account it belongs to
+  const splitAccount = (a: ReconAccount, keep: string) => {
     const src = sourcesOf(a.code);
-    const names = src.map((m) => m.source_name || m.source_code);
-    if (!confirm(`Reconcile ${names.join(', ')} as separate rows? What you entered on this row stays with ${names[0]}.`)) return;
+    setSplitting(null);
     saveAccounts((as) =>
       as.flatMap((x) =>
-        x.id !== a.id ? [x] : src.map((m, i) => ({ ...(i === 0 ? x : { id: newId('acc'), statement_p: '', less: [], add: [] }), code: a.code, client_code: m.source_code, name: names[i] }))
+        x.id !== a.id
+          ? [x]
+          : src.map((m) => ({ ...(m.source_code === keep ? x : { id: newId('acc'), statement_p: '', less: [], add: [] }), code: a.code, client_code: m.source_code, name: m.source_name || m.source_code }))
       )
     );
+  };
+  // A statement, its reading, the reconciling items and the files on the wrong row: swap them with the right one
+  const moveDetails = (from: ReconAccount, toId: string) => {
+    const to = accounts.find((x) => x.id === toId);
+    if (!to) return;
+    const fields = ['statement_p', 'statement_date', 'ai_balances', 'source', 'synced_at', 'confirmation_p', 'less', 'add'] as const;
+    const pick = (x: ReconAccount) => Object.fromEntries(fields.map((k) => [k, x[k]]));
+    const swapField = (field: string) =>
+      field.startsWith(`accounts.${from.id}.`) ? field.replace(`accounts.${from.id}.`, `accounts.${to.id}.`) : field.startsWith(`accounts.${to.id}.`) ? field.replace(`accounts.${to.id}.`, `accounts.${from.id}.`) : field;
+    swapEvidence?.(from.id, to.id);
+    save({
+      accounts: reconAccounts(live(), leads, result.engagementId).map((x) => (x.id === from.id ? { ...x, ...pick(to) } : x.id === to.id ? { ...x, ...pick(from) } : x)),
+      confidence_gate_items: (live().confidence_gate_items ?? []).map((g: any) => ({ ...g, field: swapField(String(g.field ?? '')) })),
+    });
   };
   const removeAccount = (a: ReconAccount) => {
     if (confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
@@ -109,16 +112,6 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const files = Array.from(e.dataTransfer.files ?? []);
     if (files.length && !locked && dropFiles) dropFiles(files, rowId);
   };
-  const uploadStatements = (files: File[]) => {
-    if (!dropFiles) return;
-    const byAccount = new Map<string | null, File[]>();
-    for (const f of files) {
-      const id = matchAccount(f.name, accounts)?.id ?? null;
-      byAccount.set(id, [...(byAccount.get(id) ?? []), f]);
-    }
-    byAccount.forEach((fs, id) => dropFiles(fs, id));
-  };
-
   const rows = accounts.map((a) => {
     const kind = accountKind(a.code);
     const ledger = accountLedger(a, accounts, leads, result.template.creditArea, result.engagementId);
@@ -175,31 +168,6 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
 
       {!locked && (
         <div className="flex flex-wrap items-center gap-2">
-          {pullFeed && rows.some((r) => r.kind === 'bank') && (
-            <button type="button" onClick={pullFeed} className="inline-flex items-center gap-1.5 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px]">
-              <RefreshCw className="w-3.5 h-3.5" /> Pull Open Banking feed
-            </button>
-          )}
-          {dropFiles && (
-            <>
-              <button type="button" onClick={() => uploadInput.current?.click()} className={addBtn}>
-                <Upload className="w-3.5 h-3.5" /> Upload statements
-              </button>
-              <input
-                ref={uploadInput}
-                type="file"
-                multiple
-                className="hidden"
-                accept=".pdf,.csv,.xls,.xlsx,.png,.jpg,.jpeg"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  e.target.value = '';
-                  if (files.length) uploadStatements(files);
-                }}
-              />
-              <span className="text-[11px] text-[#4A5878]">Choose several at once: each goes to the account named in its file name, and a blank closing balance is read from it.</span>
-            </>
-          )}
           {unused.length + unusedSources.length > 0 && (
             <select
               aria-label="Add account"
@@ -304,9 +272,40 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                         {a.detail ? ` · ${a.detail}` : ''}
                       </div>
                       {!locked && !a.client_code && a.code !== '*' && sourcesOf(a.code).length > 1 && (
-                        <button type="button" onClick={() => splitAccount(a)} className="mt-0.5 text-[10px] font-bold text-[#B8432F] hover:underline">
-                          Split into {sourcesOf(a.code).length} accounts
-                        </button>
+                        splitting === a.id ? (
+                          <div className="mt-1 p-2 rounded-[8px] border border-[#D3DCEE] bg-[#F5F8FD] text-[10px] text-[#122654] space-y-1">
+                            <div className="font-bold">{statementEntered(a) || files.length || items ? 'What is entered on this row, and its files, belong to:' : 'Split into one row per account:'}</div>
+                            <div className="flex flex-wrap gap-1">
+                              {sourcesOf(a.code).map((m) => (
+                                <button key={m.source_code} type="button" onClick={() => splitAccount(a, m.source_code)} className="px-2 py-0.5 rounded-[6px] border border-[#122654] font-bold hover:bg-white">
+                                  {m.source_name || m.source_code}
+                                </button>
+                              ))}
+                              <button type="button" onClick={() => setSplitting(null)} className="px-2 py-0.5 font-semibold text-[#4A5878]">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setSplitting(a.id)} className="mt-0.5 text-[10px] font-bold text-[#B8432F] hover:underline">
+                            Split into {sourcesOf(a.code).length} accounts
+                          </button>
+                        )
+                      )}
+                      {!locked && (statementEntered(a) || files.length > 0 || items > 0) && accounts.length > 1 && (
+                        <select
+                          aria-label={`Move the statement, items and files on ${name} to another account`}
+                          value=""
+                          onChange={(e) => e.target.value && moveDetails(a, e.target.value)}
+                          className="mt-0.5 block max-w-[180px] text-[10px] text-[#4A5878] bg-transparent border border-transparent hover:border-[#D3DCEE] rounded"
+                        >
+                          <option value="">Wrong account? Move to…</option>
+                          {accounts.filter((x) => x.id !== a.id).map((x) => (
+                            <option key={x.id} value={x.id}>
+                              {accountName(x, result.engagementId)}
+                            </option>
+                          ))}
+                        </select>
                       )}
                       {note && (
                         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#B8432F]">

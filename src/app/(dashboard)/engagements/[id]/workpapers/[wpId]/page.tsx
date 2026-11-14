@@ -386,6 +386,19 @@ export default function WorkpaperPage() {
     refresh();
   };
 
+  // Files linked to one row go to the other, and the other's to the one
+  const swapEvidence = (rowA: string, rowB: string) => {
+    for (const att of db.attachments.filter((x) => x.workpaper_id === workpaper.id && !x.deleted_at)) {
+      const links = att.links ?? [];
+      if (!links.some((l: any) => l.anchor_json?.row === rowA || l.anchor_json?.row === rowB)) continue;
+      const before = { ...att, links: [...links] };
+      att.links = links.map((l: any) =>
+        l.anchor_json?.row === rowA ? { ...l, anchor_json: { ...l.anchor_json, row: rowB } } : l.anchor_json?.row === rowB ? { ...l, anchor_json: { ...l.anchor_json, row: rowA } } : l
+      );
+      db.logAudit(engagement.firm_id, actor, 'LINK_ATTACHMENT', 'attachments', att.id, before, att);
+    }
+  };
+
   const removeFile = (att: Attachment) => {
     if (!confirm(`Delete ${att.filename}? It goes to the bin for 30 days.`)) return;
     try {
@@ -702,6 +715,7 @@ export default function WorkpaperPage() {
     },
     tickFor,
     live,
+    swapEvidence,
     dropFiles: (files: File[], rowId: string | null) => void doUpload(files, rowId),
     // The newest statement on the row, read again and shown beside the paper
     readStatement: (rowId: string) => {
@@ -2020,7 +2034,30 @@ export default function WorkpaperPage() {
               setAiRead(null);
             }}
             top={
-              aiRead && preview?.id === aiRead.attId ? (
+              <>
+              {preview && !isLocked && (
+                // Any file can be moved to the line it belongs to from here, on every paper
+                <label className="flex items-center gap-2 px-3 py-2 border-b border-[#E3E7EF] text-[11px] text-[#4A5878] shrink-0">
+                  Linked to
+                  <select
+                    aria-label={`Link ${preview.filename} to`}
+                    value={((preview.links ?? [])[0]?.anchor_json as any)?.row ?? 'paper'}
+                    onChange={(e) => {
+                      relink(preview, e.target.value);
+                      setPreview({ ...db.attachments.find((x) => x.id === preview.id)! });
+                    }}
+                    className="flex-1 min-w-0 px-1.5 py-1 border border-[#D3DCEE] rounded-[8px] bg-white text-[#122654] font-semibold"
+                  >
+                    <option value="paper">Whole paper</option>
+                    {result.anchors.map((an) => (
+                      <option key={an.id} value={an.id}>
+                        {an.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {aiRead && preview?.id === aiRead.attId ? (
                 <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
                   <div className="flex items-center gap-1.5 font-bold">
                     <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
@@ -2058,7 +2095,8 @@ export default function WorkpaperPage() {
                   )}
                   <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
                 </div>
-              ) : null
+              ) : null}
+              </>
             }
           />
           {sideFolded ? (
