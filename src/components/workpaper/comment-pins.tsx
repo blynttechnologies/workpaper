@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import type { Comment } from '@/lib/types/models';
+import type { Comment, CommentKeep } from '@/lib/types/models';
 
 /**
  * Comments pinned anywhere on a paper, shown as speech bubbles where they were left. A pin on a
@@ -18,6 +18,8 @@ export interface PinAnchor {
   y: number;
   /** Pixels from the top of the paper, for a pin not on a row */
   top?: number;
+  /** The paper's tabs that were open when it was left (a director, a view); it shows only on those */
+  view?: string[];
   label: string;
 }
 
@@ -25,23 +27,34 @@ export type CommentType = Comment['type'];
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 export const rowKey = (tr: HTMLTableRowElement) => norm(Array.from(tr.cells).slice(0, 2).map((c) => c.textContent ?? '').join(' '));
+/** The tabs open on the paper now. */
+export const openTabs = (paper: HTMLElement) => Array.from(paper.querySelectorAll('[role="tab"][aria-selected="true"]')).map((t) => norm(t.textContent ?? '')).filter(Boolean);
+
 export const isPin = (a: unknown): a is PinAnchor => !!a && (a as PinAnchor).kind === 'pin' && typeof (a as PinAnchor).x === 'number';
 
 /** The anchor for a click on the paper. */
 export function anchorAt(paper: HTMLElement, target: HTMLElement, clientX: number, clientY: number): PinAnchor {
+  const tabs = openTabs(paper);
+  const view = tabs.length ? { view: tabs } : {};
+  const on = (label: string) => (tabs.length ? `${label} · ${tabs.join(' · ')}` : label);
   const tr = target.closest('tr');
   if (tr && paper.contains(tr) && rowKey(tr)) {
     const r = tr.getBoundingClientRect();
-    return { kind: 'pin', row: rowKey(tr), x: (clientX - r.left) / r.width, y: (clientY - r.top) / r.height, label: rowKey(tr) };
+    return { kind: 'pin', row: rowKey(tr), x: (clientX - r.left) / r.width, y: (clientY - r.top) / r.height, ...view, label: on(rowKey(tr)) };
   }
   const p = paper.getBoundingClientRect();
   const heading = target.closest('section, fieldset, [class*="rounded"]')?.querySelector('h2, h3, legend, .font-bold')?.textContent;
   // shortcut: off a table row the pin keeps its distance from the top of the paper, so it drifts if something above it grows; anchor to sections if that matters
-  return { kind: 'pin', x: (clientX - p.left) / p.width, y: 0, top: clientY - p.top, label: heading ? norm(heading) : 'On the paper' };
+  return { kind: 'pin', x: (clientX - p.left) / p.width, y: 0, top: clientY - p.top, ...view, label: on(heading ? norm(heading) : 'On the paper') };
 }
 
 /** Where a pin sits on the paper now, or null when its row has gone. */
 export function placeOf(paper: HTMLElement, a: PinAnchor): { left: number; top: number } | null {
+  // Left on another tab of the paper: hidden until that tab is open again
+  if (a.view?.length) {
+    const open = openTabs(paper);
+    if (!a.view.every((v) => open.includes(v))) return null;
+  }
   const p = paper.getBoundingClientRect();
   if (a.row) {
     const tr = Array.from(paper.querySelectorAll('tr')).find((t) => rowKey(t) === a.row);
@@ -65,6 +78,36 @@ export const TYPE_TONE: Record<CommentType, { bg: string; chip: string; label: s
   review_note: { bg: 'bg-[#C58B00]', chip: 'bg-[#FFF4DB] text-[#8A5A00]', label: 'Review note' },
   client_query: { bg: 'bg-[#1D4E89]', chip: 'bg-[#EAF5FC] text-[#1D4E89]', label: 'Client query' },
 };
+
+export const KEEP_LABEL: Record<CommentKeep, string> = { this_year: 'This year only', next_year: 'Also next year', every_year: 'Every year' };
+
+/** Editing a comment or reply in place. */
+export function EditBox({ value, onChange, onSave, onCancel }: { value: string; onChange: (v: string) => void; onSave: () => void; onCancel: () => void }) {
+  return (
+    <div className="mt-1.5 flex flex-col gap-1.5">
+      <textarea
+        autoFocus
+        aria-label="Edit"
+        rows={3}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onCancel();
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave();
+        }}
+        className="w-full p-2 border border-[#D3DCEE] rounded-[8px] outline-none focus:border-[#FF7A66]"
+      />
+      <div className="flex justify-end gap-2 text-[11px]">
+        <button type="button" onClick={onCancel} className="px-2 font-bold text-[#4A5878]">
+          Cancel
+        </button>
+        <button type="button" onClick={onSave} disabled={!value.trim()} className="px-3 py-1 font-bold rounded-[8px] bg-[#122654] text-white disabled:opacity-40">
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Avatar({ name, type, small }: { name: string; type: CommentType; small?: boolean }) {
   return (
@@ -90,12 +133,12 @@ export function CommentPins({
   placing: boolean;
   canPost: boolean;
   onOpen: (id: string) => void;
-  onPost: (anchor: PinAnchor, type: CommentType, body: string) => void;
+  onPost: (anchor: PinAnchor, type: CommentType, body: string, keep: CommentKeep) => void;
   onStopPlacing: () => void;
 }) {
   const pinned = comments.filter((c) => c.status === 'open' && isPin(c.anchor_json));
   const [places, setPlaces] = useState<Record<string, { left: number; top: number } | null>>({});
-  const [draft, setDraft] = useState<{ anchor: PinAnchor; left: number; top: number; type: CommentType; body: string } | null>(null);
+  const [draft, setDraft] = useState<{ anchor: PinAnchor; left: number; top: number; type: CommentType; body: string; keep: CommentKeep } | null>(null);
   const [, setTick] = useState(0);
 
   // Follow the paper as it lays out, grows or is resized
@@ -129,7 +172,7 @@ export function CommentPins({
       e.stopPropagation();
       const anchor = anchorAt(el, target, e.clientX, e.clientY);
       const p = el.getBoundingClientRect();
-      setDraft({ anchor, left: e.clientX - p.left, top: e.clientY - p.top, type: 'comment', body: '' });
+      setDraft({ anchor, left: e.clientX - p.left, top: e.clientY - p.top, type: 'comment', body: '', keep: 'this_year' });
       onStopPlacing();
     };
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onStopPlacing();
@@ -146,7 +189,7 @@ export function CommentPins({
   const width = paper.current?.clientWidth ?? 0;
   const post = () => {
     if (!draft?.body.trim()) return;
-    onPost(draft.anchor, draft.type, draft.body.trim());
+    onPost(draft.anchor, draft.type, draft.body.trim(), draft.keep);
     setDraft(null);
   };
 
@@ -205,6 +248,16 @@ export function CommentPins({
             placeholder="Write a comment… @name to tag"
             className="w-full p-2 border border-[#D3DCEE] rounded-[8px] outline-none focus:border-[#FF7A66]"
           />
+          <label className="mt-1.5 flex items-center gap-1.5 text-[10px] text-[#4A5878]">
+            Keep
+            <select aria-label="How long to keep this comment" value={draft.keep} onChange={(e) => setDraft({ ...draft, keep: e.target.value as CommentKeep })} className="flex-1 px-1.5 py-1 border border-[#D3DCEE] rounded-[6px] bg-white">
+              {(Object.keys(KEEP_LABEL) as CommentKeep[]).map((k) => (
+                <option key={k} value={k}>
+                  {KEEP_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
           {draft.type === 'review_note' && <div className="mt-1 text-[10px] text-[#8A5A00]">A review note blocks sign-off until it is resolved.</div>}
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={() => setDraft(null)} className="px-2.5 py-1 font-bold text-[#4A5878]">

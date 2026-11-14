@@ -450,7 +450,7 @@ export type AnchorJson =
   | { kind: 'row'; table: string; row: string }
   | { kind: 'file'; attachment_id: string }
   /** Pinned anywhere on the paper: a table row (by its first cells' text) and the spot within it, or a place on the paper */
-  | { kind: 'pin'; row?: string; x: number; y: number; top?: number; label: string }
+  | { kind: 'pin'; row?: string; x: number; y: number; top?: number; view?: string[]; label: string }
   | { kind: 'paper' };
 
 export interface Comment {
@@ -469,12 +469,20 @@ export interface Comment {
   body: string;
   mentions?: string[]; // users tagged with @name (REV-03)
   replies?: CommentReply[];
+  /** How long it stays: this year only (the default), carried into next year once, or every year */
+  keep?: CommentKeep;
+  /** Period end of the year it was carried from, when it came from last year's paper */
+  carried_from?: string;
+  edited_at?: string;
 }
+
+export type CommentKeep = 'this_year' | 'next_year' | 'every_year';
 
 export interface CommentReply {
   id: string;
   comment_id: string;
   body: string;
+  edited_at?: string;
   mentions: string[];
   created_by: string;
   created_by_name: string;

@@ -189,11 +189,22 @@ export function checkRules(before: State, after: State, actor: Actor) {
 
   // Review notes may only be resolved by a reviewer or above
   const com = changed(rows(before, 'comments'), rows(after, 'comments'), 'comments');
+  // What someone wrote is theirs to change or delete (or an admin's); anyone may reply, resolve or set how long it is kept
+  const own = (by: string) => by === actor.id || actor.role === 'admin';
   for (const { before: b, after: a } of com.updated) {
     if (a.type === 'review_note' && b.status !== a.status && a.status === 'resolved' && !REVIEWER_UP.includes(actor.role)) {
       deny('Review notes may only be resolved by a reviewer or partner.');
     }
+    if ((b.body !== a.body || b.type !== a.type || !same(b.anchor_json, a.anchor_json) || b.created_by !== a.created_by) && !own(b.created_by)) deny('Only the person who wrote a comment can change it.');
+    const next = new Map<string, any>((a.replies ?? []).map((r: any) => [r.id, r]));
+    for (const r of b.replies ?? []) {
+      const n = next.get(r.id);
+      if ((!n || n.body !== r.body || n.created_by !== r.created_by) && !own(r.created_by)) deny('Only the person who wrote a reply can change or delete it.');
+    }
   }
+  // A paper being removed takes its comments with it; otherwise only the writer deletes one
+  const papersAfter = new Set(rows(after, 'workpapers').map((w) => w.id));
+  for (const c of com.removed) if (papersAfter.has(c.workpaper_id) && !own(c.created_by)) deny('Only the person who wrote a comment can delete it.');
 
   // Practice-wide workflow templates are for managers and above to create, change or remove
   const wft = changed(rows(before, 'workflow_templates'), rows(after, 'workflow_templates'), 'workflow_templates');
