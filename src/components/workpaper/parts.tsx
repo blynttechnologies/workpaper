@@ -519,7 +519,8 @@ export function PreviewModal({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={fileUrl(file)} alt={file.filename} className="max-w-full mx-auto" />
             ) : (
-              <iframe src={fileUrl(file)} title={file.filename} className="w-full h-full bg-white" />
+              // PDFs open fitted to the panel's width, without the thumbnails sidebar (each browser's viewer reads the hints it knows)
+              <iframe src={kind === 'PDF' ? `${fileUrl(file)}#view=FitH&zoom=page-width&navpanes=0` : fileUrl(file)} title={file.filename} className="w-full h-full bg-white" />
             )
           ) : (
             <div className="p-10 text-center text-sm text-[#4A5878]">

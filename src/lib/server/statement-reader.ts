@@ -149,6 +149,7 @@ export async function readStatement(file: { mime: string; bytes: Buffer }, perio
     bank_name: field(out.bank_name, 'Bank named on the statement'),
     statement_date: field(main.date, atEnd ? 'The year end' : 'The statement does not reach the year end'),
     statement_balance_p: field(main.balance_p, main.label),
-    candidates: others.filter((o) => o !== main),
+    // Only the year-end balance is offered; the other dates on the statement were noise to pick through
+    candidates: [],
   };
 }
