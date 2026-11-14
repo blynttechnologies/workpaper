@@ -163,18 +163,40 @@ export const exchangeCode = (code: string) =>
 
 const refreshTokens = (refreshToken: string) => tokenRequest({ grant_type: 'refresh_token', refresh_token: refreshToken });
 
-async function xeroGet<T>(url: string, accessToken: string, tenantId?: string): Promise<T> {
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-      ...(tenantId ? { 'xero-tenant-id': tenantId } : {}),
-    },
-  });
-  if (res.status === 401) throw new XeroReconnectError();
-  if (res.status === 429) throw new ServiceError('Xero is limiting requests right now. Try again in a minute.', 429, 'XERO_RATE_LIMIT');
-  if (!res.ok) throw new ServiceError(`Xero returned an error (${res.status}).`, 502, 'XERO_ERROR');
-  return (await res.json()) as T;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One Xero GET. Xero allows each organisation 60 calls a minute and 5,000 a day; when it says to
+ * wait a minute or less we wait and try again, as long as that still ends before `deadline`.
+ */
+async function xeroGet<T>(url: string, accessToken: string, tenantId?: string, deadline = 0): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        ...(tenantId ? { 'xero-tenant-id': tenantId } : {}),
+      },
+    });
+    if (res.status === 401) throw new XeroReconnectError();
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('retry-after')) || 60;
+      console.warn(`Xero 429 (${res.headers.get('x-rate-limit-problem') ?? 'unknown'} limit), retry after ${wait}s`);
+      if (wait <= 60 && attempt < 3 && Date.now() + wait * 1000 < deadline) {
+        await sleep(wait * 1000);
+        continue;
+      }
+      throw new ServiceError(
+        wait > 3600
+          ? `Xero's daily limit for this organisation is used up. Try again in about ${Math.ceil(wait / 3600)} hours.`
+          : `Xero is limiting requests right now. Try again in ${wait > 60 ? `${Math.ceil(wait / 60)} minutes` : 'a minute'}.`,
+        429,
+        'XERO_RATE_LIMIT'
+      );
+    }
+    if (!res.ok) throw new ServiceError(`Xero returned an error (${res.status}).`, 502, 'XERO_ERROR');
+    return (await res.json()) as T;
+  }
 }
 
 // ── Trial balance report → import lines ──
@@ -424,20 +446,24 @@ export function parseTransactions(engagementId: string, shortCode: string | null
   return rows;
 }
 
-/** Every page of one Xero list endpoint for the period (Xero pages hold 100). */
-async function allPages(endpoint: string, key: string, token: string, tenantId: string, from: string, to: string): Promise<XeroDoc[]> {
+/**
+ * Every page of one Xero list endpoint for the period. Pages hold 100, or up to 1,000 where the
+ * endpoint takes pageSize, which keeps a pull well inside Xero's 60 calls a minute.
+ */
+async function allPages(endpoint: string, key: string, token: string, tenantId: string, from: string, to: string, deadline = 0): Promise<XeroDoc[]> {
   const dt = (d: string) => `DateTime(${d.replaceAll('-', ', ')})`;
   const where = encodeURIComponent(`Date >= ${dt(from)} && Date <= ${dt(to)}`);
   const idOf = (d: XeroDoc) => d.InvoiceID ?? d.CreditNoteID ?? d.BankTransactionID ?? d.PaymentID ?? d.BankTransferID ?? d.ManualJournalID ?? JSON.stringify(d);
   const out: XeroDoc[] = [];
   const seen = new Set<string>();
   for (let page = 1; page <= 50; page++) {
-    const body = await xeroGet<Record<string, XeroDoc[]>>(`${API}/${endpoint}?where=${where}&page=${page}`, token, tenantId);
+    const body = await xeroGet<Record<string, XeroDoc[]>>(`${API}/${endpoint}?where=${where}&page=${page}&pageSize=1000`, token, tenantId, deadline);
     const items = body[key] ?? [];
     // Some endpoints ignore the page number and send everything again: stop when nothing is new
     const fresh = items.filter((d) => !seen.has(idOf(d)));
     fresh.forEach((d) => seen.add(idOf(d)));
     out.push(...fresh);
+    // Fewer than 100 is the last page whichever page size the endpoint used
     if (items.length < 100 || !fresh.length) break;
   }
   return out;
@@ -480,7 +506,8 @@ export async function bankPaymentsAfter(actor: Actor, engagementId: string, days
   const to = day(Math.min(Math.max(Math.round(days) || 60, 1), 366));
   requirePullable(from, 'Xero');
   const token = await accessTokenFor(conn);
-  const [payments, bank] = await Promise.all([allPages('Payments', 'Payments', token, conn.tenant_id, from, to), allPages('BankTransactions', 'BankTransactions', token, conn.tenant_id, from, to)]);
+  const deadline = Date.now() + 200_000;
+  const [payments, bank] = await Promise.all([allPages('Payments', 'Payments', token, conn.tenant_id, from, to, deadline), allPages('BankTransactions', 'BankTransactions', token, conn.tenant_id, from, to, deadline)]);
   return { from, to, payments: parseBankPayments(conn.short_code, { payments, bank }) };
 }
 
@@ -558,14 +585,16 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
   const conn = db.xero_connections.find((c) => c.firm_id === actor.firmId && c.client_id === eng.client_id);
   if (!conn) throw new ServiceError('This client is not connected to Xero yet.', 409, 'XERO_NOT_CONNECTED');
   requirePullable(eng.period_start, 'Xero');
+  // Waits for Xero's limits must end well inside the server's 300-second request limit
+  const deadline = Date.now() + 200_000;
 
   const token = await accessTokenFor(conn);
   const [accounts, report, priorReport] = await Promise.all([
-    xeroGet<{ Accounts: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id),
-    xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${eng.period_end}`, token, conn.tenant_id),
+    xeroGet<{ Accounts: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id, deadline),
+    xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${eng.period_end}`, token, conn.tenant_id, deadline),
     // Comparatives are a nicety: the import still goes ahead without them, and a prior year outside the window isn't read
     canPull(sameDayLastYear(eng.period_start))
-      ? xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${sameDayLastYear(eng.period_end)}`, token, conn.tenant_id).catch(() => null)
+      ? xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${sameDayLastYear(eng.period_end)}`, token, conn.tenant_id, deadline).catch(() => null)
       : null,
   ]);
   const current = parseTrialBalance(report, accounts.Accounts ?? []);
@@ -573,17 +602,36 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
   const out = importTrialBalance(actor, engagementId, lines, 'xero');
   if (out.status >= 400) return out;
 
-  const page = (endpoint: string) => allPages(endpoint, endpoint, token, conn.tenant_id, eng.period_start, eng.period_end);
-  const [invoices, bank, journals] = await Promise.all([page('Invoices'), page('BankTransactions'), page('ManualJournals')]);
+  conn.last_synced_at = new Date().toISOString();
+
+  const page = (endpoint: string) => allPages(endpoint, endpoint, token, conn.tenant_id, eng.period_start, eng.period_end, deadline);
+  // The trial balance is in; Xero's limit stopping the transactions keeps it, and the last transactions pulled stay
+  const rateLimited = (err: unknown) => {
+    if (!(err instanceof ServiceError) || err.code !== 'XERO_RATE_LIMIT') throw err;
+    out.body.rateLimited = err.message;
+    return out;
+  };
+  let invoices: XeroDoc[], bank: XeroDoc[], journals: XeroDoc[];
+  try {
+    [invoices, bank, journals] = await Promise.all([page('Invoices'), page('BankTransactions'), page('ManualJournals')]);
+  } catch (err) {
+    return rateLimited(err);
+  }
   // The rest are gathered in a second round (Xero allows five calls at once), and one that fails,
   // e.g. a connection made before payments were requested, doesn't stop the pull
   const notGathered: string[] = [];
   const extra = (label: string, endpoint: string) =>
-    page(endpoint).catch(() => {
+    page(endpoint).catch((err) => {
+      if (err instanceof ServiceError && err.code === 'XERO_RATE_LIMIT') throw err;
       notGathered.push(label);
       return [] as XeroDoc[];
     });
-  const [creditNotes, payments, transfers] = await Promise.all([extra('credit notes', 'CreditNotes'), extra('payments', 'Payments'), extra('bank transfers', 'BankTransfers')]);
+  let creditNotes: XeroDoc[], payments: XeroDoc[], transfers: XeroDoc[];
+  try {
+    [creditNotes, payments, transfers] = await Promise.all([extra('credit notes', 'CreditNotes'), extra('payments', 'Payments'), extra('bank transfers', 'BankTransfers')]);
+  } catch (err) {
+    return rateLimited(err);
+  }
   const names = new Map((accounts.Accounts ?? []).filter((a) => a.Code).map((a) => [a.Code!, a.Name]));
   const systemAccount = (name: string) => (accounts.Accounts ?? []).find((a) => a.SystemAccount === name)?.Code;
   const tx = parseTransactions(engagementId, conn.short_code, { invoices, bank, journals, creditNotes, payments, transfers }, names, { debtors: systemAccount('DEBTORS'), creditors: systemAccount('CREDITORS') });
@@ -591,7 +639,6 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
   db.transactions = [...db.transactions.filter((t) => !(t.engagement_id === engagementId && t.source === 'Xero')), ...tx];
   out.body.transactionCount = tx.length;
   if (notGathered.length) out.body.notGathered = notGathered;
-  conn.last_synced_at = new Date().toISOString();
   return out;
 }
 
