@@ -5,7 +5,7 @@ import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, Re
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
-import { reconAccounts, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
+import { reconAccounts, leadSources, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
 import { Tiles, type Tone } from './kit';
@@ -65,20 +65,34 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const [dragOver, setDragOver] = useState<string | null>(null);
   const uploadInput = React.useRef<HTMLInputElement | null>(null);
   const leads = result.leads;
-  const accounts = reconAccounts(data, leads);
+  const accounts = reconAccounts(data, leads, result.engagementId);
+  const sourcesOf = (code: string) => leadSources(result.engagementId, code);
   const tolerance = result.totals.tolerance ?? 100n;
   const tot = (key: string) => result.totals[key] ?? 0n;
   const periodEnd = db.engagements.find((e) => e.id === result.engagementId)?.period_end ?? '';
 
   // Writes always store the full account list, built on the latest data
-  const saveAccounts = (fn: (as: ReconAccount[]) => ReconAccount[]) => save({ accounts: fn(reconAccounts(live(), leads)) });
+  const saveAccounts = (fn: (as: ReconAccount[]) => ReconAccount[]) => save({ accounts: fn(reconAccounts(live(), leads, result.engagementId)) });
   const updateAcc = (id: string, patch: Partial<ReconAccount>) => saveAccounts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   const updateItems = (id: string, side: 'less' | 'add', fn: (rows: ReconItem[]) => ReconItem[]) =>
     saveAccounts((as) => as.map((a) => (a.id === id ? { ...a, [side]: fn(a[side] ?? []) } : a)));
-  const addAccount = (code: string) => {
+  const addAccount = (value: string) => {
+    const [code, source] = value.split('|');
     const lead = result.template.leads.find((l) => l.code === code);
     if (!lead) return;
-    saveAccounts((as) => [...as, { id: newId('acc'), code, name: lead.label, statement_p: '', less: [], add: [] }]);
+    const m = source ? sourcesOf(code).find((x) => x.source_code === source) : undefined;
+    saveAccounts((as) => [...as, { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] }]);
+  };
+  // Several client accounts on one code: one row each, and what was entered on the combined row stays with the first
+  const splitAccount = (a: ReconAccount) => {
+    const src = sourcesOf(a.code);
+    const names = src.map((m) => m.source_name || m.source_code);
+    if (!confirm(`Reconcile ${names.join(', ')} as separate rows? What you entered on this row stays with ${names[0]}.`)) return;
+    saveAccounts((as) =>
+      as.flatMap((x) =>
+        x.id !== a.id ? [x] : src.map((m, i) => ({ ...(i === 0 ? x : { id: newId('acc'), statement_p: '', less: [], add: [] }), code: a.code, client_code: m.source_code, name: names[i] }))
+      )
+    );
   };
   const removeAccount = (a: ReconAccount) => {
     if (confirm(`Remove ${accountName(a)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
@@ -101,7 +115,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
 
   const rows = accounts.map((a) => {
     const kind = accountKind(a.code);
-    const ledger = accountLedger(a, accounts, leads, result.template.creditArea);
+    const ledger = accountLedger(a, accounts, leads, result.template.creditArea, result.engagementId);
     const entered = statementEntered(a);
     const diff = tot(`${a.id}_diff`);
     const files = filesFor(a.id);
@@ -114,7 +128,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const reconciled = rows.filter((r) => r.status === 'done' || r.status === 'evidence').length;
   const withEvidence = rows.filter((r) => r.files.length).length;
   const todo = rows.filter((r) => !r.entered).length;
-  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code));
+  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code) && sourcesOf(l.code).length < 2);
+  const unusedSources = result.template.leads.flatMap((l) => {
+    const src = sourcesOf(l.code);
+    return src.length > 1 && !accounts.some((a) => a.code === l.code && !a.client_code) ? src.filter((m) => !accounts.some((a) => a.code === l.code && a.client_code === m.source_code)).map((m) => ({ l, m })) : [];
+  });
   const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
   const pill = {
     todo: 'bg-[#EEF1F6] text-[#4A5878]',
@@ -176,7 +194,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               <span className="text-[11px] text-[#4A5878]">Choose several at once: each goes to the account named in its file name, and a blank closing balance is read from it.</span>
             </>
           )}
-          {unused.length > 0 && (
+          {unused.length + unusedSources.length > 0 && (
             <select
               aria-label="Add account"
               value=""
@@ -184,6 +202,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               className="ml-auto min-h-[32px] px-2 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] rounded-[8px]"
             >
               <option value="">+ Add account</option>
+              {unusedSources.map(({ l, m }) => (
+                <option key={`${l.code}|${m.source_code}`} value={`${l.code}|${m.source_code}`}>
+                  {l.code} {m.source_name || m.source_code} · {formatPence(asPence(m.balance_p))}
+                </option>
+              ))}
               {unused
                 .map((l) => ({ l, bal: leads.find((x) => x.code === l.code)?.final ?? 0n }))
                 .sort((a, b) => (b.bal !== 0n ? 1 : 0) - (a.bal !== 0n ? 1 : 0))
@@ -256,8 +279,14 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                       </div>
                       <div className="text-[10px] text-[#4A5878]">
                         {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
+                        {a.client_code ? ` · ${a.client_code}` : ''}
                         {a.detail ? ` · ${a.detail}` : ''}
                       </div>
+                      {!locked && !a.client_code && a.code !== '*' && sourcesOf(a.code).length > 1 && (
+                        <button type="button" onClick={() => splitAccount(a)} className="mt-0.5 text-[10px] font-bold text-[#B8432F] hover:underline">
+                          Split into {sourcesOf(a.code).length} accounts
+                        </button>
+                      )}
                       {note && (
                         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#B8432F]">
                           <AlertTriangle className="w-3 h-3 shrink-0" /> {note}

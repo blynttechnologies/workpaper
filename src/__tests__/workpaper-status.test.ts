@@ -67,6 +67,24 @@ describe('status engine (WPS-04)', () => {
     expect(paperStatus(wp)).toBe('unreconciled');
   });
 
+  it('bank and cash: two bank accounts mapped to one code are reconciled as two rows that still add up to the TB', () => {
+    const wp = bankPaper();
+    const e = wp.engagement_id;
+    for (let i = db.account_mappings.length - 1; i >= 0; i--) if (db.account_mappings[i].engagement_id === e && db.account_mappings[i].blynt_code === '6000') db.account_mappings.splice(i, 1);
+    const add = (source_code: string, source_name: string, balance_p: string) =>
+      db.account_mappings.push({ id: `m_${source_code}`, engagement_id: e, source_code, source_name, source_type: 'Bank', balance_p, blynt_code: '6000', status: 'confirmed', confidence: 100, method: 'manual' } as any);
+    add('ACC-BELGRAVE', 'Belgrave', '555450');
+    add('ACC-PATCHAM', 'Patcham', '1954927');
+    const r = evaluatePaper(wp)!;
+    const rows = reconAccounts(wp.data_json, r.leads, e).filter((a) => a.code === '6000');
+    expect(rows.map((a) => [a.client_code, a.name])).toEqual([['ACC-BELGRAVE', 'Belgrave'], ['ACC-PATCHAM', 'Patcham']]);
+    const lead6000 = r.leads.find((l) => l.code === '6000')!.final;
+    const ledgers = rows.map((a) => r.totals[`${a.id}_ledger`]);
+    expect(ledgers[1]).toBe(1954927n);
+    expect(ledgers[0] + ledgers[1]).toBe(lead6000); // the first also carries any journals on 6000
+    expect(r.totals.ledger).toBe(r.leads.reduce((a, l) => a + l.final, 0n));
+  });
+
   it('bank and cash: a paper saved with one statement keeps it as a single row covering every account', () => {
     const wp = bankPaper();
     wp.data_json.statement_p = '1';

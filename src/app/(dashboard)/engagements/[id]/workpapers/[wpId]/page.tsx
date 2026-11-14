@@ -318,7 +318,7 @@ export default function WorkpaperPage() {
     if (added.length) touchPaper();
     setUploading(false);
     // Bank and cash: a statement dropped on an account row opens beside the paper with what the AI read off it
-    if (t.kind === 'reconciliation' && linkRow && reconAccounts(live(), result!.leads).some((a) => a.id === linkRow)) {
+    if (t.kind === 'reconciliation' && linkRow && reconAccounts(live(), result!.leads, result!.engagementId).some((a) => a.id === linkRow)) {
       for (const [i, att] of added.entries()) await readStatementFor(att, linkRow, i === 0);
     }
     setMessage(
@@ -330,7 +330,7 @@ export default function WorkpaperPage() {
   }
 
   const saveAccount = (rowId: string, patch: Partial<ReconAccount>) =>
-    saveData({ accounts: reconAccounts(live(), result!.leads).map((a) => (a.id === rowId ? { ...a, ...patch } : a)) });
+    saveData({ accounts: reconAccounts(live(), result!.leads, result!.engagementId).map((a) => (a.id === rowId ? { ...a, ...patch } : a)) });
 
   /**
    * The AI reads a statement on the server: the balance at the year end and the balances either side.
@@ -706,7 +706,7 @@ export default function WorkpaperPage() {
       if (file) void readStatementFor(file, rowId, true);
     },
     pullFeed: () => {
-      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result.leads) });
+      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result.leads, result.engagementId) });
       try {
         const { feedResponse } = services.reconcileBankWithOpenBanking(engagement.firm_id, actor, workpaper.id);
         touchPaper();
@@ -2028,7 +2028,7 @@ export default function WorkpaperPage() {
                   {aiRead.state === 'done' && (
                     <ul className="mt-2 flex flex-col gap-1">
                       {aiRead.options.map((b) => {
-                        const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
+                        const acc = reconAccounts(live(), result!.leads, result!.engagementId).find((a) => a.id === aiRead.rowId);
                         const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
                         return (
                           <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">

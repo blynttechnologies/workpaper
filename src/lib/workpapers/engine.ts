@@ -107,6 +107,8 @@ export interface ReconItem {
 export interface ReconAccount {
   id: string; // also the evidence anchor for the statement or count
   code: string; // Blynt lead code, or '*' for every lead no other row covers
+  /** The client account this row reconciles, when several are mapped to the same code */
+  client_code?: string;
   name: string;
   detail?: string;
   statement_p: string; // '' until a statement balance or cash count is entered
@@ -140,24 +142,50 @@ function foldAdd(a: any): ReconAccount {
   return { ...a, less: [...(a.less ?? []), ...flipped], add: [] };
 }
 
-export function reconAccounts(data: Record<string, any>, leads: LeadFigure[]): ReconAccount[] {
+/** Confirmed client accounts mapped under a lead code. */
+export const leadSources = (engagementId: string, code: string) =>
+  db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status === 'confirmed' && inLead(m.blynt_code, code));
+
+export function reconAccounts(data: Record<string, any>, leads: LeadFigure[], engagementId = ''): ReconAccount[] {
   if (Array.isArray(data.accounts)) return data.accounts.map(foldAdd);
   const sections: any[] = data.sections ?? [];
   const rowsOf = (neg: boolean) => sections.filter((s) => Number(s.sign) < 0 === neg).flatMap((s) => s.rows ?? []);
   if (asPence(data.statement_p) !== 0n || sections.some((s) => s.rows?.length)) {
     return [foldAdd({ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) })];
   }
+  // Two or more client accounts on one code are reconciled one row each
   return leads
     .filter((l) => l.mapped || l.final !== 0n)
-    .map((l) => ({ id: `acc_${l.code}`, code: l.code, name: l.label, statement_p: '', less: [], add: [] }));
+    .flatMap((l) => {
+      const src = engagementId ? leadSources(engagementId, l.code) : [];
+      return src.length > 1
+        ? src.map((m) => ({ id: `acc_${l.code}_${m.source_code}`, code: l.code, client_code: m.source_code, name: m.source_name || m.source_code, statement_p: '', less: [], add: [] }))
+        : [{ id: `acc_${l.code}`, code: l.code, name: l.label, statement_p: '', less: [], add: [] }];
+    });
 }
 
-/** Ledger balance for one row: its lead, or for '*' every lead no other row covers. */
-export function accountLedger(a: ReconAccount, accounts: ReconAccount[], leads: LeadFigure[], creditArea = false) {
-  const others = new Set(accounts.filter((x) => x !== a).map((x) => x.code));
-  const ls = a.code === '*' ? leads.filter((l) => !others.has(l.code)) : leads.filter((l) => l.code === a.code);
-  const final = ls.reduce((acc, l) => acc + l.final, 0n);
-  return { final: creditArea ? -final : final, mapped: ls.some((l) => l.mapped) };
+/**
+ * Ledger balance for one row: its client account, else its lead, or for '*' every lead no other row covers.
+ * A lead's client-account rows come out of the lead's own row, so the rows still add up to the trial balance.
+ */
+export function accountLedger(a: ReconAccount, accounts: ReconAccount[], leads: LeadFigure[], creditArea = false, engagementId = '') {
+  const mappingOf = (x: ReconAccount) => db.account_mappings.find((m) => m.engagement_id === engagementId && m.status === 'confirmed' && m.source_code === x.client_code && inLead(m.blynt_code, x.code));
+  const own = (x: ReconAccount) => asPence(mappingOf(x)?.balance_p ?? '0');
+  const rest = (code: string) => (leads.find((l) => l.code === code)?.final ?? 0n) - accounts.filter((x) => x.client_code && x.code === code).reduce((acc, x) => acc + own(x), 0n);
+  let final: bigint;
+  let mapped: boolean;
+  if (a.client_code) {
+    const sameCode = accounts.filter((x) => x.code === a.code);
+    // Journals post to the chart code, not a client account: they sit with the code's own row, else with its first account
+    final = own(a) + (!sameCode.some((x) => !x.client_code) && sameCode[0] === a ? rest(a.code) : 0n);
+    mapped = !!mappingOf(a);
+  } else {
+    const others = new Set(accounts.filter((x) => x !== a).map((x) => x.code));
+    const ls = a.code === '*' ? leads.filter((l) => !others.has(l.code)) : leads.filter((l) => l.code === a.code);
+    final = ls.reduce((acc, l) => acc + rest(l.code), 0n);
+    mapped = ls.some((l) => l.mapped);
+  }
+  return { final: creditArea ? -final : final, mapped };
 }
 
 /* ---------- Trade debtors: recoverability decisions ---------- */
@@ -300,7 +328,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
   if (review) draft = review(paperContext(wp, { leads, checks, anchors, totals }));
 
   if (t.kind === 'reconciliation') {
-    const accounts = reconAccounts(data, leads);
+    const accounts = reconAccounts(data, leads, wp.engagement_id);
     const tolerance = toleranceFor(wp.engagement_id);
     const periodEnd = db.engagements.find((e) => e.id === wp.engagement_id)?.period_end;
     const staleBefore = periodEnd ? new Date(Date.parse(periodEnd) - 30 * 86400000).toISOString().slice(0, 10) : null;
@@ -309,7 +337,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     const noStatement: string[] = [], unreconciled: string[] = [], noEvidence: string[] = [], noTb: string[] = [], old: string[] = [], cashCredit: string[] = [];
     for (const a of accounts) {
       const name = accountName(a);
-      const l = accountLedger(a, accounts, leads, t.creditArea);
+      const l = accountLedger(a, accounts, leads, t.creditArea, wp.engagement_id);
       const s = asPence(a.statement_p || '0');
       const less = (a.less ?? []).reduce((acc: bigint, r: any) => acc + asPence(r.amount_p), 0n);
       const add = (a.add ?? []).reduce((acc: bigint, r: any) => acc + asPence(r.amount_p), 0n);

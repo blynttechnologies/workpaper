@@ -23,6 +23,8 @@ export interface PrintedBalance {
   balance_p: string;
   page: number;
   kind: 'opening' | 'line' | 'closing';
+  /** The line's amount, money in positive, when printed */
+  amount_p?: string;
 }
 
 const SCHEMA = {
@@ -30,6 +32,7 @@ const SCHEMA = {
   properties: {
     found: { type: 'boolean', description: 'false if this is not a bank statement or no balance can be read' },
     bank_name: { type: 'string' },
+    period_to: { type: 'string', description: 'YYYY-MM-DD the statement period printed in the header runs to, or "" if none is printed' },
     confidence: { type: 'integer', description: '0-100: how sure you are every balance is copied exactly' },
     balances: {
       type: 'array',
@@ -39,15 +42,16 @@ const SCHEMA = {
         properties: {
           date: { type: 'string', description: 'YYYY-MM-DD of the line the balance is printed on' },
           balance: { type: 'string', description: 'Plain decimal as printed, e.g. "118402.17"; negative ("-250.00") if overdrawn or marked DR/OD' },
+          amount: { type: 'string', description: 'The line amount as a plain decimal, money in positive and money out negative; "" on opening and closing lines' },
           page: { type: 'integer', description: '1-based page' },
           kind: { type: 'string', enum: ['opening', 'line', 'closing'], description: 'opening or closing balance line, or the running balance on a transaction line' },
         },
-        required: ['date', 'balance', 'page', 'kind'],
+        required: ['date', 'balance', 'amount', 'page', 'kind'],
         additionalProperties: false,
       },
     },
   },
-  required: ['found', 'bank_name', 'confidence', 'balances'],
+  required: ['found', 'bank_name', 'period_to', 'confidence', 'balances'],
   additionalProperties: false,
 } as const;
 
@@ -62,8 +66,22 @@ const uk = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB',
  * day before that and on the first day after the year end, and the statement's own opening and closing.
  * No year-end balance when the statement does not reach the year end.
  */
-export function pickBalances(printed: PrintedBalance[], periodEnd: string | null): { atEnd: BalanceCandidate | null; others: BalanceCandidate[] } {
-  const rows = printed.filter((b) => ISO.test(b.date)).map((b, i) => ({ ...b, i }));
+/**
+ * The balances oldest first. Statements print oldest-first or newest-first: each running balance is the one
+ * before it plus the line's amount, which shows the direction; without amounts, the first and last dates do.
+ */
+export function inDateOrder(printed: PrintedBalance[]): PrintedBalance[] {
+  const fits = (rows: PrintedBalance[]) =>
+    rows.slice(1).filter((b, i) => b.amount_p != null && BigInt(b.balance_p) - BigInt(rows[i].balance_p) === BigInt(b.amount_p)).length;
+  const reversed = [...printed].reverse();
+  const forward = fits(printed), backward = fits(reversed);
+  if (forward !== backward) return forward > backward ? printed : reversed;
+  const dated = printed.filter((b) => ISO.test(b.date));
+  return dated.length > 1 && dated[0].date > dated[dated.length - 1].date ? reversed : printed;
+}
+
+export function pickBalances(printed: PrintedBalance[], periodEnd: string | null, periodTo: string | null = null): { atEnd: BalanceCandidate | null; others: BalanceCandidate[] } {
+  const rows = inDateOrder(printed).filter((b) => ISO.test(b.date)).map((b, i) => ({ ...b, i }));
   // Printed order breaks ties within a day: the last balance on a day is that day's closing figure
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date) || a.i - b.i);
   const opening = sorted.find((b) => b.kind === 'opening') ?? sorted[0];
@@ -74,7 +92,8 @@ export function pickBalances(printed: PrintedBalance[], periodEnd: string | null
   if (periodEnd && sorted.length && sorted[0].date <= periodEnd) {
     const upTo = sorted.filter((b) => b.date <= periodEnd);
     const last = upTo[upTo.length - 1];
-    const reaches = sorted[sorted.length - 1].date >= periodEnd;
+    // A statement whose period runs to the year end reaches it, even with no movement on the last days
+    const reaches = sorted[sorted.length - 1].date >= periodEnd || (!!periodTo && periodTo >= periodEnd);
     if (reaches) atEnd = option(last, last.date === periodEnd ? `Balance on ${uk(periodEnd)}` : `Balance on ${uk(periodEnd)} (no movement since ${uk(last.date)})`, periodEnd);
     // The balance on the last day with movements before the one the year-end figure comes from
     const before = upTo.filter((b) => b.date < last.date).pop();
@@ -124,7 +143,9 @@ export async function readStatement(file: { mime: string; bytes: Buffer }, perio
             text:
               'This is a bank statement for a UK year-end bank reconciliation. List every balance printed on it, in the order printed: ' +
               'the opening balance line, the running balance on each transaction line, and the closing balance line. Give each the date of ' +
-              'the line it is printed on (a running balance on a line with no date of its own takes the date of the line above). ' +
+              'the line it is printed on (a running balance on a line with no date of its own takes the date of the line above), and the amount on that line ' +
+              '(money in positive, money out negative). Statements may list the newest transactions first; keep the printed order. Give the date the ' +
+              'statement period in the header runs to. ' +
               'Copy every figure and date exactly as printed; do not calculate or fill in balances that are not printed. Use the ledger ' +
               'balance, not an available or cleared balance. If the statement covers several accounts or nothing can be read, set found to false.',
           },
@@ -135,20 +156,20 @@ export async function readStatement(file: { mime: string; bytes: Buffer }, perio
   if (res.stop_reason !== 'end_turn') return null;
   const text = res.content.find((b) => b.type === 'text');
   if (!text || text.type !== 'text') return null;
-  const out = JSON.parse(text.text) as { found: boolean; bank_name: string; confidence: number; balances: { date: string; balance: string; page: number; kind: PrintedBalance['kind'] }[] };
+  const out = JSON.parse(text.text) as { found: boolean; bank_name: string; period_to: string; confidence: number; balances: { date: string; balance: string; amount: string; page: number; kind: PrintedBalance['kind'] }[] };
   const printed = (out.balances ?? [])
     .filter((b) => DECIMAL.test(b.balance.trim()) && ISO.test(b.date))
-    .map((b) => ({ date: b.date, balance_p: toPence(b.balance).toString(), page: b.page, kind: b.kind }));
+    .map((b) => ({ date: b.date, balance_p: toPence(b.balance).toString(), page: b.page, kind: b.kind, ...(DECIMAL.test((b.amount ?? '').trim()) ? { amount_p: toPence(b.amount).toString() } : {}) }));
   if (!out.found || !printed.length) return null;
 
-  const { atEnd, others } = pickBalances(printed, end);
+  const { atEnd, others } = pickBalances(printed, end, ISO.test(out.period_to ?? '') ? out.period_to : null);
   // With no year-end balance the statement's closing balance leads, labelled as such
   const main = atEnd ?? others.find((o) => o.label === 'Statement closing balance') ?? others[0];
   const field = <T,>(value: T, reason: string): ExtractedField<T> => ({ value, confidence: out.confidence, page: main.page, gate: out.confidence >= 90 ? 'ready' : 'check', reason });
   return {
     bank_name: field(out.bank_name, 'Bank named on the statement'),
     statement_date: field(main.date, atEnd ? 'The year end' : 'The statement does not reach the year end'),
-    statement_balance_p: field(main.balance_p, main.label),
+    statement_balance_p: field(main.balance_p, atEnd || !end ? main.label : `${main.label}: this statement does not cover the year end, ${uk(end)}`),
     // Only the year-end balance is offered; the other dates on the statement were noise to pick through
     candidates: [],
   };
