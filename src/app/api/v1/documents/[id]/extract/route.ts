@@ -1,28 +1,27 @@
-import { syncIn, syncOut } from '@/lib/server/store';
+import { syncIn, freshWrite } from '@/lib/server/store';
 import { errorResponse, jsonResponse, requireAttachmentAccess } from '@/lib/server/api-helpers';
 import { services } from '@/lib/server/services';
+import { extractWithAi } from '@/lib/server/ai/documents';
+import { db } from '@/lib/server/db';
 
-export async function POST(
-  req: Request,
-  props: { params: Promise<{ id: string }> }
-) {
+export const dynamic = 'force-dynamic';
+
+/** Read a stored document with AI (through the gateway) and keep what was read on the document. Nothing reaches a paper until filled and confirmed. */
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
     await syncIn();
-    const params = await props.params;
-    const actor = requireAttachmentAccess(req, params.id);
-    let overrideCategory: any = undefined;
-    try {
-      const body = await req.json();
-      overrideCategory = body?.overrideCategory;
-    } catch {
-      // empty body is fine
-    }
-
-    const result = services.extractDocument(actor.firmId, actor, params.id, overrideCategory);
-    await syncOut();
-    return jsonResponse(result);
+    const { id } = await props.params;
+    const actor = requireAttachmentAccess(req, id);
+    const body = await req.json().catch(() => ({}));
+    const attachment = db.attachments.find((a) => a.id === id)!;
+    const result = await extractWithAi(
+      actor.firmId,
+      { firmId: actor.firmId, userId: actor.id, channel: 'app', engagementId: attachment.engagement_id },
+      { ...attachment },
+      body?.overrideCategory
+    );
+    return jsonResponse(await freshWrite(() => services.applyExtraction(actor.firmId, actor, id, result)));
   } catch (err) {
     return errorResponse(err);
   }
 }
-

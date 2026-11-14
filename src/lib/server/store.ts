@@ -55,7 +55,7 @@ function getPool() {
   return pool;
 }
 
-async function query<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
+export async function query<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
   const p = getPool();
   if (!schemaReady) {
     schemaReady = p
@@ -74,6 +74,19 @@ async function query<T = Record<string, unknown>>(text: string, params: unknown[
            sha256 text NOT NULL,
            bytes bytea NOT NULL,
            created_at timestamptz NOT NULL DEFAULT now()
+         );
+         CREATE TABLE IF NOT EXISTS ai_requests (
+           id text PRIMARY KEY,
+           firm_id text NOT NULL,
+           created_at timestamptz NOT NULL DEFAULT now(),
+           data jsonb NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS ai_requests_firm_time ON ai_requests (firm_id, created_at);
+         CREATE TABLE IF NOT EXISTS oauth_records (
+           id text PRIMARY KEY,
+           kind text NOT NULL,
+           data jsonb NOT NULL,
+           expires_at timestamptz
          );`
       )
       .catch((err) => {
@@ -153,6 +166,23 @@ export async function syncOut() {
   const v = await writeState(serverVersion, db.exportState());
   if (v === null) throw new Error('Workspace was changed by someone else. Please retry.');
   serverVersion = v;
+}
+
+/**
+ * Apply a change to the latest saved workspace and save it, trying once more if someone saved in between.
+ * For changes made after slow work (an AI call), so the save is not refused for a stale version.
+ */
+export async function freshWrite<T>(apply: () => T): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    await syncIn();
+    const out = apply();
+    try {
+      await syncOut();
+      return out;
+    } catch (err) {
+      if (attempt >= 1 || !String((err as Error).message).includes('changed by someone else')) throw err;
+    }
+  }
 }
 
 // Attachment file contents, kept apart from the workspace state so saves stay small

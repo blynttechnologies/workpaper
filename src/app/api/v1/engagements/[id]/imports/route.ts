@@ -2,6 +2,8 @@ import { syncIn, syncOut } from '@/lib/server/store';
 import { getActorFromRequest, jsonResponse, errorResponse, requireEngagementAccess } from '@/lib/server/api-helpers';
 import { db } from '@/lib/server/db';
 import { importTrialBalance } from '@/lib/server/tb-import';
+import { ServiceError } from '@/lib/server/services';
+import { canPull, mustKeep, RETENTION_YEARS } from '@/lib/periods';
 
 export async function POST(
   req: Request,
@@ -30,6 +32,11 @@ export async function DELETE(
     const params = await props.params;
     requireEngagementAccess(req, params.id);
     const actor = getActorFromRequest(req);
+    const eng = db.engagements.find((e) => e.id === params.id);
+    // Past the pull window it can't be fetched again, so clearing would lose records that must be kept
+    if (eng && mustKeep(eng.period_end) && !canPull(eng.period_start)) {
+      throw new ServiceError(`This trial balance can't be cleared: records must be kept for ${RETENTION_YEARS} years after the year end, and this year is too old to pull again from Xero or QuickBooks.`, 409, 'RETENTION');
+    }
 
     // Clear mappings and tb_snapshots for this engagement
     const priorCount = db.account_mappings.filter((m) => m.engagement_id === params.id).length;

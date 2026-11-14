@@ -16,6 +16,12 @@ const PUBLIC_PATHS = [
   '/invite',
   '/api/v1/invites/accept', // guarded by the invite token
   '/samples',
+  // Outside assistants (MCP): each guards itself (bearer token, PKCE code) and is off unless MCP_ENABLED=1
+  '/.well-known',
+  '/api/oauth/register',
+  '/api/oauth/token',
+  '/api/oauth/revoke',
+  '/api/mcp',
 ];
 
 export function proxy(request: NextRequest) {
@@ -33,7 +39,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: 'Please sign in.', code: 'UNAUTHENTICATED' }, { status: 401 });
   }
   const loginUrl = new URL('/login', request.url);
-  if (pathname !== '/') loginUrl.searchParams.set('from', pathname);
+  // The query comes along, so an assistant's connection request survives sign-in
+  if (pathname !== '/') loginUrl.searchParams.set('from', pathname + request.nextUrl.search);
   return NextResponse.redirect(loginUrl);
 }
 

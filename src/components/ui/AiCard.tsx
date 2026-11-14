@@ -11,7 +11,7 @@ interface AiCardProps {
 
 export const AiCard: React.FC<AiCardProps> = ({
   title,
-  badge = 'AI Copilot',
+  badge = 'AI assistant',
   children,
   action,
   className = '',

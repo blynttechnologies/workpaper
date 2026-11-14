@@ -1,68 +1,28 @@
-import { jsonResponse, errorResponse } from '@/lib/server/api-helpers';
-import { matchBlyntAccount } from '@/lib/mapping/auto-mapper';
-import { db } from '@/lib/server/db';
+import { jsonResponse, errorResponse, getActorFromRequest, requireEngagementAccess } from '@/lib/server/api-helpers';
+import { syncIn } from '@/lib/server/store';
+import { suggestMappings } from '@/lib/server/ai/services';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * Mapping suggestions: { items: [{ id, name, type, code, balance_p }], engagementId? } or a single { name, type, code }.
+ * The auto-mapper's rules go first; accounts they cannot place are offered to the AI. Nothing is saved:
+ * a suggestion changes nothing until a named user accepts it on the mapping screen.
+ */
 export async function POST(req: Request) {
   try {
+    await syncIn();
     const body = await req.json().catch(() => ({}));
-    
-    // Batch mode support: { items: [{ name, type, code, id }] }
-    if (Array.isArray(body.items)) {
-      const results = body.items.map((item: any) => {
-        const suggestion = matchBlyntAccount(item.name || '', item.type || '', item.code || '');
-        return {
-          id: item.id,
-          source_name: item.name,
-          suggested_blynt_code: suggestion ? suggestion.blynt_code : '6000',
-          blynt_name: suggestion ? suggestion.name : 'Office Rent & Rates',
-          confidence: suggestion ? suggestion.confidence : 60,
-          reason: suggestion ? suggestion.reason : 'General overhead allocation',
-          lead_letter: suggestion ? suggestion.lead_letter : 'E',
-        };
-      });
-
-      return jsonResponse({
-        success: true,
-        batch: true,
-        count: results.length,
-        results,
-        notice: 'AI-assisted mapping predictions calculated against Blynt Chart of Accounts.',
-      });
+    const actor = body.engagementId ? requireEngagementAccess(req, body.engagementId) : getActorFromRequest(req);
+    const items = Array.isArray(body.items)
+      ? body.items.slice(0, 500).map((i: any, n: number) => ({ id: String(i.id ?? n), name: String(i.name ?? ''), type: String(i.type ?? ''), code: String(i.code ?? ''), balance_p: String(i.balance_p ?? '') }))
+      : [{ id: 'single', name: String(body.name ?? ''), type: String(body.type ?? ''), code: String(body.code ?? '') }];
+    const r = await suggestMappings(actor, items);
+    if (!Array.isArray(body.items)) {
+      const one = r.results[0];
+      return jsonResponse({ label: '✦ AI suggestion', ...one, ai: r.ai, notice: 'AI output changes nothing until accepted by a named user.' });
     }
-
-    // Single account mode
-    const accountName = body.name || '';
-    const accountType = body.type || '';
-    const accountCode = body.code || '';
-
-    const suggestion = matchBlyntAccount(accountName, accountType, accountCode);
-
-    // Contextual alternatives
-    const allBlynt = db.blynt_accounts;
-    const primary = suggestion
-      ? allBlynt.find((b) => b.code === suggestion.blynt_code) || allBlynt[0]
-      : allBlynt[0];
-
-    const alternatives = allBlynt
-      .filter((b) => b.code !== primary.code && b.type === primary.type)
-      .slice(0, 2)
-      .map((alt) => ({
-        blynt_code: alt.code,
-        name: alt.name,
-        reason: `Related ${alt.type} category on Lead Schedule ${alt.lead_letter}`,
-        confidence: Math.max(50, (suggestion?.confidence || 70) - 20),
-      }));
-
-    return jsonResponse({
-      label: '✦ AI suggestion',
-      suggested_blynt_code: primary.code,
-      name: primary.name,
-      confidence: suggestion ? suggestion.confidence : 75,
-      reason: suggestion ? suggestion.reason : 'Automated mapping match',
-      lead_letter: primary.lead_letter,
-      alternatives,
-      notice: 'AI output changes nothing until accepted by a named user.',
-    });
+    return jsonResponse({ success: true, batch: true, count: r.results.length, ...r, notice: 'AI output changes nothing until accepted by a named user.' });
   } catch (err) {
     return errorResponse(err);
   }

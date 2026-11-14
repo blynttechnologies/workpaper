@@ -12,10 +12,8 @@ import {
   Search,
   ShieldCheck,
   X,
-  AlertTriangle,
   Trash2,
   Clock,
-  ArrowRight,
 } from 'lucide-react';
 import { useLocale } from '@/context/LocaleContext';
 
@@ -37,106 +35,30 @@ interface DocumentItem {
   version?: number;
 }
 
-const DEFAULT_DOCUMENTS: DocumentItem[] = [
-  {
-    id: 'att_lease_unit4',
-    filename: 'Unit_4_Commercial_Lease_Agreement_2025.pdf',
-    folder: 'permanent',
-    category: 'Lease agreement',
-    aiTag: 'Lease agreement',
-    linkedScheduleRef: 'L-10',
-    linkedScheduleName: 'Lease schedule (REC-04 / L-10)',
-    uploadedBy: 'Sarah Jenkins',
-    uploadedAt: '2026-02-10T10:15:00Z',
-    sizeKb: 2450,
-    expiryDate: '2030-03-31',
-    expiresInDays: 1250,
-    aiSummary: [
-      'Lessor: Grosvenor Estates PLC; Lessee: Harlow & Finch Fine Goods Ltd (Cl. 1, p. 2)',
-      'Premises: Unit 4, St. Peter’s Wharf Industrial Park, London (Cl. 1.2, p. 2)',
-      'Term: 5 years commencing 1 April 2025 expiring 31 March 2030 (Cl. 2.1, p. 4)',
-      'Annual Rent: £10,200 payable quarterly in advance at £2,550/qtr (Cl. 3.1, p. 5)',
-      'Rent-Free Period: 3 months from commencement (Cl. 3.4, p. 6)',
-      'Break Option: Tenant break option at 3 years on 6 months written notice (Cl. 7.2, p. 11)',
-    ],
-    version: 1,
-  },
-  {
-    id: 'att_const_articles',
-    filename: 'Articles_of_Association_and_Incorporation.pdf',
-    folder: 'permanent',
-    category: 'Constitutional',
-    aiTag: 'Articles of association',
-    linkedScheduleRef: 'E-10',
-    linkedScheduleName: 'Share capital & reserves (REC-12 / E-10)',
-    uploadedBy: 'David Thorne',
-    uploadedAt: '2025-10-01T09:00:00Z',
-    sizeKb: 1820,
-    aiSummary: [
-      'Authorised share capital: 50,000 Ordinary Shares of £1.00 nominal par value (Art. 4, p. 3)',
-      'Voting rights: 1 vote per ordinary share held on all matters (Art. 6, p. 4)',
-      'Dividend rights: Pari passu rights to distributable profits declared (Art. 9, p. 6)',
-    ],
-    version: 1,
-  },
-  {
-    id: 'att_bank_sep26',
-    filename: 'Barclays_Bank_Statement_Sep2026.pdf',
-    folder: 'current',
-    category: 'Bank statement',
-    aiTag: 'Bank statement',
-    linkedScheduleRef: 'B-10',
-    linkedScheduleName: 'Bank reconciliation (REC-02 / B-10)',
-    uploadedBy: 'Marcus Vance',
-    uploadedAt: '2026-10-02T14:20:00Z',
-    sizeKb: 890,
-    aiSummary: [
-      'Account: Barclays Operating Current 20-45-78 98451230 (p. 1)',
-      'Statement Period: 1 September 2026 to 30 September 2026 (p. 1)',
-      'Closing Balance at 30 Sep 2026: £118,402.17 in funds (p. 3)',
-      'Total credits £450,230.12; Total debits £398,410.50 across 142 items (p. 3)',
-    ],
-    version: 1,
-  },
-  {
-    id: 'att_p32_m12',
-    filename: 'P32_Employer_Payment_Summary_Month12.pdf',
-    folder: 'current',
-    category: 'Payroll report',
-    aiTag: 'Payroll report',
-    linkedScheduleRef: 'P-20',
-    linkedScheduleName: 'Payroll reconciliation (REC-05 / P-20)',
-    uploadedBy: 'Marcus Vance',
-    uploadedAt: '2026-10-03T11:00:00Z',
-    sizeKb: 430,
-    aiSummary: [
-      'HMRC Accounts Office Reference: 120/PX0029412 (p. 1)',
-      'Gross Wages Month 12: £12,540.00; Employers NIC: £1,131.00 (p. 1)',
-      'PAYE Deductions Month 12: £2,150.40; Employee Pension: £300.00 (p. 1)',
-      'Net payment due to HMRC: £3,281.40 by 22 October 2026 (p. 2)',
-    ],
-    version: 1,
-  },
-  {
-    id: 'att_vat_q4_26',
-    filename: 'HMRC_VAT100_Return_Q4_Sep2026.pdf',
-    folder: 'current',
-    category: 'VAT return',
-    aiTag: 'VAT return',
-    linkedScheduleRef: 'T-20',
-    linkedScheduleName: 'VAT reconciliation (REC-06 / T-20)',
-    uploadedBy: 'Marcus Vance',
-    uploadedAt: '2026-10-04T09:45:00Z',
-    sizeKb: 310,
-    aiSummary: [
-      'VAT Registration Number: GB 384 9281 04 (Box 1)',
-      'Box 1 VAT due on sales: £24,800.00; Box 4 VAT reclaimed: £4,980.00 (p. 1)',
-      'Box 5 Net VAT payable to HMRC: £19,820.00 (p. 1)',
-      'Return successfully received online by HMRC on 04/10/2026 (p. 2)',
-    ],
-    version: 1,
-  },
-];
+/** A stored attachment as the page lists it: the AI tag and summary are what was actually read, page and clause included. */
+// The paper each kind of document fills
+const SCHEDULE_FOR: Record<string, string> = { Statement: 'B-10', 'Bank statement': 'B-10', 'Lease agreement': 'L-10', Invoice: 'F-10', 'Loan agreement': 'L-20', 'Payroll report': 'P-20', 'VAT return': 'T-20', 'Stock count': 'D-10' };
+
+function toItem(a: any): DocumentItem {
+  const bullets: any[] = a.ai_summary?.bullets ?? [];
+  const where = (x: any) => [x.clause, x.page ? `p. ${x.page}` : ''].filter(Boolean).join(', ');
+  return {
+    id: a.id,
+    filename: a.filename,
+    folder: a.folder === 'permanent' || a.is_permanent ? 'permanent' : 'current',
+    category: a.category || 'Other',
+    aiTag: a.ai_tag || a.category || 'Other',
+    linkedScheduleRef: a.linked_schedule_ref || (a.extracted_data ? SCHEDULE_FOR[a.category] : undefined),
+    uploadedBy: a.uploaded_by_name || a.uploaded_by || 'User',
+    uploadedAt: a.uploaded_at || new Date().toISOString(),
+    sizeKb: Math.round((a.size || 0) / 1024),
+    expiryDate: a.expiry_date,
+    expiresInDays: a.expiry_date ? Math.ceil((new Date(a.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : undefined,
+    aiSummary: bullets.length ? bullets.map((x) => (where(x) ? `${x.text} (${where(x)})` : x.text)) : ['Not read yet. Use Read with AI to read the figures from it.'],
+    isDuplicate: !!a.is_duplicate,
+    version: a.version || 1,
+  };
+}
 
 export default function DocumentsPage() {
   const params = useParams();
@@ -145,7 +67,7 @@ export default function DocumentsPage() {
   const { formatDate } = useLocale();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [documents, setDocuments] = useState<DocumentItem[]>(DEFAULT_DOCUMENTS);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [activeFolder, setActiveFolder] = useState<'current' | 'permanent'>('current');
   const [search, setSearch] = useState('');
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
@@ -161,28 +83,7 @@ export default function DocumentsPage() {
     fetch(`/api/v1/documents?engagementId=${engagementId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.attachments && data.attachments.length > 0) {
-          const mapped: DocumentItem[] = data.attachments.map((a: any) => ({
-            id: a.id,
-            filename: a.filename,
-            folder: a.folder || (a.category === 'Constitutional' || a.category === 'Lease agreement' ? 'permanent' : 'current'),
-            category: a.category || 'Other',
-            aiTag: a.ai_type_tag || `${a.category}`,
-            linkedScheduleRef: a.linked_schedule_ref || a.schedule_reference,
-            linkedScheduleName: a.linked_schedule_name,
-            uploadedBy: a.uploaded_by || 'User',
-            uploadedAt: a.uploaded_at || new Date().toISOString(),
-            sizeKb: Math.round((a.bytes || 1024) / 1024),
-            expiryDate: a.expiry_date,
-            expiresInDays: a.expiry_date ? Math.ceil((new Date(a.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : undefined,
-            aiSummary: a.summary_bullets?.map((b: any) => (typeof b === 'string' ? b : `${b.text} (${b.reference})`)) || [
-              'Document uploaded and indexed.',
-            ],
-            isDuplicate: !!a.is_duplicate,
-            version: a.version_number || 1,
-          }));
-          setDocuments(mapped);
-        }
+        if (Array.isArray(data?.documents)) setDocuments(data.documents.map(toItem));
       })
       .catch(() => {});
   }, [engagementId]);
@@ -197,7 +98,7 @@ export default function DocumentsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setActionStatus('Uploading & scanning with AI...');
+    setActionStatus('Uploading...');
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -210,26 +111,12 @@ export default function DocumentsPage() {
       });
       const data = await res.json();
       if (res.ok && data.attachment) {
-        const att = data.attachment;
-        const newDoc: DocumentItem = {
-          id: att.id,
-          filename: att.filename,
-          folder: att.folder || activeFolder,
-          category: att.category || 'Other',
-          aiTag: att.ai_type_tag || 'AI Tagged',
-          linkedScheduleRef: att.linked_schedule_ref,
-          uploadedBy: att.uploaded_by || 'Current User',
-          uploadedAt: att.uploaded_at || new Date().toISOString(),
-          sizeKb: Math.round((att.bytes || file.size) / 1024),
-          aiSummary: att.summary_bullets?.map((b: any) => `${b.text} (${b.reference})`) || ['Document processed by AI.'],
-          isDuplicate: !!att.is_duplicate,
-          version: att.version_number || 1,
-        };
-        setDocuments((prev) => [newDoc, ...prev]);
+        const newDoc = toItem({ ...data.attachment, is_duplicate: data.is_duplicate });
+        setDocuments((prev) => [newDoc, ...prev.filter((d) => d.id !== newDoc.id)]);
         setSelectedDoc(newDoc);
-        setActionStatus(att.is_duplicate ? '⚠️ Duplicate file detected (matches existing SHA-256 hash)' : '✓ Uploaded and classified successfully');
+        setActionStatus(newDoc.isDuplicate ? '⚠️ Duplicate file detected (matches existing SHA-256 hash)' : '✓ Uploaded. Use Read with AI to read its figures.');
       } else {
-        setActionStatus('Upload completed');
+        setActionStatus(data.error || 'Upload failed');
       }
     } catch {
       setActionStatus('Upload failed');
@@ -239,29 +126,23 @@ export default function DocumentsPage() {
 
   const handleRunAiExtraction = async (doc: DocumentItem) => {
     setExtracting(true);
+    setActionStatus('Reading with AI...');
     try {
-      const res = await fetch(`/api/v1/documents/${doc.id}/extract`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ document_id: doc.id, filename: doc.filename }),
-      });
+      const res = await fetch(`/api/v1/documents/${doc.id}/extract`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
       const json = await res.json();
-      if (json.extracted) {
-        const bullets = json.extracted.summary_bullets?.map((b: any) => `${b.text} (${b.reference})`) || doc.aiSummary;
-        const updated = {
-          ...doc,
-          aiSummary: bullets,
-          linkedScheduleRef: json.extracted.suggested_schedule_ref || doc.linkedScheduleRef,
-        };
+      if (res.ok && json.attachment) {
+        const updated = { ...toItem(json.attachment), linkedScheduleRef: json.attachment.linked_schedule_ref || SCHEDULE_FOR[json.attachment.category] };
         setSelectedDoc(updated);
         setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
-        setActionStatus('✓ AI extraction completed');
+        setActionStatus(json.ai ? '✓ Read with AI. Check each figure before relying on it.' : json.note || 'Not read with AI. Enter the figures from the document.');
+      } else {
+        setActionStatus(json.error || 'Could not read the document.');
       }
     } catch {
-      setActionStatus('AI extraction completed');
+      setActionStatus('Could not read the document.');
     } finally {
       setExtracting(false);
-      setTimeout(() => setActionStatus(null), 3000);
+      setTimeout(() => setActionStatus(null), 5000);
     }
   };
 
@@ -274,19 +155,19 @@ export default function DocumentsPage() {
       const res = await fetch(`/api/v1/documents/${doc.id}/fill-schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          target_workpaper_ref: scheduleRef,
-          engagement_id: engagementId,
-        }),
+        body: JSON.stringify({ target_workpaper_ref: scheduleRef }),
       });
       const json = await res.json();
-      setActionStatus(`✓ Auto-filled schedule ${scheduleRef}! Extracted figures placed with AI badges.`);
-      setTimeout(() => {
-        const routeRef = scheduleRef.toLowerCase().replace('-', '');
-        router.push(`/engagements/${engagementId}/workpapers/wp_${routeRef}`);
-      }, 1000);
+      if (!res.ok) {
+        setActionStatus(json.error || `Could not fill ${scheduleRef}.`);
+        return;
+      }
+      setActionStatus(
+        json.filledFields?.length ? `✓ ${scheduleRef}: ${json.filledFields.length} figure(s) placed, each waiting for someone to confirm it.` : `Nothing to place on ${scheduleRef}: no figures were read.`
+      );
+      setTimeout(() => router.push(`/engagements/${engagementId}/workpapers/${json.workpaper.id}`), 1000);
     } catch {
-      router.push(`/engagements/${engagementId}/workpapers/wp_${scheduleRef.toLowerCase().replace('-', '')}`);
+      setActionStatus(`Could not fill ${scheduleRef}.`);
     } finally {
       setFillingSchedule(false);
     }

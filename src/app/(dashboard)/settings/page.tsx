@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Building2,
   Users,
@@ -461,6 +462,15 @@ export default function PracticeSettingsPage() {
           <Sparkles className="w-4 h-4 text-[#FF7A66]" />
           <span>AI Rules &amp; Accuracy</span>
         </button>
+
+        <Link
+          id="tab-ai-control"
+          href="/settings/ai"
+          className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-[#4A5878] hover:text-[#122654] transition-all shrink-0"
+        >
+          <Sparkles className="w-4 h-4 text-[#1D4E89]" />
+          <span>AI Control Centre</span>
+        </Link>
       </div>
 
       {/* TAB 1: Company Settings (Basic settings the company uses) */}

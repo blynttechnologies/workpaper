@@ -1,4 +1,5 @@
-import { sameDayLastYear } from '../periods';
+import { canPull, PULL_YEARS, RETENTION_YEARS, sameDayLastYear } from '../periods';
+import { ukDate } from '../dates';
 import crypto from 'crypto';
 import { db } from './db';
 import { secret } from './auth';
@@ -477,6 +478,7 @@ export async function bankPaymentsAfter(actor: Actor, engagementId: string, days
   const day = (n: number) => new Date(Date.parse(eng.period_end) + n * 86_400_000).toISOString().slice(0, 10);
   const from = day(1);
   const to = day(Math.min(Math.max(Math.round(days) || 60, 1), 366));
+  requirePullable(from, 'Xero');
   const token = await accessTokenFor(conn);
   const [payments, bank] = await Promise.all([allPages('Payments', 'Payments', token, conn.tenant_id, from, to), allPages('BankTransactions', 'BankTransactions', token, conn.tenant_id, from, to)]);
   return { from, to, payments: parseBankPayments(conn.short_code, { payments, bank }) };
@@ -485,6 +487,16 @@ export async function bankPaymentsAfter(actor: Actor, engagementId: string, days
 // ── Connections ──
 
 type Actor = { id: string; name: string; role: UserRole; firmId: string };
+
+/** Refuses a pull for data older than the current financial year and the two before it. */
+export function requirePullable(from: string, provider: string) {
+  if (!canPull(from))
+    throw new ServiceError(
+      `${provider} is only read for the current financial year and the ${PULL_YEARS - 1} before it, and this period starts on ${ukDate(from)}. Import its trial balance from a file instead. What is already here is kept for ${RETENTION_YEARS} years after the year end.`,
+      409,
+      'OUTSIDE_PULL_WINDOW'
+    );
+}
 
 /** Finishes the OAuth flow: swaps the code for tokens and links the shared organisation to the client. */
 export async function completeConnection(actor: Actor, clientId: string, code: string): Promise<XeroConnection> {
@@ -545,13 +557,16 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
   if (!eng) throw new ServiceError('Engagement not found', 404, 'NOT_FOUND');
   const conn = db.xero_connections.find((c) => c.firm_id === actor.firmId && c.client_id === eng.client_id);
   if (!conn) throw new ServiceError('This client is not connected to Xero yet.', 409, 'XERO_NOT_CONNECTED');
+  requirePullable(eng.period_start, 'Xero');
 
   const token = await accessTokenFor(conn);
   const [accounts, report, priorReport] = await Promise.all([
     xeroGet<{ Accounts: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id),
     xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${eng.period_end}`, token, conn.tenant_id),
-    // Comparatives are a nicety: the import still goes ahead without them
-    xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${sameDayLastYear(eng.period_end)}`, token, conn.tenant_id).catch(() => null),
+    // Comparatives are a nicety: the import still goes ahead without them, and a prior year outside the window isn't read
+    canPull(sameDayLastYear(eng.period_start))
+      ? xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${sameDayLastYear(eng.period_end)}`, token, conn.tenant_id).catch(() => null)
+      : null,
   ]);
   const current = parseTrialBalance(report, accounts.Accounts ?? []);
   const lines = priorReport ? withComparatives(current, parseTrialBalance(priorReport, accounts.Accounts ?? [])) : current;

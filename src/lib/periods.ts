@@ -35,3 +35,14 @@ export const RETENTION_YEARS = 6;
 /** True while a period's records must still be kept, so it cannot be deleted (archive the client instead). */
 export const mustKeep = (periodEnd: string, today = new Date().toISOString().slice(0, 10)) =>
   `${Number(periodEnd.slice(0, 4)) + RETENTION_YEARS}${periodEnd.slice(4)}` > today;
+
+/** Xero and QuickBooks are read for the current financial year and the two before it; what was pulled is kept for RETENTION_YEARS. */
+export const PULL_YEARS = 3;
+
+/**
+ * True when a period starting on `periodStart` may be pulled from Xero or QuickBooks. A year starting
+ * after this day PULL_YEARS ago is the current financial year or one of the two before it.
+ * shortcut: exact for year-end files; quarterly and monthly files get a rolling 3 years, until the client's year end is stored in one format.
+ */
+export const canPull = (periodStart: string, today = new Date().toISOString().slice(0, 10)) =>
+  periodStart > `${Number(today.slice(0, 4)) - PULL_YEARS}${today.slice(4).replace('-02-29', '-02-28')}`;

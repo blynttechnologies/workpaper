@@ -4,16 +4,23 @@ import { ServiceError } from './services';
 import { db } from './db';
 import { readCookie, verifySessionToken } from './auth';
 import { GuardError, visibleClientIds } from './state-guard';
+import { AiError } from './ai/types';
 
 /** The signed-in user, from the signed session cookie. Call after syncIn(). */
 export function getActorFromRequest(req: Request) {
   const session = verifySessionToken(readCookie(req));
   if (!session) throw new ServiceError('Please sign in.', 401, 'UNAUTHENTICATED');
-  const user = db.users.find((u) => u.id === session.uid);
-  const membership = db.memberships.find((m) => m.user_id === session.uid);
-  if (!user || !membership || membership.status === 'deactivated') throw new ServiceError('Your account no longer has access.', 401, 'UNAUTHENTICATED');
+  const actor = actorForUser(session.uid);
   // Readonly members can look at everything they are assigned but change nothing (sign-in routes don't come through here)
-  if (membership.role === 'readonly' && req.method !== 'GET' && req.method !== 'HEAD') throw new ServiceError('Your access is read-only.', 403, 'READONLY');
+  if (actor.role === 'readonly' && req.method !== 'GET' && req.method !== 'HEAD') throw new ServiceError('Your access is read-only.', 403, 'READONLY');
+  return actor;
+}
+
+/** A user's current role, practice and assigned clients, looked up afresh: a removed or deactivated member loses access at once. Also used for outside assistants' tokens. */
+export function actorForUser(uid: string) {
+  const user = db.users.find((u) => u.id === uid);
+  const membership = db.memberships.find((m) => m.user_id === uid);
+  if (!user || !membership || membership.status === 'deactivated') throw new ServiceError('Your account no longer has access.', 401, 'UNAUTHENTICATED');
   return {
     id: user.id,
     name: user.name,
@@ -102,6 +109,11 @@ export function errorResponse(err: any) {
   }
   if (err instanceof ServiceError) {
     return jsonResponse({ error: err.message, code: err.code }, err.status);
+  }
+  // AI errors carry messages written for the user; provider details stay in the request log
+  if (err instanceof AiError) {
+    const status = err.code === 'not_configured' || err.code === 'disabled' ? 503 : err.code === 'limit' ? 429 : err.code === 'bad_request' ? 400 : 502;
+    return jsonResponse({ error: err.message, code: `AI_${err.code.toUpperCase()}` }, status);
   }
   logError('api', err);
   // Don't send internal error text to the browser
