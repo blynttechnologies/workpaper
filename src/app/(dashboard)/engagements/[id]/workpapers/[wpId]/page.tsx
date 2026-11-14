@@ -36,7 +36,7 @@ import { PAPER_SCREENS } from '@/components/workpaper/papers';
 import { accountKind, evaluatePaper, levelsFor, linkedFiles, paperStatus, reconAccounts, type BalanceOption, type ReconAccount } from '@/lib/workpapers/engine';
 import { diffData } from '@/lib/workpapers/diff';
 import { TEMPLATES, templateFor, templateOf } from '@/lib/workpapers/templates';
-import type { Attachment, AttachmentCategory } from '@/lib/types/models';
+import type { Attachment, AttachmentCategory, CommentKeep } from '@/lib/types/models';
 import {
   Section,
   StatePill,
@@ -71,7 +71,7 @@ import {
 } from '@/components/workpaper/schedules';
 import { AnalyticalSchedule } from '@/components/workpaper/review-schedules';
 import { CheckChips } from '@/components/workpaper/kit';
-import { Avatar, CommentPins, isPin, TYPE_TONE, type CommentType, type PinAnchor } from '@/components/workpaper/comment-pins';
+import { Avatar, CommentPins, EditBox, isPin, KEEP_LABEL, TYPE_TONE, type CommentType, type PinAnchor } from '@/components/workpaper/comment-pins';
 import { ukDate } from '@/lib/dates';
 
 const ROLE_ORDER = ['preparer', 'reviewer', 'partner'] as const;
@@ -97,6 +97,8 @@ export default function WorkpaperPage() {
   // Comments pinned on the paper: placing one, and the thread open in the side panel
   const [pinMode, setPinMode] = useState(false);
   const [activeComment, setActiveComment] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ id: string; replyId?: string; body: string } | null>(null);
+  const [noteKeep, setNoteKeep] = useState<CommentKeep>('this_year');
   const paperRef = useRef<HTMLDivElement | null>(null);
   const stopPinMode = useCallback(() => setPinMode(false), []);
   const [unreviewOpen, setUnreviewOpen] = useState(false);
@@ -473,8 +475,12 @@ export default function WorkpaperPage() {
       body: noteBody.trim(),
     });
     const c = db.comments[db.comments.length - 1];
-    if (c) c.anchor_summary = anchorLabel(noteAnchor === 'paper' ? undefined : noteAnchor);
+    if (c) {
+      c.anchor_summary = anchorLabel(noteAnchor === 'paper' ? undefined : noteAnchor);
+      c.keep = noteKeep;
+    }
     setNoteBody('');
+    setNoteKeep('this_year');
     refresh();
   };
 
@@ -488,11 +494,45 @@ export default function WorkpaperPage() {
     setActiveComment(id);
     document.getElementById(`pin-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
-  const postPin = (anchor: PinAnchor, type: CommentType, body: string) => {
+  const postPin = (anchor: PinAnchor, type: CommentType, body: string, keep: CommentKeep) => {
     const c = services.addComment(engagement.firm_id, actor, workpaper.id, { type, anchor_json: anchor, body });
     c.anchor_summary = anchor.label;
+    c.keep = keep;
     refresh();
     openThread(c.id);
+  };
+
+  // Only the writer (or an admin) edits or deletes; the server holds to the same rule
+  const canChange = (by: string) => by === actor.id || actor.role === 'admin';
+  const saveEdit = () => {
+    const c = editing && db.comments.find((x) => x.id === editing.id);
+    if (!c || !editing?.body.trim()) return;
+    const at = new Date().toISOString();
+    const before = JSON.parse(JSON.stringify(c));
+    if (editing.replyId) c.replies = (c.replies ?? []).map((r) => (r.id === editing.replyId ? { ...r, body: editing.body.trim(), edited_at: at } : r));
+    else Object.assign(c, { body: editing.body.trim(), edited_at: at });
+    db.logAudit(engagement.firm_id, actor, 'EDIT_COMMENT', 'comments', c.id, before, c);
+    setEditing(null);
+    refresh();
+  };
+  const deleteComment = (id: string, replyId?: string) => {
+    const i = db.comments.findIndex((x) => x.id === id);
+    if (i < 0 || !window.confirm(replyId ? 'Delete this reply?' : 'Delete this comment and its replies?')) return;
+    const c = db.comments[i];
+    const before = JSON.parse(JSON.stringify(c));
+    if (replyId) c.replies = (c.replies ?? []).filter((r) => r.id !== replyId);
+    else db.comments.splice(i, 1);
+    db.logAudit(engagement.firm_id, actor, replyId ? 'DELETE_REPLY' : 'DELETE_COMMENT', 'comments', id, before, replyId ? c : null);
+    if (!replyId && activeComment === id) setActiveComment(null);
+    refresh();
+  };
+  const setKeep = (id: string, keep: CommentKeep) => {
+    const c = db.comments.find((x) => x.id === id);
+    if (!c) return;
+    const before = { ...c };
+    c.keep = keep;
+    db.logAudit(engagement.firm_id, actor, 'KEEP_COMMENT', 'comments', id, before, c);
+    refresh();
   };
 
   const reply = (commentId: string) => {
@@ -2324,6 +2364,7 @@ export default function WorkpaperPage() {
                   .map((c) => {
                     const pinned = isPin(c.anchor_json);
                     const active = activeComment === c.id;
+                    const editingThis = editing?.id === c.id && !editing.replyId;
                     return (
                       <div
                         key={c.id}
@@ -2336,13 +2377,18 @@ export default function WorkpaperPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline gap-1.5">
                               <span className="font-bold truncate">{c.created_by_name}</span>
-                              <span className="text-[10px] text-[#7E8DA6] whitespace-nowrap">{fmtDateTime(c.created_at)}</span>
+                              <span className="text-[10px] text-[#7E8DA6] whitespace-nowrap">
+                                {fmtDateTime(c.created_at)}
+                                {c.edited_at ? ' · edited' : ''}
+                              </span>
                             </div>
                             <div className="mt-0.5 flex flex-wrap items-center gap-1">
                               <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${TYPE_TONE[c.type].chip}`}>
                                 {TYPE_TONE[c.type].label}
                                 {c.status === 'resolved' ? ' · resolved' : ''}
                               </span>
+                              {c.keep && c.keep !== 'this_year' && <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#E8F5EF] text-[#0B6B52]">{KEEP_LABEL[c.keep]}</span>}
+                              {c.carried_from && <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#F5F8FD] text-[#4A5878]">From year ended {ukDate(c.carried_from)}</span>}
                               {pinned && c.status === 'open' ? (
                                 <button type="button" onClick={() => showPin(c.id)} className="inline-flex items-center gap-0.5 max-w-full text-[10px] text-[#1D4E89] hover:underline" title="Show on the paper">
                                   <MapPin className="w-3 h-3 shrink-0" />
@@ -2352,21 +2398,69 @@ export default function WorkpaperPage() {
                                 <span className="text-[10px] text-[#7E8DA6] truncate">{c.anchor_summary || 'Whole paper'}</span>
                               )}
                             </div>
-                            <p className="mt-1.5 leading-relaxed break-words">{c.body}</p>
+                            {editingThis ? (
+                              <EditBox value={editing!.body} onChange={(body) => setEditing({ ...editing!, body })} onSave={saveEdit} onCancel={() => setEditing(null)} />
+                            ) : (
+                              <p className="mt-1.5 leading-relaxed break-words">{c.body}</p>
+                            )}
+                            {!isLocked && !editingThis && (
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-[#4A5878]">
+                                <label className="inline-flex items-center gap-1">
+                                  Keep
+                                  <select aria-label="How long to keep this comment" value={c.keep ?? 'this_year'} onChange={(e) => setKeep(c.id, e.target.value as CommentKeep)} className="px-1 py-0.5 border border-[#E3E7EF] rounded-[6px] bg-white text-[10px]">
+                                    {(Object.keys(KEEP_LABEL) as CommentKeep[]).map((k) => (
+                                      <option key={k} value={k}>
+                                        {KEEP_LABEL[k]}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                {canChange(c.created_by) && (
+                                  <>
+                                    <button type="button" onClick={() => setEditing({ id: c.id, body: c.body })} className="font-bold hover:text-[#122654] hover:underline">
+                                      Edit
+                                    </button>
+                                    <button type="button" onClick={() => deleteComment(c.id)} className="font-bold hover:text-[#B42318] hover:underline">
+                                      Delete
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        {(c.replies ?? []).map((r) => (
-                          <div key={r.id} className="mt-2.5 ml-4 flex items-start gap-2">
-                            <Avatar name={r.created_by_name} type={c.type} small />
-                            <div className="min-w-0">
-                              <div className="flex items-baseline gap-1.5">
-                                <span className="font-bold text-[11px]">{r.created_by_name}</span>
-                                <span className="text-[10px] text-[#7E8DA6]">{fmtDateTime(r.created_at)}</span>
+                        {(c.replies ?? []).map((r) => {
+                          const editingReply = editing?.id === c.id && editing.replyId === r.id;
+                          return (
+                            <div key={r.id} className="mt-2.5 ml-4 flex items-start gap-2">
+                              <Avatar name={r.created_by_name} type={c.type} small />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="font-bold text-[11px]">{r.created_by_name}</span>
+                                  <span className="text-[10px] text-[#7E8DA6]">
+                                    {fmtDateTime(r.created_at)}
+                                    {r.edited_at ? ' · edited' : ''}
+                                  </span>
+                                  {!isLocked && !editingReply && canChange(r.created_by) && (
+                                    <span className="ml-auto flex gap-2 text-[10px] text-[#4A5878]">
+                                      <button type="button" onClick={() => setEditing({ id: c.id, replyId: r.id, body: r.body })} className="hover:text-[#122654] hover:underline">
+                                        Edit
+                                      </button>
+                                      <button type="button" onClick={() => deleteComment(c.id, r.id)} className="hover:text-[#B42318] hover:underline">
+                                        Delete
+                                      </button>
+                                    </span>
+                                  )}
+                                </div>
+                                {editingReply ? (
+                                  <EditBox value={editing!.body} onChange={(body) => setEditing({ ...editing!, body })} onSave={saveEdit} onCancel={() => setEditing(null)} />
+                                ) : (
+                                  <p className="break-words">{r.body}</p>
+                                )}
                               </div>
-                              <p className="break-words">{r.body}</p>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {c.status === 'open' && !isLocked && (
                           <div className="mt-2.5 flex items-center gap-1.5">
                             <input
@@ -2426,6 +2520,16 @@ export default function WorkpaperPage() {
                         placeholder="Write a comment… type @name to tag a colleague"
                         className="p-2 border border-[#D3DCEE] rounded-[8px]"
                       />
+                      <label className="flex items-center gap-1.5 text-[11px] text-[#4A5878]">
+                        Keep
+                        <select aria-label="How long to keep this comment" value={noteKeep} onChange={(e) => setNoteKeep(e.target.value as CommentKeep)} className="flex-1 min-h-[30px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
+                          {(Object.keys(KEEP_LABEL) as CommentKeep[]).map((k) => (
+                            <option key={k} value={k}>
+                              {KEEP_LABEL[k]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       {noteType === 'review_note' && <div className="text-[10px] text-[#8A5A00]">A review note blocks sign-off until it is resolved.</div>}
                       <button type="button" onClick={addNote} disabled={!noteBody.trim()} className="min-h-[34px] bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] font-bold rounded-[8px] disabled:opacity-40">
                         Post

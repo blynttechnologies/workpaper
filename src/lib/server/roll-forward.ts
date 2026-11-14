@@ -389,6 +389,27 @@ export class RollForwardService {
       }
     }
 
+    // Comments kept beyond the year: "next year" comes across once, "every year" keeps coming
+    for (const c of db.comments.filter((x) => (x.keep === 'next_year' || x.keep === 'every_year') && priorWps.some((w) => w.id === x.workpaper_id))) {
+      const pyWp = priorWps.find((w) => w.id === c.workpaper_id)!;
+      const newWpId = `wp_${newEngId}_${pyWp.ref.replace('-', '').toLowerCase()}`;
+      const id = `com_rolled_${c.id}_${newEngId}`;
+      if (!db.workpapers.some((w) => w.id === newWpId) || db.comments.some((x) => x.id === id)) continue;
+      db.comments.push({
+        ...c,
+        id,
+        workpaper_id: newWpId,
+        status: 'open',
+        resolved_by: null,
+        resolved_by_name: null,
+        resolved_at: null,
+        keep: c.keep === 'every_year' ? 'every_year' : 'this_year',
+        carried_from: priorEng.period_end,
+        replies: (c.replies ?? []).map((r) => ({ ...r, comment_id: id })),
+      });
+      carriedComments.push({ id: c.id, ref: pyWp.ref, body: c.body.slice(0, 80), keep: c.keep });
+    }
+
     const report: RollForwardReport = {
       new_engagement_id: newEngId,
       prior_engagement_id: priorEng.id,
