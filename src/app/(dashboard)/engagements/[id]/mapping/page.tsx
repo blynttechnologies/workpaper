@@ -950,6 +950,11 @@ export default function AccountMappingPage() {
                     : row.confidence >= 70
                     ? 'check'
                     : 'exception';
+                // A new account to offer: the AI's, or for a weak match one named as the client names it, starting from the guess
+                const proposal =
+                  row.status === 'confirmed'
+                    ? null
+                    : row.ai_new_account ?? (gateName === 'exception' ? { name: row.source_name, parent_code: row.blynt_code ?? '' } : null);
 
                 return (
                   <tr
@@ -1089,15 +1094,15 @@ export default function AccountMappingPage() {
                         suggestName={row.source_name}
                         onPick={(code) => handleInitiateChangeMapping(row.id, code)}
                       />
-                      {/* No chart account fits: the AI's proposed new account, created only when someone approves it */}
-                      {row.status !== 'confirmed' && row.ai_new_account && (
+                      {/* No chart account fits (the AI says so, or the match is weak): offer a new account, created only when someone approves it */}
+                      {proposal && (
                         creatingFor === row.id ? (
                           <div className="mt-2 max-w-sm">
                             <NewAccountForm
                               firmId={firmId}
                               clientId={engagementClientId ?? undefined}
-                              initialName={row.ai_new_account.name}
-                              initialBase={row.ai_new_account.parent_code}
+                              initialName={proposal.name}
+                              initialBase={proposal.parent_code || undefined}
                               onCancel={() => setCreatingFor(null)}
                               onUseExisting={(code) => {
                                 setCreatingFor(null);
@@ -1113,12 +1118,18 @@ export default function AccountMappingPage() {
                           </div>
                         ) : (
                           <div className="mt-1 max-w-[260px] text-[10px] text-[#4A5878]">
-                            <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
-                            AI: no chart account fits.{' '}
+                            {row.ai_new_account ? (
+                              <>
+                                <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
+                                AI: no chart account fits.{' '}
+                              </>
+                            ) : (
+                              'Weak match. Not in the chart? '
+                            )}
                             <button type="button" onClick={() => setCreatingFor(row.id)} className="font-bold text-[#B8432F] hover:underline">
-                              Create &ldquo;{row.ai_new_account.name}&rdquo;
-                            </button>{' '}
-                            (works like {row.ai_new_account.parent_code})
+                              Create &ldquo;{proposal.name}&rdquo;
+                            </button>
+                            {proposal.parent_code ? ` (works like ${proposal.parent_code})` : ''}
                           </div>
                         )
                       )}
