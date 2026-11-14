@@ -7,7 +7,7 @@ import { ukDate } from '@/lib/dates';
 import { CENTRAL_TAX_RATES } from '@/lib/tax-rates';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
-import { btnPrimary, btnSecondary, card, contextOf, ExpandButton, JournalPanel, money, newId, Pill, SuggestionRow, th, Tiles, useOpen } from '../kit';
+import { btnPrimary, btnSecondary, card, contextOf, ExpandButton, FlowsTo, JournalPanel, money, newId, Pill, SuggestionRow, th, Tiles, useOpen } from '../kit';
 import { advancesNote, dlaAccounts, dlaReview } from '@/lib/workpapers/dla';
 
 const owed = (p: bigint) => (p > 0n ? `${formatPence(p)} owed by the director` : p < 0n ? `${formatPence(-p)} owed to the director` : 'nil');
@@ -322,11 +322,21 @@ export function DlaSchedule({ data, result, locked, save, filesFor, attachTo, pr
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <JournalPanel engagementId={result.engagementId} date={ctx.periodEnd} lines={r.lines} sent={data.journal} narrative="Director's loan: business costs charged to the loan" source="D-20" locked={locked} save={save} empty="Nothing to move. Mark a purchase as a business cost and its journal appears here." />
         <div className={card}>
-          <div className="font-bold mb-2">Advances to directors · note</div>
+          <div className="font-bold mb-2">Note for the accounts</div>
           <div className="text-[11px] text-[#122654]">{note || `No advances to ${name} in the year.`}</div>
           <div className="mt-1 text-[10px] text-[#4A5878]">Required even in micro-entity accounts.</div>
         </div>
       </div>
+      <FlowsTo
+        engagementId={result.engagementId}
+        rows={[
+          { ref: 'Z-40', label: 'Balance sheet analysis', detail: r.closing > 0n ? "Director's loan account (current assets)" : 'Owed to the director (creditors)', amount: r.closing < 0n ? -r.closing : r.closing },
+          { ref: 'E-10', label: 'Share capital and dividends', detail: 'Dividends credited to the account', amount: -r.groups.find((g) => g.key === 'dividends')!.total },
+          { ref: 'T-10', label: 'Tax computation', detail: r.s455.s455 ? 's455 on the balance not repaid' : 's455 · CT600A relief if repaid', amount: r.s455.s455 },
+          { ref: 'P-20', label: 'Payroll · P11D and Class 1A', detail: r.loan.over ? `Loan benefit ${formatPence(r.loan.benefit)}, Class 1A` : 'No loan benefit: never over £10,000', amount: r.loan.class1a },
+          { ref: 'Z-30', label: 'P&L analysis · Sundry expenses', detail: 'Purchases moved out of the loan as business costs', amount: r.tx.filter((x) => x.decision === 'business').reduce((a, x) => a + x.amount, 0n) },
+        ]}
+      />
     </div>
   );
 }

@@ -641,7 +641,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     } ${anyOverdrawn ? `Caution: Overdrawn balance detected subject to s455 tax review (${formatPence(totalS455)}).` : 'All accounts in credit.'}`;
   }
 
-  if (t.kind === 'loans') {
+  if (!review && t.kind === 'loans') {
     const principal = asPence(data.principal_p ?? '0');
     const within1y = asPence(data.maturity?.within_1y_p ?? '0');
     const within1to5y = asPence(data.maturity?.within_1_to_5y_p ?? '0');

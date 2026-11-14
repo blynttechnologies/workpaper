@@ -7,7 +7,7 @@ import { CENTRAL_TAX_RATES } from '@/lib/tax-rates';
 import { ukDate } from '@/lib/dates';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
-import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, contextOf, ExpandButton, JournalPanel, money, newId, Pill, SuggestionRow, th, Tiles, useOpen } from '../kit';
+import { AccountsPreview, FlowsTo, btnAdd, btnPrimary, btnSecondary, card, contextOf, ExpandButton, JournalPanel, money, newId, Pill, SuggestionRow, th, Tiles, useOpen } from '../kit';
 import { investmentsReview, type Investment, type Property } from '@/lib/workpapers/investments';
 
 const ACTIONS: Record<string, [string, string, string, string]> = {
@@ -309,6 +309,41 @@ export function InvestmentsSchedule({ data, result, locked, save, filesFor, atta
             ...(r.frs105 ? [] : [{ label: 'Of which unrealised gains (not distributable)', amount: tot('gains') - tot('deferred_tax') }]),
           ]}
           note={r.frs105 ? 'Micro-entities on FRS 105 cannot use fair value.' : `Valued at ${ukDate(ctx.periodEnd)}; fair value movements go through the P&L with deferred tax at ${CENTRAL_TAX_RATES.corporation_tax.main_rate_pct}%.`}
+        />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {!r.frs105 && (
+          <div className={card}>
+            <div className="font-bold mb-2">Unrealised gains and deferred tax</div>
+            <table className="w-full text-[11px]">
+              <tbody>
+                <tr>
+                  <td className="py-1">Fair value gains this year</td>
+                  <td className="py-1 text-right font-mono">{money(tot('gains'))}</td>
+                </tr>
+                <tr>
+                  <td className="py-1">Deferred tax at {CENTRAL_TAX_RATES.corporation_tax.main_rate_pct}%</td>
+                  <td className="py-1 text-right font-mono">{money(-tot('deferred_tax'))}</td>
+                </tr>
+                <tr className="font-bold border-t border-[#D3DCEE]">
+                  <td className="py-1">Unrealised, not distributable</td>
+                  <td className="py-1 text-right font-mono">{money(tot('gains') - tot('deferred_tax'))}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="mt-2 p-2 rounded-[8px] bg-[#F5F8FD] text-[10px] text-[#4A5878]">These gains go through profit but are not realised, so they cannot be paid out as dividends. Keep them out of the dividends test and show them as a separate fair value reserve.</div>
+          </div>
+        )}
+        <FlowsTo
+          engagementId={result.engagementId}
+          rows={[
+            { ref: 'Z-40', label: 'Balance sheet analysis', detail: 'Investment property and investments', amount: tot('property') + tot('investments') },
+            { ref: 'Z-30', label: 'P&L analysis', detail: r.frs105 ? 'Depreciation on buildings' : 'Fair value gains', amount: r.frs105 ? r.props.reduce((a, x) => a + x.charge, 0n) : tot('gains') },
+            { ref: 'E-20', label: 'Reserves movement', detail: 'Non-distributable fair value reserve', amount: r.frs105 ? 0n : tot('gains') - tot('deferred_tax') },
+            { ref: 'T-30', label: 'Deferred tax', detail: 'Deferred tax on gains; not taxed until sale', amount: tot('deferred_tax') },
+            { ref: 'L-20', label: 'Loans and borrowings', detail: 'Properties secure the loans; their values drive the covenants', amount: null },
+            { ref: 'C-30', label: 'Other debtors', detail: 'Rent debtor, if accepted', amount: r.props.filter((x) => x.d.rent === 'debtor').reduce((a, x) => a + x.shortfall, 0n) },
+          ]}
         />
       </div>
     </div>

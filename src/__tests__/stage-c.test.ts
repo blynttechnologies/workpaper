@@ -275,8 +275,10 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         maturity: { within_1y_p: '1000000', within_1_to_5y_p: '3000000', over_5y_p: '0' },
       };
 
+      // A paper saved before facilities opens as one facility, and the split is worked out from it
       const evalRes = evaluatePaper(loanWp)!;
-      expect(evalRes.checks.find((c) => c.id === 'loan_maturity_tie')?.passed).toBe(true);
+      expect(evalRes.totals.borrowings).toBe(4000000n);
+      expect(evalRes.anchors.map((a) => a.id)).toEqual(['legacy']);
     });
 
     it('REC-04: Leases with Right-of-Use model for FRS 102 periods from 1 January 2026', () => {
