@@ -177,6 +177,17 @@ describe('accounting, review and reporting services', () => {
     expect(sent).not.toContain('Sales Ledger Control Account');
   });
 
+  it('mapping with all: every account goes to the AI in batches, and its reading wins over the name matcher', async () => {
+    const items = Array.from({ length: 85 }, (_, n) => ({ id: `i${n}`, name: n === 0 ? 'Sales Ledger Control Account' : `Account ${n}`, type: 'Expense' }));
+    const answer = (ids: string[]) => ({ text: JSON.stringify({ suggestions: ids.map((id) => ({ id, code: '4000', confidence: 91, reason: 'Read as an overhead' })) }) });
+    replies.push(answer(items.slice(0, 80).map((i) => i.id)), answer(items.slice(80).map((i) => i.id)));
+    const r = await suggestMappings(preparer, items, 'app', { all: true, engagementId });
+    expect(calls).toHaveLength(2); // 80 + 5
+    expect(JSON.stringify(calls[0].messages)).toContain('Sales Ledger Control Account');
+    expect(r.results.find((x) => x.id === 'i0')).toMatchObject({ source: 'ai', suggested_blynt_code: '4000', confidence: 91 });
+    expect(r.results.every((x) => x.source === 'ai')).toBe(true);
+  });
+
   it('AI review findings join the paper and block sign-off until dealt with; a new review replaces the old open ones', async () => {
     const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'F-10')!;
     replies.push({ text: JSON.stringify({ findings: [{ severity: 'error', title: 'Disposal proceeds unsupported', explanation: 'No evidence for £250 proceeds.' }] }) });
