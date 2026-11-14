@@ -24,6 +24,7 @@ import { engagementSummary } from '@/lib/api';
 import { NewAccountForm } from '@/components/coa/NewAccountForm';
 import { AccountPicker } from '@/components/coa/AccountPicker';
 import { groupMappings } from '@/lib/mapping/group';
+import { nameShape, similarLines } from '@/lib/mapping/similar';
 
 function ChartOptions({ engagementId }: { engagementId: string }) {
   return (
@@ -69,6 +70,8 @@ export default function AccountMappingPage() {
     pattern: string;
   } | null>(null);
   const [ruleScope, setRuleScope] = useState<'client' | 'practice'>('client');
+  // Other lines the correction is also applied to, chosen in the rule pop-up
+  const [alsoApply, setAlsoApply] = useState<string[]>([]);
 
   // Load from db
   const reloadData = () => {
@@ -144,6 +147,11 @@ export default function AccountMappingPage() {
   }, [mappings, search, typeFilter, statutoryFilter, activeTab]);
   const groups = useMemo(() => groupMappings(filteredMappings, sortBy), [filteredMappings, sortBy]);
   const columns = 5 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
+  // Lines that look like the one being corrected, offered in the rule pop-up
+  const similar = useMemo(() => {
+    const item = pendingCorrection && mappings.find((m) => m.id === pendingCorrection.mappingId);
+    return item ? similarLines(item, mappings).filter((s) => !(s.line.status === 'confirmed' && s.line.blynt_code === pendingCorrection!.targetCode)) : [];
+  }, [pendingCorrection, mappings]);
 
   // Active detail mapping for slide-over facts (DAT-03 UI step 3)
   const detailMapping = mappings.find((m) => m.id === activeDetailId) || null;
@@ -315,6 +323,9 @@ export default function AccountMappingPage() {
     // A client rule keys on the client's own nominal code, which stays the same from year to year
     // even if the account is renamed; a practice rule keys on the whole name, since codes differ between clients
     const pattern = `name:${item.source_name}`;
+    // Lines with the same name but for codes ("Route 52 Wages" beside "Route 2V Wages") are ticked to follow
+    const lines = db.account_mappings.filter((m) => m.engagement_id === engagementId);
+    setAlsoApply(similarLines(item, lines).filter((s) => s.alike && !(s.line.status === 'confirmed' && s.line.blynt_code === newBlyntCode)).map((s) => s.line.id));
 
     setPendingCorrection({
       mappingId,
@@ -336,54 +347,60 @@ export default function AccountMappingPage() {
     const targetAcc = db.blynt_accounts.find((b) => b.code === targetCode);
     const statDetails = getStatutoryDetails(targetCode, sourceName);
 
-    // 1. Create the rule in db.learned_rules (DAT-09)
-    let appliedCount = 1;
-    const createdRuleId = `rule_${Date.now()}`;
-    const newRule: LearnedRule = {
-      id: createdRuleId,
-      firm_id: firmId,
-      client_id: ruleScope === 'client' ? engagementClientId : null,
-      supplier_name: null,
-      type: 'mapping',
-      scope: ruleScope,
-      pattern: ruleScope === 'client' ? `code:${pendingCorrection.sourceCode}` : pattern,
-      target_value: targetCode,
-      explanation: `Rule learned from correction on ${sourceName} → ${targetCode} ${targetAcc?.name ?? ''}`,
-      created_by: actor.id,
-      created_by_name: actor.name,
-      created_at: now,
-      times_used: 1,
-      // Practice rules wait for a manager (DAT-09); the server refuses anything else
-      active: ruleScope !== 'practice' || ['manager', 'partner', 'admin'].includes(actor.role),
-      approved_by_manager: ruleScope === 'practice' ? ['manager', 'partner', 'admin'].includes(actor.role) : true,
-    };
-    db.learned_rules.unshift(newRule);
+    // The other lines ticked in the pop-up take the same account, confirmed by this person
+    const others = db.account_mappings.filter((m) => m.engagement_id === engagementId && m.id !== mappingId && alsoApply.includes(m.id));
+    const appliedCount = 1 + others.length;
 
-    db.logAudit(
-      firmId,
-      actor,
-      'CREATE_LEARNED_RULE',
-      'learned_rules',
-      newRule.id,
-      null,
-      newRule
-    );
-
-    // Apply immediately to matching unconfirmed accounts in the same file (DAT-05 criteria 1)
-    const sameName = (name: string) => name.trim().toLowerCase() === sourceName.trim().toLowerCase();
-    db.account_mappings.forEach((m) => {
-      if (m.engagement_id === engagementId && m.id !== mappingId && m.status !== 'confirmed') {
-        if (sameName(m.source_name)) {
-          m.blynt_code = targetCode;
-          m.status = 'suggested';
-          m.confidence = 95;
-          m.method = 'rule';
-          m.ai_reason = `Applied from newly created rule: ${sourceName}`;
-          m.gate = 'ready';
-          appliedCount++;
-        }
-      }
+    // 1. Create the rule in db.learned_rules (DAT-09). A client rule keys on each nominal code; a practice
+    // rule on the name, with codes as * when lines differing only by code were applied too
+    const shape = nameShape(sourceName);
+    const patterns =
+      ruleScope === 'client'
+        ? [pendingCorrection.sourceCode, ...others.map((m) => m.source_code)].map((c) => `code:${c}`)
+        : [shape.includes('*') && others.some((m) => nameShape(m.source_name) === shape) ? `name:${shape}` : pattern];
+    const createdRuleIds: string[] = [];
+    patterns.forEach((rulePattern, i) => {
+      const newRule: LearnedRule = {
+        id: `rule_${Date.now()}_${i}`,
+        firm_id: firmId,
+        client_id: ruleScope === 'client' ? engagementClientId : null,
+        supplier_name: null,
+        type: 'mapping',
+        scope: ruleScope,
+        pattern: rulePattern,
+        target_value: targetCode,
+        explanation: `Rule learned from correction on ${sourceName} → ${targetCode} ${targetAcc?.name ?? ''}`,
+        created_by: actor.id,
+        created_by_name: actor.name,
+        created_at: now,
+        times_used: 1,
+        // Practice rules wait for a manager (DAT-09); the server refuses anything else
+        active: ruleScope !== 'practice' || ['manager', 'partner', 'admin'].includes(actor.role),
+        approved_by_manager: ruleScope === 'practice' ? ['manager', 'partner', 'admin'].includes(actor.role) : true,
+      };
+      db.learned_rules.unshift(newRule);
+      createdRuleIds.push(newRule.id);
+      db.logAudit(firmId, actor, 'CREATE_LEARNED_RULE', 'learned_rules', newRule.id, null, newRule);
     });
+
+    for (const m of others) {
+      const before = { ...m };
+      const stat = getStatutoryDetails(targetCode, m.source_name);
+      Object.assign(m, {
+        blynt_code: targetCode,
+        status: 'confirmed',
+        confidence: 100,
+        method: 'manual',
+        ai_reason: `Applied with the correction to ${sourceName}`,
+        gate: 'ready',
+        statutory_line: stat.statutory_line,
+        schedule_ref: stat.schedule_ref,
+        cash_flow_category: stat.cash_flow_category,
+        confirmed_by: actor.id,
+        confirmed_at: now,
+      });
+      db.logAudit(firmId, actor, 'UPDATE_MAPPING_WITH_RULE', 'account_mappings', m.id, before, { ...m, appliedWith: mappingId });
+    }
 
     // 2. Update the target mapping
     const item = db.account_mappings.find((m) => m.id === mappingId);
@@ -432,9 +449,9 @@ export default function AccountMappingPage() {
 
     // Toast with Undo (DAT-05 UI step 1)
     setCorrectionToast({
-      message: `Rule created – applied to ${appliedCount} accounts (scope: ${ruleScope}).`,
+      message: `Rule created – ${targetCode} applied to ${appliedCount} account${appliedCount === 1 ? '' : 's'} (scope: ${ruleScope}).`,
       undoAction: () => {
-        db.learned_rules = db.learned_rules.filter((r) => r.id !== createdRuleId);
+        db.learned_rules = db.learned_rules.filter((r) => !createdRuleIds.includes(r.id));
         reloadData();
         setCorrectionToast({ message: 'Rule undone.' });
       },
@@ -1009,6 +1026,39 @@ export default function AccountMappingPage() {
                 </span>
               </div>
             </div>
+
+            {similar.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#122654]">Also map these to {pendingCorrection.targetCode}:</span>
+                  <button
+                    type="button"
+                    onClick={() => setAlsoApply(alsoApply.length === similar.length ? [] : similar.map((s) => s.line.id))}
+                    className="text-[11px] font-semibold text-[#1D4E89] hover:underline"
+                  >
+                    {alsoApply.length === similar.length ? 'Untick all' : 'Tick all'}
+                  </button>
+                </div>
+                <div className="max-h-44 overflow-y-auto rounded-xl border border-[#E3E7EF] divide-y divide-[#E3E7EF]">
+                  {similar.map(({ line }) => (
+                    <label key={line.id} className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-[#F5F8FD]">
+                      <input
+                        type="checkbox"
+                        checked={alsoApply.includes(line.id)}
+                        onChange={() => setAlsoApply((ids) => (ids.includes(line.id) ? ids.filter((x) => x !== line.id) : [...ids, line.id]))}
+                        className="w-4 h-4 rounded border-[#D3DCEE]"
+                      />
+                      <span className="font-mono text-[11px] text-[#4A5878] shrink-0">{line.source_code}</span>
+                      <span className="flex-1 min-w-0 truncate font-semibold text-[#122654]">{line.source_name}</span>
+                      <span className="shrink-0 text-[10px] text-[#4A5878]">
+                        {line.blynt_code ? `now ${line.blynt_code}${line.status === 'confirmed' ? ', confirmed' : ''}` : 'not mapped'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#4A5878]">Ticked lines are mapped to {pendingCorrection.targetCode} and confirmed, and the rule covers them in future years too.</p>
+              </div>
+            )}
 
             {/* Scope Selection (DAT-09 UI step 1) */}
             <div className="space-y-2">
