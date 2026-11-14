@@ -25,16 +25,16 @@ function json(label: string, value: unknown): Part {
 
 export interface MappingInput {
   chart: { code: string; name: string; type: string }[];
-  items: { id: string; name: string; type: string; balance_p: string }[];
+  items: { id: string; code: string; name: string; type: string; balance_p: string }[];
 }
 export interface MappingOutput {
-  suggestions: { id: string; code: string; confidence: number; reason: string }[];
+  suggestions: { id: string; code: string; confidence: number; reason: string; new_name: string; parent_code: string }[];
 }
 
 export const suggestMappingTask: TaskDef<MappingInput, MappingOutput> = {
   id: 'suggest_mapping',
   module: 'mapping',
-  version: '2026-11-14',
+  version: '2026-11-14b',
   system: BASE,
   build: ({ chart, items }) => [
     json('chart_of_accounts', chart),
@@ -42,9 +42,12 @@ export const suggestMappingTask: TaskDef<MappingInput, MappingOutput> = {
     {
       type: 'text',
       text:
-        'Map each client account to the one Blynt chart account it belongs to, by what the account is (name, type and sign of the balance), ' +
-        'not by its code number. Use only codes from the chart. Give a 0-100 confidence and a one-line reason. Use code "" with confidence 0 ' +
-        'when no chart account fits.',
+        "Read each client account's own code, its description, its type and the sign of its balance, and work out what the account really is " +
+        '(for example "Depreciation - Bristol Buses" on an expense is a depreciation charge; "Motor Vehicle Cost" on a fixed asset is cost, not depreciation). ' +
+        "Then give the exact Blynt chart code it belongs to. The client's code is a clue to how their ledger is arranged, but Blynt's numbers are " +
+        'different, so never copy it across. Use only codes from the chart. Give a 0-100 confidence and a one-line reason. ' +
+        'When no chart account fits, use code "" and propose a new account instead: new_name, a short name in the chart\'s style, and ' +
+        'parent_code, the chart account it works like. Otherwise leave new_name and parent_code as "".',
     },
   ],
   schema: {
@@ -54,8 +57,15 @@ export const suggestMappingTask: TaskDef<MappingInput, MappingOutput> = {
         type: 'array',
         items: {
           type: 'object',
-          properties: { id: { type: 'string' }, code: { type: 'string' }, confidence: { type: 'integer' }, reason: { type: 'string' } },
-          required: ['id', 'code', 'confidence', 'reason'],
+          properties: {
+            id: { type: 'string' },
+            code: { type: 'string' },
+            confidence: { type: 'integer' },
+            reason: { type: 'string' },
+            new_name: { type: 'string' },
+            parent_code: { type: 'string' },
+          },
+          required: ['id', 'code', 'confidence', 'reason', 'new_name', 'parent_code'],
           additionalProperties: false,
         },
       },
