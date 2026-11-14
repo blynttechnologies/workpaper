@@ -42,32 +42,44 @@ function writable(engagementId: string) {
 
 // ------------------------------------------------------------ Accounting intelligence: mapping
 
-/** Rules first (the auto-mapper and learned rules); AI only for accounts the rules could not place. */
-export async function suggestMappings(actor: Actor, items: { id: string; name: string; type?: string; code?: string; balance_p?: string }[], channel?: RunCtx['channel']) {
+// Accounts per AI request: small enough that every suggestion fits in one answer
+const MAPPING_BATCH = 80;
+
+/**
+ * Rules first (the auto-mapper and learned rules); AI for accounts the rules could not place, or for
+ * every account with `all`, where the AI's reading wins over the name matcher's.
+ */
+export async function suggestMappings(actor: Actor, items: { id: string; name: string; type?: string; code?: string; balance_p?: string }[], channel?: RunCtx['channel'], opts: { all?: boolean; engagementId?: string } = {}) {
   const ruled = items.map((item) => {
     const s = matchBlyntAccount(item.name || '', item.type || '', item.code || '');
     return { id: item.id, source_name: item.name, suggested_blynt_code: s?.blynt_code ?? null, blynt_name: s?.name ?? null, confidence: s?.confidence ?? 0, reason: s?.reason ?? 'No rule matched', source: 'rule' as const };
   });
-  const weak = ruled.filter((r) => r.confidence < 70);
+  const weak = opts.all ? ruled : ruled.filter((r) => r.confidence < 70);
   if (!weak.length || !aiAvailable(actor.firmId, suggestMappingTask)) return { results: ruled, ai: false };
 
   const chart = db.blynt_accounts.filter((a) => a.type !== 'System' && (!a.firm_id || a.firm_id === actor.firmId)).map((a) => ({ code: a.code, name: a.name, type: a.type }));
   const codes = new Set(chart.map((c) => c.code));
+  const batches: (typeof weak)[] = [];
+  for (let i = 0; i < weak.length; i += MAPPING_BATCH) batches.push(weak.slice(i, i + MAPPING_BATCH));
   try {
-    const r = await run(
-      suggestMappingTask,
-      { chart, items: weak.map((w) => { const i = items.find((x) => x.id === w.id)!; return { id: i.id, name: i.name, type: i.type ?? '', balance_p: i.balance_p ?? '' }; }) },
-      ctxOf(actor, undefined, channel)
+    const runs = await Promise.all(
+      batches.map((batch) =>
+        run(
+          suggestMappingTask,
+          { chart, items: batch.map((w) => { const i = items.find((x) => x.id === w.id)!; return { id: i.id, name: i.name, type: i.type ?? '', balance_p: i.balance_p ?? '' }; }) },
+          ctxOf(actor, opts.engagementId, channel)
+        )
+      )
     );
-    const byId = new Map(r.output.suggestions.filter((s) => codes.has(s.code)).map((s) => [s.id, s]));
+    const byId = new Map(runs.flatMap((r) => r.output.suggestions.filter((s) => codes.has(s.code)).map((s) => [s.id, { ...s, agreement: r.agreement, model: r.model }] as const)));
     const results = ruled.map((x) => {
       const s = byId.get(x.id);
-      if (!s || x.confidence >= 70 || s.confidence <= x.confidence) return x;
+      if (!s || (!opts.all && (x.confidence >= 70 || s.confidence <= x.confidence))) return x;
       // A disagreement between two models is never Ready
-      const confidence = r.agreement === false ? Math.min(s.confidence, 69) : s.confidence;
-      return { ...x, suggested_blynt_code: s.code, blynt_name: chart.find((c) => c.code === s.code)?.name ?? null, confidence, reason: s.reason, source: 'ai' as const, model: r.model };
+      const confidence = s.agreement === false ? Math.min(s.confidence, 69) : s.confidence;
+      return { ...x, suggested_blynt_code: s.code, blynt_name: chart.find((c) => c.code === s.code)?.name ?? null, confidence, reason: s.reason, source: 'ai' as const, model: s.model };
     });
-    return { results, ai: true, model: r.model };
+    return { results, ai: true, model: runs[0]?.model };
   } catch (err) {
     if (err instanceof AiError) return { results: ruled, ai: false, note: err.message };
     throw err;
