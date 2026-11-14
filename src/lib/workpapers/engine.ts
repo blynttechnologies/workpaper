@@ -127,7 +127,10 @@ export interface ReconAccount {
 export type BalanceOption = NonNullable<ReconAccount['ai_balances']>[number];
 
 export const accountKind = (code: string): 'bank' | 'cash' | 'card' => (code === '6200' || code === '6450' ? 'cash' : code === '6300' ? 'card' : 'bank');
-export const accountName = (a: ReconAccount) => (a.code === '*' ? a.name : `${a.code} ${a.name}`);
+/** The chart code a row shows: its client account's own code (a practice account sits under the lead it works like), else the lead's. */
+export const rowCode = (a: ReconAccount, engagementId = '') =>
+  (a.client_code && db.account_mappings.find((m) => m.engagement_id === engagementId && m.source_code === a.client_code)?.blynt_code) || a.code;
+export const accountName = (a: ReconAccount, engagementId = '') => (a.code === '*' ? a.name : `${rowCode(a, engagementId)} ${a.name}`);
 export const statementEntered = (a: ReconAccount) => a.statement_p !== '' && a.statement_p != null;
 
 /**
@@ -336,7 +339,7 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     let ledger = 0n, statement = 0n, adjusted = 0n, difference = 0n, unexplained = 0n;
     const noStatement: string[] = [], unreconciled: string[] = [], noEvidence: string[] = [], noTb: string[] = [], old: string[] = [], cashCredit: string[] = [];
     for (const a of accounts) {
-      const name = accountName(a);
+      const name = accountName(a, wp.engagement_id);
       const l = accountLedger(a, accounts, leads, t.creditArea, wp.engagement_id);
       const s = asPence(a.statement_p || '0');
       const less = (a.less ?? []).reduce((acc: bigint, r: any) => acc + asPence(r.amount_p), 0n);

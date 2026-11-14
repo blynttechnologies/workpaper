@@ -7,7 +7,7 @@ import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, Re
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
-import { reconAccounts, leadSources, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
+import { reconAccounts, leadSources, rowCode, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
 import { Tiles, type Tone } from './kit';
@@ -48,6 +48,8 @@ function RemoveButton({ onClick, label, disabled }: { onClick: () => void; label
 
 /* ---------- B-10 style: bank and cash, one row per account ---------- */
 const KIND_LABEL = { bank: 'Bank', cash: 'Cash', card: 'Credit card' } as const;
+/** A balance with its sign and side spelt out: + Dr for money held, − Cr for owed or overdrawn. */
+const signed = (p: bigint) => (p === 0n ? formatPence(p) : `${p < 0n ? '−' : '+'}${formatPence(p < 0n ? -p : p)} ${p < 0n ? 'Cr' : 'Dr'}`);
 const abs = (x: bigint) => (x < 0n ? -x : x);
 
 /** Which account a statement file is for, from the account code or name in its file name. */
@@ -99,7 +101,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     );
   };
   const removeAccount = (a: ReconAccount) => {
-    if (confirm(`Remove ${accountName(a)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
+    if (confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
   };
   const onDrop = (e: React.DragEvent, rowId: string) => {
     e.preventDefault();
@@ -151,7 +153,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className={tile}>
           <div className="text-[11px] text-[#4A5878]">Ledger balance, all accounts</div>
-          <div className="text-lg font-bold font-mono text-[#122654]">{formatPence(tot('ledger'))}</div>
+          <div className="text-lg font-bold font-mono text-[#122654] whitespace-nowrap">{signed(tot('ledger'))}</div>
         </div>
         <div className={tile}>
           <div className="text-[11px] text-[#4A5878]">Accounts reconciled</div>
@@ -265,7 +267,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               const less = tot(`${a.id}_less`);
               const add = tot(`${a.id}_add`);
               const items = (a.less ?? []).length + (a.add ?? []).length;
-              const name = accountName(a);
+              const name = accountName(a, result.engagementId);
               // A row from before accounts were named, with one client account on its code: show that account's name
               const single = !a.client_code && a.code !== '*' && sourcesOf(a.code).length === 1 ? sourcesOf(a.code)[0] : null;
               return (
@@ -293,7 +295,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                     </td>
                     <td className="p-2 align-top">
                       <div className="font-bold">
-                        {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{a.code}</span>}
+                        {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{single?.blynt_code ?? rowCode(a, result.engagementId)}</span>}
                         {single ? single.source_name || single.source_code : a.name}
                       </div>
                       <div className="text-[10px] text-[#4A5878]">
@@ -313,7 +315,9 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                       )}
                     </td>
                     <td className="p-2 align-top text-right">
-                      <div className="font-mono font-bold">{formatPence(ledger.final)}</div>
+                      <div className="font-mono font-bold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
+                        {signed(ledger.final)}
+                      </div>
                       <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
                     </td>
                     <td className="p-1.5 align-top">
@@ -499,8 +503,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                 <td className="p-2">
                   Total · {rows.length} account{rows.length === 1 ? '' : 's'}
                 </td>
-                <td className="p-2 text-right font-mono">{formatPence(tot('ledger'))}</td>
-                <td className="p-2 text-right font-mono">{formatPence(tot('statement'))}</td>
+                <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('ledger'))}</td>
+                <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('statement'))}</td>
                 <td className="p-2 text-right font-mono">{formatPence(tot('adjusted') - tot('statement'))}</td>
                 <td className={`p-2 text-right font-mono ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
                   {formatPence(rows.filter((r) => r.entered).reduce((acc, r) => acc + abs(r.diff), 0n))}
