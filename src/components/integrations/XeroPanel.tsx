@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, CheckCircle2, Link2, Loader2, RefreshCw, Unplug } from 'lucide-react';
+import { db } from '@/lib/server/db';
+import { canPull, PULL_YEARS, RETENTION_YEARS } from '@/lib/periods';
 
 interface Status {
   configured: boolean;
@@ -52,6 +54,8 @@ export function LedgerPanel({ provider, clientId, engagementId, reconnectNeeded 
   const [error, setError] = useState('');
   const [needsReconnect, setNeedsReconnect] = useState(Boolean(reconnectNeeded));
   const [result, setResult] = useState<PullResult | null>(null);
+  const eng = engagementId ? db.engagements.find((e) => e.id === engagementId) : undefined;
+  const tooOld = !!eng && !canPull(eng.period_start);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/v1/integrations/${P.api}/connection?clientId=${encodeURIComponent(clientId)}`);
@@ -166,7 +170,11 @@ export function LedgerPanel({ provider, clientId, engagementId, reconnectNeeded 
             <dd className="text-[#122654]">{when(status.last_synced_at)}</dd>
           </dl>
           <div className="flex flex-wrap items-center gap-2">
-            {engagementId ? (
+            {tooOld ? (
+              <span className="text-[11px] text-[#4A5878]">
+                {P.name} is read for the current financial year and the {PULL_YEARS - 1} before it, so this year can&apos;t be pulled. Import its trial balance from a file. What is here is kept for {RETENTION_YEARS} years after the year end.
+              </span>
+            ) : engagementId ? (
               <button
                 type="button"
                 onClick={pull}
