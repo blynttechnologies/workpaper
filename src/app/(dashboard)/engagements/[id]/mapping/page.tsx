@@ -1014,6 +1014,19 @@ export default function AccountMappingPage() {
                           <span>Exception {row.confidence}%</span>
                         </span>
                       )}
+                      {row.status !== 'confirmed' && row.blynt_code && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            confirmMappings([row.id]);
+                          }}
+                          aria-label={`Confirm ${row.source_code} ${row.source_name} as ${row.blynt_code}`}
+                          className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-white bg-[#122654] hover:bg-[#0B1A3B] rounded-full"
+                        >
+                          <Check className="w-3 h-3 stroke-[2.5]" /> Confirm
+                        </button>
+                      )}
                     </td>
 
                     {/* AI Reason & Evidence (hoverable) */}
@@ -1054,10 +1067,28 @@ export default function AccountMappingPage() {
           </table>
         </div>
         {/* Room for the action bar, so it never covers the last row */}
-        {selectedIds.length > 0 && <div className="h-20" aria-hidden="true" />}
+        {(selectedIds.length > 0 || confirmedCount < totalImported) && <div className="h-20" aria-hidden="true" />}
       </div>
 
-      {/* Ticked lines: the actions follow the page down, so confirming never means scrolling back up */}
+      {/* The confirm actions follow the page down, so confirming never means scrolling back up */}
+      {selectedIds.length === 0 && confirmedCount < totalImported && !ruleModalOpen && (
+        <div role="region" aria-label="Confirm lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">
+            <span className="text-xs mr-auto">
+              <span className="font-bold">{totalImported - confirmedCount} to confirm</span>
+              <span className="text-white/70"> · tick lines to confirm or remap several, or use Confirm on a row</span>
+            </span>
+            <button
+              type="button"
+              disabled={readyCount === 0}
+              onClick={handleConfirmAllReady}
+              className="min-h-[36px] px-4 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" /> Confirm all Ready ({readyCount})
+            </button>
+          </div>
+        </div>
+      )}
       {selectedIds.length > 0 && !ruleModalOpen && (
         <div role="region" aria-label="Selected lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
           <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">
