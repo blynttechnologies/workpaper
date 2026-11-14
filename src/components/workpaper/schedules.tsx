@@ -75,7 +75,14 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const lead = result.template.leads.find((l) => l.code === code);
     if (!lead) return;
     const m = source ? sourcesOf(code).find((x) => x.source_code === source) : undefined;
-    saveAccounts((as) => [...as, { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] }]);
+    const dismissed = ((live().dismissed_accounts ?? []) as string[]).filter((k) => k !== `${code}|${source}`);
+    save({
+      dismissed_accounts: dismissed,
+      accounts: [
+        ...reconAccounts({ ...live(), dismissed_accounts: dismissed }, leads, result.engagementId).filter((x) => !(m && x.code === code && x.client_code === m.source_code)),
+        { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] },
+      ],
+    });
   };
   // Several client accounts on one code: one row each. What was entered on the combined row, and its files, go to the account it belongs to
   const splitAccount = (a: ReconAccount, keep: string) => {
@@ -104,7 +111,10 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     });
   };
   const removeAccount = (a: ReconAccount) => {
-    if (confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
+    if (!confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) return;
+    // A client account is remembered as removed, so it isn't added back as a new row
+    const dismissed = a.client_code ? [...new Set([...(live().dismissed_accounts ?? []), `${a.code}|${a.client_code}`])] : live().dismissed_accounts;
+    save({ dismissed_accounts: dismissed, accounts: reconAccounts({ ...live(), dismissed_accounts: dismissed }, leads, result.engagementId).filter((x) => x.id !== a.id) });
   };
   const onDrop = (e: React.DragEvent, rowId: string) => {
     e.preventDefault();
