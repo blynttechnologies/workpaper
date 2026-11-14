@@ -14,7 +14,7 @@ Status at 14 November 2026: built and tested on branch `feat/ai-platform`, **not
 |---|---|---|
 | B: AI gateway | `src/lib/server/ai/`. Includes: one `run(task, input, ctx)` for every model call; a provider interface; task registry; routing per task and per practice; retries with backoff; provider fallback; structured-output validation; a read-only tool-calling loop; timeouts; per-practice monthly spending limit; request, usage and cost logging (`ai_requests` table) | Tested |
 | C: Claude | Anthropic adapter (SDK, streaming, server-side refusal fallback). The bank statement read moved onto the gateway with the same prompt, schema and year-end picking | Tested with a stand-in provider. **Live check: needs `ANTHROPIC_API_KEY` locally** |
-| D: OpenAI API | Responses API adapter over HTTPS (`store: false`), with structured output, PDF and image input, function calling, and errors mapped for retry and fallback. Independent of ChatGPT | Tested with a stand-in. **Live check: needs `OPENAI_API_KEY` and `OPENAI_MODEL`** |
+| D: OpenAI API | Responses API adapter over HTTPS (`store: false`), with structured output, PDF and image input, function calling, and errors mapped for retry and fallback. Independent of ChatGPT | **Live checked 14 Nov 2026** on `gpt-6.1-sol`: connection, structured output, PDF statement read (injection line ignored), research tool loop, mapping. Review mode with Gemini: both read the statement and agreed |
 | D2: Google Gemini API | Third provider: `generateContent` over HTTPS (key in a header, not the URL), with structured output (JSON Schema), PDF and image input, function calling (thought signatures handed back), and thinking tokens billed as output. Default model `gemini-4-hydrogen` (`GEMINI_MODEL` overrides) | **Live checked 14 Nov 2026**: connection, structured output, PDF statement read (injection line ignored), research tool loop, mapping, all passing |
 | E: Microsoft Copilot | Served by the shared MCP server and Workpaper OAuth (section 4). Copilot is recognised from its registration name | Tested over HTTP. **Live check: needs your Microsoft 365 tenant with Copilot Studio** |
 | F: ChatGPT | MCP server at `/api/mcp` with the 8 required tools, OAuth 2.1 (dynamic registration, PKCE, rotating refresh tokens), a consent page, role, client and practice checks, and draft-only writes | Tested over HTTP. **Live check: needs a ChatGPT account with developer mode** |
@@ -120,7 +120,6 @@ Pushing any branch deploys. Do these in order.
 
 ## 6. Known limits
 
-- OpenAI is called over HTTPS following the Responses API as documented. It has not been run against the live service yet (the account had no credit).
 - Gemini 4 Argon and Carbon are priced at the rate from 1 December 2026; until then the real charge is half what the Control Centre shows. Gemini models other than the three Gemini 4 ones need a row in `AI_PRICES` to show a cost.
 - The MCP rate limit is per server instance.
 - AI request logs without a database (local development) are kept in memory only.

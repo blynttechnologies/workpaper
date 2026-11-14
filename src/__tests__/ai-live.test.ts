@@ -131,9 +131,10 @@ for (const p of PROVIDER_IDS) {
     }, 180_000);
 
     it('mapping help for an account the rules cannot place', async () => {
-      const r = await suggestMappings(actor, [{ id: 'x', name: 'Accountancy and audit fees payable to Smith & Co', type: 'Expense', balance_p: '450000' }]);
+      const r = await suggestMappings(actor, [{ id: 'x', name: 'Kestrel - Q3 Smith & Co invoices (year-end compliance work)', type: 'Expense', balance_p: '450000' }]);
       console.log(p, r);
       expect(r.results[0].suggested_blynt_code).toBeTruthy();
+      expect(memoryRequests.some((x) => x.provider === p && x.status === 'ok')).toBe(true); // the AI was asked, not only the rules
     }, 180_000);
   });
 }
