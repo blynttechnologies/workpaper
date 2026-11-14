@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { db } from './db';
 import { ServiceError } from './services';
 import { importTrialBalance, ImportResult, TbLineInput } from './tb-import';
-import { encryptToken, decryptToken } from './xero';
+import { encryptToken, decryptToken, requirePullable } from './xero';
 import { UserRole } from '../types/models';
 
 /**
@@ -238,6 +238,7 @@ export async function pullQboTrialBalance(actor: Actor, engagementId: string): P
   if (!eng) throw new ServiceError('Engagement not found', 404, 'NOT_FOUND');
   const conn = db.qbo_connections.find((c) => c.firm_id === actor.firmId && c.client_id === eng.client_id);
   if (!conn) throw new ServiceError('This client is not connected to QuickBooks yet.', 409, 'QBO_NOT_CONNECTED');
+  requirePullable(eng.period_start, 'QuickBooks');
 
   const token = await accessTokenFor(conn);
   const [accounts, report] = await Promise.all([
