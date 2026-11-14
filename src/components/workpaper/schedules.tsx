@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+import { inLead } from '@/lib/workpapers/common';
 import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, ArrowRight, ChevronDown, ChevronRight, Upload } from 'lucide-react';
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
@@ -18,7 +20,7 @@ export interface ScheduleProps {
   save: (patch: Record<string, any>) => void;
   filesFor: (rowId: string) => Attachment[];
   attachTo: (rowId: string) => void;
-  preview: (a: Attachment) => void;
+  preview: (a: Attachment, expand?: boolean) => void;
   tickFor: (rowId: string, label: string) => React.ReactNode;
   /** The paper's latest data. Writes build on this, so quick successive edits never overwrite each other. */
   live: () => Record<string, any>;
@@ -67,6 +69,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const leads = result.leads;
   const accounts = reconAccounts(data, leads, result.engagementId);
   const sourcesOf = (code: string) => leadSources(result.engagementId, code);
+  // Mapped here but not confirmed: not in the trial balance, so not on this paper until confirmed
+  const pending = db.account_mappings.filter((m) => m.engagement_id === result.engagementId && m.status !== 'confirmed' && result.template.leads.some((l) => inLead(m.blynt_code, l.code)));
   const tolerance = result.totals.tolerance ?? 100n;
   const tot = (key: string) => result.totals[key] ?? 0n;
   const periodEnd = db.engagements.find((e) => e.id === result.engagementId)?.period_end ?? '';
@@ -128,10 +132,10 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const reconciled = rows.filter((r) => r.status === 'done' || r.status === 'evidence').length;
   const withEvidence = rows.filter((r) => r.files.length).length;
   const todo = rows.filter((r) => !r.entered).length;
-  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code) && sourcesOf(l.code).length < 2);
+  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code) && sourcesOf(l.code).length === 0);
   const unusedSources = result.template.leads.flatMap((l) => {
     const src = sourcesOf(l.code);
-    return src.length > 1 && !accounts.some((a) => a.code === l.code && !a.client_code) ? src.filter((m) => !accounts.some((a) => a.code === l.code && a.client_code === m.source_code)).map((m) => ({ l, m })) : [];
+    return src.length > 0 && !accounts.some((a) => a.code === l.code && !a.client_code) ? src.filter((m) => !accounts.some((a) => a.code === l.code && a.client_code === m.source_code)).map((m) => ({ l, m })) : [];
   });
   const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
   const pill = {
@@ -221,6 +225,19 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
         </div>
       )}
 
+      {pending.length > 0 && (
+        <div role="status" className="flex items-start gap-2 p-3 rounded-[10px] bg-[#FFF4DB] border border-[#F0D9A0] text-xs text-[#5C4100]">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            {pending.length === 1 ? '1 account is' : `${pending.length} accounts are`} mapped here but not confirmed, so not in the trial balance or on this paper:{' '}
+            <span className="font-semibold">{pending.map((m) => `${m.source_name || m.source_code} (${m.blynt_code})`).join(', ')}</span>.{' '}
+            <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="font-bold underline">
+              Confirm on Mapping
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-xs text-[#122654]">
           <thead className="bg-[#F5F8FD]">
@@ -249,6 +266,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               const add = tot(`${a.id}_add`);
               const items = (a.less ?? []).length + (a.add ?? []).length;
               const name = accountName(a);
+              // A row from before accounts were named, with one client account on its code: show that account's name
+              const single = !a.client_code && a.code !== '*' && sourcesOf(a.code).length === 1 ? sourcesOf(a.code)[0] : null;
               return (
                 <React.Fragment key={a.id}>
                   <tr
@@ -275,11 +294,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                     <td className="p-2 align-top">
                       <div className="font-bold">
                         {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{a.code}</span>}
-                        {a.name}
+                        {single ? single.source_name || single.source_code : a.name}
                       </div>
                       <div className="text-[10px] text-[#4A5878]">
                         {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
-                        {a.client_code ? ` · ${a.client_code}` : ''}
+                        {a.client_code || single ? ` · ${a.client_code ?? single!.source_code}` : ''}
                         {a.detail ? ` · ${a.detail}` : ''}
                       </div>
                       {!locked && !a.client_code && a.code !== '*' && sourcesOf(a.code).length > 1 && (

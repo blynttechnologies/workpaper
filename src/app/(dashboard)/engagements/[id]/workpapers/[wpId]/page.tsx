@@ -696,7 +696,10 @@ export default function WorkpaperPage() {
     save: saveData,
     filesFor: (rowId: string) => linkedFiles(workpaper.id, rowId),
     attachTo,
-    preview: setPreview,
+    preview: (a: Attachment, expand?: boolean) => {
+      setPreview(a);
+      if (expand) setPreviewLarge(true);
+    },
     tickFor,
     live,
     dropFiles: (files: File[], rowId: string | null) => void doUpload(files, rowId),
@@ -1816,7 +1819,7 @@ export default function WorkpaperPage() {
                         return (
                           <tr key={a.id}>
                             <td className="p-2">
-                              <button type="button" onClick={() => setPreview(a)} className="flex items-center gap-2 text-left hover:underline">
+                              <button type="button" onClick={() => setPreview(a)} onDoubleClick={() => (setPreview(a), setPreviewLarge(true))} className="flex items-center gap-2 text-left hover:underline">
                                 <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-[#122654] text-white">{fileKind(a)}</span>
                                 <span className="font-semibold break-all">{a.filename}</span>
                               </button>
@@ -1846,7 +1849,7 @@ export default function WorkpaperPage() {
                               {initials(a.uploaded_by_name)} · {fmtDate(a.uploaded_at)}
                             </td>
                             <td className="p-2 text-right whitespace-nowrap">
-                              <button type="button" onClick={() => setPreview(a)} className="font-bold text-[#122654] hover:underline mr-3">
+                              <button type="button" onClick={() => setPreview(a)} onDoubleClick={() => (setPreview(a), setPreviewLarge(true))} className="font-bold text-[#122654] hover:underline mr-3">
                                 Preview
                               </button>
                               <a href={fileUrl(a, true)} className="font-bold text-[#122654] hover:underline mr-3">
@@ -2199,6 +2202,7 @@ export default function WorkpaperPage() {
                         key={a.id}
                         className="p-2.5 rounded-[10px] border border-[#D3DCEE] bg-white flex flex-col gap-1 hover:border-[#122654] cursor-pointer"
                         onClick={() => setPreview(a)}
+                        onDoubleClick={() => (setPreview(a), setPreviewLarge(true))}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-[#122654] truncate max-w-[180px]">{a.filename}</span>

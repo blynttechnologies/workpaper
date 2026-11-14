@@ -153,12 +153,12 @@ export function reconAccounts(data: Record<string, any>, leads: LeadFigure[], en
   if (asPence(data.statement_p) !== 0n || sections.some((s) => s.rows?.length)) {
     return [foldAdd({ id: 'statement', code: '*', name: data.bank_name || 'Bank and cash', statement_p: data.statement_p ?? '0', confirmation_p: data.confirmation_p, less: rowsOf(true), add: rowsOf(false) })];
   }
-  // Two or more client accounts on one code are reconciled one row each
+  // Each client account is reconciled on its own row, named as the client names it
   return leads
     .filter((l) => l.mapped || l.final !== 0n)
     .flatMap((l) => {
       const src = engagementId ? leadSources(engagementId, l.code) : [];
-      return src.length > 1
+      return src.length
         ? src.map((m) => ({ id: `acc_${l.code}_${m.source_code}`, code: l.code, client_code: m.source_code, name: m.source_name || m.source_code, statement_p: '', less: [], add: [] }))
         : [{ id: `acc_${l.code}`, code: l.code, name: l.label, statement_p: '', less: [], add: [] }];
     });

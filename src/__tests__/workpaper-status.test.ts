@@ -50,7 +50,7 @@ describe('status engine (WPS-04)', () => {
   it('bank and cash: one row per TB account, each reconciled on its own', () => {
     const wp = bankPaper();
     const r = evaluatePaper(wp)!;
-    const accounts = reconAccounts(wp.data_json, r.leads);
+    const accounts = reconAccounts(wp.data_json, r.leads, wp.engagement_id);
     expect(accounts.length).toBeGreaterThan(0);
     expect(accounts.every((a) => a.code !== '*' && a.statement_p === '')).toBe(true);
     // Every account agrees: reconciled
@@ -83,6 +83,11 @@ describe('status engine (WPS-04)', () => {
     expect(ledgers[1]).toBe(1954927n);
     expect(ledgers[0] + ledgers[1]).toBe(lead6000); // the first also carries any journals on 6000
     expect(r.totals.ledger).toBe(r.leads.reduce((a, l) => a + l.final, 0n));
+    // One card on its own code still gets its own named row
+    for (let i = db.account_mappings.length - 1; i >= 0; i--) if (db.account_mappings[i].engagement_id === e && db.account_mappings[i].blynt_code === '6300') db.account_mappings.splice(i, 1);
+    db.account_mappings.push({ id: 'm_card', engagement_id: e, source_code: 'ACC-SRICOMME', source_name: 'Sri - Commercial Card', source_type: 'Bank', balance_p: '-22844', blynt_code: '6300', status: 'confirmed', confidence: 100, method: 'manual' } as any);
+    const card = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads, e).filter((a) => a.code === '6300');
+    expect(card).toEqual([expect.objectContaining({ client_code: 'ACC-SRICOMME', name: 'Sri - Commercial Card' })]);
   });
 
   it('bank and cash: a paper saved with one statement keeps it as a single row covering every account', () => {

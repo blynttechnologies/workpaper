@@ -406,7 +406,8 @@ export function RowFiles({
   label,
 }: {
   files: Attachment[];
-  onPreview: (a: Attachment) => void;
+  /** expand: opened by double-click, to show it full size */
+  onPreview: (a: Attachment, expand?: boolean) => void;
   onAttach: () => void;
   disabled: boolean;
   label: string;
@@ -418,6 +419,7 @@ export function RowFiles({
           key={f.id}
           type="button"
           onClick={() => onPreview(f)}
+          onDoubleClick={() => onPreview(f, true)}
           title={f.filename}
           className="inline-flex items-center gap-1 max-w-[150px] text-[10px] font-semibold text-[#B8432F] hover:underline"
         >
@@ -484,7 +486,7 @@ export function PreviewModal({
       }
     >
       <div className="h-full flex flex-col">
-        <div className="flex items-center gap-3 p-3 border-b border-[#E3E7EF]">
+        <div className="flex items-center gap-3 p-3 border-b border-[#E3E7EF]" onDoubleClick={(e) => onToggleSize && !(e.target as HTMLElement).closest('a,button') && onToggleSize()}>
           <div className="min-w-0">
             <div className="text-sm font-bold text-[#122654] truncate">{file.filename}</div>
             <div className="text-[10px] font-mono text-[#4A5878] truncate">
@@ -517,7 +519,7 @@ export function PreviewModal({
           {inline ? (
             kind === 'IMG' ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={fileUrl(file)} alt={file.filename} className="max-w-full mx-auto" />
+              <img src={fileUrl(file)} alt={file.filename} onDoubleClick={onToggleSize} className="max-w-full mx-auto" />
             ) : (
               // PDFs open fitted to the panel's width, without the thumbnails sidebar (each browser's viewer reads the hints it knows)
               <iframe src={kind === 'PDF' ? `${fileUrl(file)}#view=FitH&zoom=page-width&navpanes=0` : fileUrl(file)} title={file.filename} className="w-full h-full bg-white" />
