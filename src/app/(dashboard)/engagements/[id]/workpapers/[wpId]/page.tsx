@@ -989,7 +989,7 @@ export default function WorkpaperPage() {
                 </h1>
                 {openChecks.length > 0 ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#FFF4DB] text-[#8A5A00]">
-                    {openChecks.length} item{openChecks.length === 1 ? ' needs' : 's need'} action
+                    {openChecks.length} check{openChecks.length === 1 ? '' : 's'} to do
                   </span>
                 ) : (
                   <StatusBadge status={paperStatus(workpaper)} />

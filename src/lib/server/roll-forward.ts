@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { db } from './db';
+import { facilitiesOf, facilityWorkings } from '../workpapers/loans';
 import { asPence, formatPence } from '../money';
 import { templateFor, blankPaperData } from '../workpapers/templates';
 import { Workpaper, Engagement, Adjustment, JOURNAL_IN_TB, AuditLog } from '../types/models';
@@ -69,7 +70,7 @@ export class RollForwardService {
         const leases = data.leases || [];
         closingBal = leases.reduce((acc: bigint, l: any) => acc + asPence(l.liability_cf_p || '0'), 0n);
       } else if (t?.kind === 'loans') {
-        closingBal = asPence(data.principal_p || '0');
+        closingBal = priorEng ? facilitiesOf(data, priorEng.period_start).reduce((acc, f) => acc + facilityWorkings(f, priorEng.period_start, priorEng.period_end, priorEng.id).closing, 0n) : 0n;
       } else if (t?.kind === 'dla') {
         const dirs = data.directors || [];
         closingBal = dirs.reduce((acc: bigint, d: any) => acc + asPence(d.closing_p || '0'), 0n);
@@ -239,6 +240,15 @@ export class RollForwardService {
             prior_closing_balance_p: String(totalLiab),
             agrees_to_penny: true,
           });
+        } else if (t.kind === 'loans' && (Array.isArray(pyData.facilities) || !pyData.principal_p)) {
+          // Loans (REC-10): each facility opens at what the workings left owed; the months, statement and decisions start again
+          const rolled = facilitiesOf(pyData, priorEng.period_start).map((f) => {
+            const w = facilityWorkings(f, priorEng.period_start, priorEng.period_end, priorEng.id);
+            return { ...f, opening_p: String(w.closing), start: f.start, months: {}, lender_p: undefined, fee_p: undefined };
+          });
+          const sum = rolled.reduce((acc, f) => acc + asPence(f.opening_p), 0n);
+          newData = { ...newData, facilities: rolled };
+          carriedSchedules.push({ ref: pyWp.ref, title: t.title, opening_balance_p: String(sum), prior_closing_balance_p: String(sum), agrees_to_penny: true });
         } else if (t.kind === 'loans') {
           // Loans (REC-10)
           newData = {

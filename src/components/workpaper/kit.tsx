@@ -163,6 +163,38 @@ export function AccountsPreview({ title = 'How it shows in the accounts', rows, 
   );
 }
 
+/** The other papers this one feeds, each linked, with the figure it passes them. Papers not in the file show unlinked. */
+export function FlowsTo({ engagementId, rows }: { engagementId: string; rows: { ref: string; label: string; detail: string; amount: bigint | null }[] }) {
+  return (
+    <div className={card}>
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <span className="font-bold">Where this flows</span>
+        <span className="text-[10px] text-[#4A5878]">Updates the linked schedules</span>
+      </div>
+      <ul className="flex flex-col divide-y divide-[#EEF1F6] text-[11px]">
+        {rows.map((r) => {
+          const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === r.ref);
+          return (
+            <li key={`${r.ref}:${r.label}`} className="py-1.5 flex items-start gap-2">
+              <span className="flex-1 min-w-0">
+                {wp ? (
+                  <a href={`/engagements/${engagementId}/workpapers/${wp.id}`} className="font-semibold text-[#1D4E89] underline">
+                    {r.label}
+                  </a>
+                ) : (
+                  <span className="font-semibold">{r.label}</span>
+                )}
+                <span className="block text-[10px] text-[#4A5878]">{r.detail}</span>
+              </span>
+              <span className="font-mono">{r.amount === null || r.amount === 0n ? '–' : money(r.amount)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * The journal built from a paper's decisions, and the button that sends it to the journal
  * register as a proposal. What was sent is saved on the paper, so the check can tell when the

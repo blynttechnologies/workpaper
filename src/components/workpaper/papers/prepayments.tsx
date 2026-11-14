@@ -7,8 +7,9 @@ import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
-import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, SuggestionRow, th, Tiles } from '../kit';
+import { AccountsPreview, FlowsTo, btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, SuggestionRow, th, Tiles } from '../kit';
 import { addDays, expenseCodes } from '@/lib/workpapers/common';
+import { chartName } from '@/lib/workpapers/common';
 import { accruedIncome, findPrepaidCosts, lastYear, prepaymentsJournal, prepView, type PrepLine } from '@/lib/workpapers/prepayments';
 
 export function PrepaymentsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
@@ -283,6 +284,15 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
           note="Shown as its own line under debtors."
         />
       </div>
+      <FlowsTo
+        engagementId={result.engagementId}
+        rows={[
+          // Each expense account the journal takes the prepaid part out of
+          ...lines.filter((l) => l.credit > 0n).map((l) => ({ ref: 'Z-30', label: `P&L analysis · ${chartName(l.code)}`, detail: 'Prepaid part taken off the charge', amount: -l.credit })),
+          { ref: 'Z-40', label: 'Balance sheet analysis', detail: 'Other debtors and prepayments', amount: tot('total') },
+          { ref: 'I-10', label: 'Revenue', detail: 'Source of the accrued income line', amount: tot('accrued') },
+        ]}
+      />
     </div>
   );
 }
