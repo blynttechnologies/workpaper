@@ -26,6 +26,8 @@ import { GET as connect } from '../app/api/v1/integrations/xero/connect/route';
 import { GET as callback } from '../app/api/v1/integrations/xero/callback/route';
 import { POST as sync } from '../app/api/v1/integrations/xero/sync/route';
 import { DELETE as disconnect } from '../app/api/v1/integrations/xero/connection/route';
+import { GET as getState, PUT as putState } from '../app/api/v1/state/route';
+import { GET as getLedger } from '../app/api/v1/engagements/[id]/transactions/route';
 
 const FIRM = 'firm_blynt_uk';
 const CLIENT = 'cli_harlow';
@@ -497,5 +499,35 @@ describe('Xero bank payments after the period end (creditors check)', () => {
     expect(bankMatches(supplier('BOOKER LIMITED', '1'), payments).map((p) => p.amount_p)).toEqual(['120050']); // by name
     expect(bankMatches(supplier('Jefferson Gas', '34500'), payments).map((p) => p.amount_p)).toEqual(['34500']); // by amount
     expect(bankMatches(supplier('Nobody', '1'), payments)).toEqual([]);
+  });
+});
+
+describe('Ledger transactions stay on the server, out of the workspace download', () => {
+  it('the workspace leaves them out, a save cannot change them, and an engagement fetches its own a page at a time', async () => {
+    const state = createState({ firmId: FIRM, userId: 'usr_admin', clientId: CLIENT });
+    fakeXero();
+    await callback(get(`/api/v1/integrations/xero/callback?code=c&state=${encodeURIComponent(state)}`, 'usr_admin'));
+    fakeXero();
+    await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
+    const pulled = db.transactions.filter((t) => t.engagement_id === ENG);
+    expect(pulled.length).toBeGreaterThan(2);
+
+    const ws = await (await getState(get('/api/v1/state', 'usr_admin'))).json();
+    expect(ws.data.transactions).toBeUndefined();
+    expect(ws.data.engagements.length).toBeGreaterThan(0);
+
+    // A save without them (or with an edited copy) leaves the server's untouched
+    const res = await putState(post('/api/v1/state', { version: 1, data: { ...ws.data, transactions: [] } }, 'PUT'));
+    expect(res.status).toBe(200);
+    expect(db.transactions.filter((t) => t.engagement_id === ENG)).toHaveLength(pulled.length);
+
+    const page = async (q: string) => (await getLedger(get(`/api/v1/engagements/${ENG}/transactions${q}`, 'usr_admin'), { params: Promise.resolve({ id: ENG }) })).json();
+    const first = await page('?offset=0&limit=2');
+    expect(first.total).toBe(pulled.length);
+    expect(first.rows.map((t: any) => t.id)).toEqual(pulled.slice(0, 2).map((t) => t.id));
+    expect((await page('?offset=2')).rows).toHaveLength(pulled.length - 2);
+    // Another firm's user cannot read them
+    const outsider = db.users.find((u) => !db.memberships.some((m) => m.user_id === u.id && m.firm_id === FIRM));
+    if (outsider) expect((await getLedger(get(`/api/v1/engagements/${ENG}/transactions`, outsider.id), { params: Promise.resolve({ id: ENG }) })).status).toBeGreaterThanOrEqual(400);
   });
 });

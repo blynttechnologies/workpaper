@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     const items = Array.isArray(body.items)
       ? body.items.slice(0, 500).map((i: any, n: number) => ({ id: String(i.id ?? n), name: String(i.name ?? ''), type: String(i.type ?? ''), code: String(i.code ?? ''), balance_p: String(i.balance_p ?? '') }))
       : [{ id: 'single', name: String(body.name ?? ''), type: String(body.type ?? ''), code: String(body.code ?? '') }];
-    const r = await suggestMappings(actor, items);
+    const r = await suggestMappings(actor, items, 'app', { all: body.all === true, engagementId: body.engagementId ? String(body.engagementId) : undefined });
     if (!Array.isArray(body.items)) {
       const one = r.results[0];
       return jsonResponse({ label: '✦ AI suggestion', ...one, ai: r.ai, notice: 'AI output changes nothing until accepted by a named user.' });

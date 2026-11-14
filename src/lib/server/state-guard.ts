@@ -24,7 +24,8 @@ export class GuardError extends Error {
 }
 
 // Server-managed: a browser save never changes these
-const SERVER_MANAGED = ['firms', 'users', 'memberships', 'credentials', 'invites', 'uploads', 'xero_connections', 'qbo_connections', 'templates', 'adjustments'];
+// Ledger transactions are server-managed too: a year of a busy client's ledger is too big to send with every save
+const SERVER_MANAGED = ['firms', 'users', 'memberships', 'credentials', 'invites', 'uploads', 'xero_connections', 'qbo_connections', 'templates', 'adjustments', 'transactions'];
 
 const REVIEWER_UP: UserRole[] = ['reviewer', 'manager', 'partner', 'admin'];
 const PARTNER_UP: UserRole[] = ['partner', 'admin'];
@@ -297,4 +298,8 @@ export function mergeFirmState(full: State, proposed: State, actor: Actor): Stat
 }
 
 /** What the browser is allowed to see. */
-export const publicSlice = (full: State, firmId: string, userId?: string) => firmSlice(full, firmId, userId);
+/** What the browser loads. Ledger transactions are left out (they outgrow one response); it fetches an engagement's from /api/v1/engagements/[id]/transactions. */
+export const publicSlice = (full: State, firmId: string, userId?: string) => {
+  const { transactions: _ledger, ...rest } = firmSlice(full, firmId, userId);
+  return rest;
+};

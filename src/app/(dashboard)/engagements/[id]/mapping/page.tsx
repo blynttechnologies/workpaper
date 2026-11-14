@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { Fragment, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -23,6 +23,8 @@ import { getActor } from '@/lib/session';
 import { engagementSummary } from '@/lib/api';
 import { NewAccountForm } from '@/components/coa/NewAccountForm';
 import { AccountPicker } from '@/components/coa/AccountPicker';
+import { groupMappings } from '@/lib/mapping/group';
+import { nameShape, similarLines } from '@/lib/mapping/similar';
 
 function ChartOptions({ engagementId }: { engagementId: string }) {
   return (
@@ -48,6 +50,7 @@ export default function AccountMappingPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'ready' | 'check' | 'exception' | 'confirmed'>('all');
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'amount' | 'code'>('amount');
   const [activeDetailId, setActiveDetailId] = useState<string | null>(null);
   const [typeFilter] = useState('all');
   const [statutoryFilter] = useState('all');
@@ -67,6 +70,8 @@ export default function AccountMappingPage() {
     pattern: string;
   } | null>(null);
   const [ruleScope, setRuleScope] = useState<'client' | 'practice'>('client');
+  // Other lines the correction is also applied to, chosen in the rule pop-up
+  const [alsoApply, setAlsoApply] = useState<string[]>([]);
 
   // Load from db
   const reloadData = () => {
@@ -78,6 +83,61 @@ export default function AccountMappingPage() {
   useEffect(() => {
     reloadData();
   }, [engagementId]);
+
+  // The AI system reads every unconfirmed line and suggests an account; each stays a suggestion until someone confirms it
+  const [aiBusy, setAiBusy] = useState(false);
+  const mapWithAi = async () => {
+    const open = db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status !== 'confirmed');
+    if (!open.length) {
+      setCorrectionToast({ message: 'Every line is already confirmed.' });
+      setTimeout(() => setCorrectionToast(null), 4000);
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const res = await fetch('/api/v1/ai/suggest-mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ engagementId, all: true, items: open.map((m) => ({ id: m.id, name: m.source_name, type: m.source_type, code: m.source_code, balance_p: m.balance_p })) }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'The AI could not map the lines. Try again.');
+      if (!body.ai) {
+        setCorrectionToast({ message: body.note || 'AI is not switched on for this practice. An admin can turn it on in the AI Control Centre.' });
+        return;
+      }
+      const actor = getActor();
+      let changed = 0;
+      for (const r of body.results as { id: string; suggested_blynt_code: string | null; confidence: number; reason: string; source: string; model?: string }[]) {
+        const m = db.account_mappings.find((x) => x.id === r.id && x.status !== 'confirmed');
+        if (!m || r.source !== 'ai' || !r.suggested_blynt_code) continue;
+        const stat = getStatutoryDetails(r.suggested_blynt_code, m.source_name, m.source_type);
+        const bal = asPence(m.balance_p);
+        if (m.blynt_code !== r.suggested_blynt_code) changed++;
+        Object.assign(m, {
+          blynt_code: r.suggested_blynt_code,
+          status: 'suggested',
+          confidence: r.confidence,
+          method: 'ai',
+          ai_reason: `AI: ${r.reason}`,
+          evidence_used: r.model ? `AI model ${r.model}` : 'AI',
+          gate: r.confidence >= 90 ? 'ready' : r.confidence >= 70 ? 'check' : 'exception',
+          statutory_line: stat.statutory_line,
+          schedule_ref: stat.schedule_ref,
+          cash_flow_category: stat.cash_flow_category,
+          sign_mismatch: (stat.is_credit_area && bal > 0n) || (!stat.is_credit_area && bal < 0n),
+        });
+      }
+      db.logAudit(firmId, actor, 'AI_MAPPING_SUGGESTED', 'engagements', engagementId, null, { lines: open.length, changed, model: body.model });
+      reloadData();
+      setCorrectionToast({ message: `AI read ${open.length} unconfirmed lines and changed the suggestion on ${changed}. Check them on the Ready, Check and Exception tabs, then confirm.` });
+    } catch (err) {
+      setCorrectionToast({ message: (err as Error).message });
+    } finally {
+      setAiBusy(false);
+      setTimeout(() => setCorrectionToast(null), 8000);
+    }
+  };
 
   // Confidence Gate calculations (DAT-03, DAT-08)
   const totalImported = mappings.length;
@@ -140,6 +200,15 @@ export default function AccountMappingPage() {
       return true;
     });
   }, [mappings, search, typeFilter, statutoryFilter, activeTab]);
+  const groups = useMemo(() => groupMappings(filteredMappings, sortBy), [filteredMappings, sortBy]);
+  const columns = 5 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
+  const canApprove = ['manager', 'partner', 'admin'].includes(getActor().role);
+  const patternsHint = alsoApply.length ? `these ${alsoApply.length + 1} accounts` : 'this account';
+  // Lines that look like the one being corrected, offered in the rule pop-up
+  const similar = useMemo(() => {
+    const item = pendingCorrection && mappings.find((m) => m.id === pendingCorrection.mappingId);
+    return item ? similarLines(item, mappings).filter((s) => !(s.line.status === 'confirmed' && s.line.blynt_code === pendingCorrection!.targetCode)) : [];
+  }, [pendingCorrection, mappings]);
 
   // Active detail mapping for slide-over facts (DAT-03 UI step 3)
   const detailMapping = mappings.find((m) => m.id === activeDetailId) || null;
@@ -311,6 +380,9 @@ export default function AccountMappingPage() {
     // A client rule keys on the client's own nominal code, which stays the same from year to year
     // even if the account is renamed; a practice rule keys on the whole name, since codes differ between clients
     const pattern = `name:${item.source_name}`;
+    // Lines with the same name but for codes ("Route 52 Wages" beside "Route 2V Wages") are ticked to follow
+    const lines = db.account_mappings.filter((m) => m.engagement_id === engagementId);
+    setAlsoApply(similarLines(item, lines).filter((s) => s.alike && !(s.line.status === 'confirmed' && s.line.blynt_code === newBlyntCode)).map((s) => s.line.id));
 
     setPendingCorrection({
       mappingId,
@@ -332,54 +404,60 @@ export default function AccountMappingPage() {
     const targetAcc = db.blynt_accounts.find((b) => b.code === targetCode);
     const statDetails = getStatutoryDetails(targetCode, sourceName);
 
-    // 1. Create the rule in db.learned_rules (DAT-09)
-    let appliedCount = 1;
-    const createdRuleId = `rule_${Date.now()}`;
-    const newRule: LearnedRule = {
-      id: createdRuleId,
-      firm_id: firmId,
-      client_id: ruleScope === 'client' ? engagementClientId : null,
-      supplier_name: null,
-      type: 'mapping',
-      scope: ruleScope,
-      pattern: ruleScope === 'client' ? `code:${pendingCorrection.sourceCode}` : pattern,
-      target_value: targetCode,
-      explanation: `Rule learned from correction on ${sourceName} → ${targetCode} ${targetAcc?.name ?? ''}`,
-      created_by: actor.id,
-      created_by_name: actor.name,
-      created_at: now,
-      times_used: 1,
-      // Practice rules wait for a manager (DAT-09); the server refuses anything else
-      active: ruleScope !== 'practice' || ['manager', 'partner', 'admin'].includes(actor.role),
-      approved_by_manager: ruleScope === 'practice' ? ['manager', 'partner', 'admin'].includes(actor.role) : true,
-    };
-    db.learned_rules.unshift(newRule);
+    // The other lines ticked in the pop-up take the same account, confirmed by this person
+    const others = db.account_mappings.filter((m) => m.engagement_id === engagementId && m.id !== mappingId && alsoApply.includes(m.id));
+    const appliedCount = 1 + others.length;
 
-    db.logAudit(
-      firmId,
-      actor,
-      'CREATE_LEARNED_RULE',
-      'learned_rules',
-      newRule.id,
-      null,
-      newRule
-    );
-
-    // Apply immediately to matching unconfirmed accounts in the same file (DAT-05 criteria 1)
-    const sameName = (name: string) => name.trim().toLowerCase() === sourceName.trim().toLowerCase();
-    db.account_mappings.forEach((m) => {
-      if (m.engagement_id === engagementId && m.id !== mappingId && m.status !== 'confirmed') {
-        if (sameName(m.source_name)) {
-          m.blynt_code = targetCode;
-          m.status = 'suggested';
-          m.confidence = 95;
-          m.method = 'rule';
-          m.ai_reason = `Applied from newly created rule: ${sourceName}`;
-          m.gate = 'ready';
-          appliedCount++;
-        }
-      }
+    // 1. Create the rule in db.learned_rules (DAT-09). A client rule keys on each nominal code; a practice
+    // rule on the name, with codes as * when lines differing only by code were applied too
+    const shape = nameShape(sourceName);
+    const patterns =
+      ruleScope === 'client'
+        ? [pendingCorrection.sourceCode, ...others.map((m) => m.source_code)].map((c) => `code:${c}`)
+        : [shape.includes('*') && others.some((m) => nameShape(m.source_name) === shape) ? `name:${shape}` : pattern];
+    const createdRuleIds: string[] = [];
+    patterns.forEach((rulePattern, i) => {
+      const newRule: LearnedRule = {
+        id: `rule_${Date.now()}_${i}`,
+        firm_id: firmId,
+        client_id: ruleScope === 'client' ? engagementClientId : null,
+        supplier_name: null,
+        type: 'mapping',
+        scope: ruleScope,
+        pattern: rulePattern,
+        target_value: targetCode,
+        explanation: `Rule learned from correction on ${sourceName} → ${targetCode} ${targetAcc?.name ?? ''}`,
+        created_by: actor.id,
+        created_by_name: actor.name,
+        created_at: now,
+        times_used: 1,
+        // Practice rules wait for a manager (DAT-09); the server refuses anything else
+        active: ruleScope !== 'practice' || ['manager', 'partner', 'admin'].includes(actor.role),
+        approved_by_manager: ruleScope === 'practice' ? ['manager', 'partner', 'admin'].includes(actor.role) : true,
+      };
+      db.learned_rules.unshift(newRule);
+      createdRuleIds.push(newRule.id);
+      db.logAudit(firmId, actor, 'CREATE_LEARNED_RULE', 'learned_rules', newRule.id, null, newRule);
     });
+
+    for (const m of others) {
+      const before = { ...m };
+      const stat = getStatutoryDetails(targetCode, m.source_name);
+      Object.assign(m, {
+        blynt_code: targetCode,
+        status: 'confirmed',
+        confidence: 100,
+        method: 'manual',
+        ai_reason: `Applied with the correction to ${sourceName}`,
+        gate: 'ready',
+        statutory_line: stat.statutory_line,
+        schedule_ref: stat.schedule_ref,
+        cash_flow_category: stat.cash_flow_category,
+        confirmed_by: actor.id,
+        confirmed_at: now,
+      });
+      db.logAudit(firmId, actor, 'UPDATE_MAPPING_WITH_RULE', 'account_mappings', m.id, before, { ...m, appliedWith: mappingId });
+    }
 
     // 2. Update the target mapping
     const item = db.account_mappings.find((m) => m.id === mappingId);
@@ -428,9 +506,11 @@ export default function AccountMappingPage() {
 
     // Toast with Undo (DAT-05 UI step 1)
     setCorrectionToast({
-      message: `Rule created – applied to ${appliedCount} accounts (scope: ${ruleScope}).`,
+      message: `${targetCode} applied to ${appliedCount} account${appliedCount === 1 ? '' : 's'}. ${
+        ruleScope === 'client' ? `Remembered for ${clientName}.` : canApprove ? 'Remembered for every client.' : 'The practice rule waits for a manager to approve it.'
+      }`,
       undoAction: () => {
-        db.learned_rules = db.learned_rules.filter((r) => r.id !== createdRuleId);
+        db.learned_rules = db.learned_rules.filter((r) => !createdRuleIds.includes(r.id));
         reloadData();
         setCorrectionToast({ message: 'Rule undone.' });
       },
@@ -723,6 +803,27 @@ export default function AccountMappingPage() {
               />
             </div>
 
+            <button
+              type="button"
+              onClick={mapWithAi}
+              disabled={aiBusy}
+              title="The AI reads every unconfirmed line and suggests an account. Nothing is confirmed until you confirm it."
+              className="min-h-[38px] px-3 text-xs font-bold text-[#B8432F] bg-[#FFF8F6] hover:bg-[#FFF1EE] border border-[#FF7A66]/40 rounded-xl flex items-center gap-1.5 disabled:opacity-60"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${aiBusy ? 'animate-pulse' : ''}`} />
+              {aiBusy ? 'AI is reading the lines…' : 'Map with AI'}
+            </button>
+
+            <select
+              aria-label="Order within each type"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'amount' | 'code')}
+              className="min-h-[38px] px-2 text-xs font-semibold text-[#122654] bg-white border border-[#D3DCEE] rounded-xl"
+            >
+              <option value="amount">Largest balance first</option>
+              <option value="code">Code order</option>
+            </select>
+
             {/* Optional columns */}
             {([
               ['statutory line', showStatutory, setShowStatutory],
@@ -800,7 +901,17 @@ export default function AccountMappingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E3E7EF]">
-              {filteredMappings.map((row) => {
+              {groups.map((g) => (
+                <Fragment key={g.type}>
+                  <tr className="bg-[#F5F8FD]">
+                    <th scope="rowgroup" colSpan={columns} className="px-4 py-2 text-left text-[11px] font-bold text-[#122654]">
+                      {g.type}
+                      <span className="ml-2 font-normal text-[#4A5878]">
+                        {g.rows.length} account{g.rows.length === 1 ? '' : 's'} · {formatPence(g.total, { accountingFormat: true })}
+                      </span>
+                    </th>
+                  </tr>
+              {g.rows.map((row) => {
                 const isSelected = selectedIds.includes(row.id);
                 const stat = getStatutoryDetails(row.blynt_code, row.source_name, row.source_type);
                 const isSignMismatch =
@@ -937,10 +1048,49 @@ export default function AccountMappingPage() {
                   </tr>
                 );
               })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
+        {/* Room for the action bar, so it never covers the last row */}
+        {selectedIds.length > 0 && <div className="h-20" aria-hidden="true" />}
       </div>
+
+      {/* Ticked lines: the actions follow the page down, so confirming never means scrolling back up */}
+      {selectedIds.length > 0 && !ruleModalOpen && (
+        <div role="region" aria-label="Selected lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">
+            <span className="text-xs font-bold mr-auto">
+              {selectedIds.length} line{selectedIds.length === 1 ? '' : 's'} selected
+            </span>
+            <select
+              aria-label="Map the selected lines to"
+              value={batchTargetCode}
+              onChange={(e) => setBatchTargetCode(e.target.value)}
+              className="min-h-[36px] max-w-[200px] px-2 text-xs font-semibold text-[#122654] bg-white rounded-lg"
+            >
+              <option value="">Map to…</option>
+              <ChartOptions engagementId={engagementId} />
+            </select>
+            {batchTargetCode && (
+              <button type="button" onClick={handleApplyBatchRemap} className="min-h-[36px] px-3 text-xs font-bold bg-white/15 hover:bg-white/25 rounded-lg">
+                Apply
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleConfirmSelected}
+              className="min-h-[36px] px-4 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-lg flex items-center gap-1.5"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" /> Confirm selected ({selectedIds.length})
+            </button>
+            <button type="button" onClick={() => setSelectedIds([])} className="min-h-[36px] px-2 text-xs font-semibold text-white/80 hover:text-white">
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* RULE CREATION MODAL UPON CORRECTION (DAT-09, DAT-05) */}
       {ruleModalOpen && pendingCorrection && (
@@ -956,8 +1106,8 @@ export default function AccountMappingPage() {
                   <Sparkles className="w-5 h-5 text-[#FF7A66]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#122654]">Learn Rule from Correction</h3>
-                  <p className="text-[11px] text-[#4A5878]">Save this correction so the same mistake is never repeated</p>
+                  <h3 className="text-sm font-bold text-[#122654]">Remember this mapping</h3>
+                  <p className="text-[11px] text-[#4A5878]">So it is mapped this way automatically next time</p>
                 </div>
               </div>
               <button
@@ -984,41 +1134,68 @@ export default function AccountMappingPage() {
               </div>
             </div>
 
-            {/* Scope Selection (DAT-09 UI step 1) */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-[#122654]">
-                Choose Rule Scope:
-              </label>
-              <div className="space-y-2 text-xs">
-                <label className="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer hover:bg-gray-50 border-emerald-300 bg-emerald-50/30">
-                  <input
-                    type="radio"
-                    name="ruleScope"
-                    checked={ruleScope === 'client'}
-                    onChange={() => setRuleScope('client')}
-                    className="mt-0.5 text-[#0B6B52]"
-                  />
-                  <div>
-                    <div className="font-bold text-[#0B6B52]">This client only ({clientName})</div>
-                    <div className="text-[11px] text-[#4A5878]">Remembered for all future engagements and roll-forward periods for this client.</div>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer hover:bg-gray-50 border-gray-200">
-                  <input
-                    type="radio"
-                    name="ruleScope"
-                    checked={ruleScope === 'practice'}
-                    onChange={() => setRuleScope('practice')}
-                    className="mt-0.5 text-[#122654]"
-                  />
-                  <div>
-                    <div className="font-bold text-[#122654]">Whole practice (requires manager approval)</div>
-                    <div className="text-[11px] text-[#4A5878]">Sent to Manager Approval Queue in Practice Settings &gt; Rules.</div>
-                  </div>
-                </label>
+            {similar.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#122654]">Also map these to {pendingCorrection.targetCode}:</span>
+                  <button
+                    type="button"
+                    onClick={() => setAlsoApply(alsoApply.length === similar.length ? [] : similar.map((s) => s.line.id))}
+                    className="text-[11px] font-semibold text-[#1D4E89] hover:underline"
+                  >
+                    {alsoApply.length === similar.length ? 'Untick all' : 'Tick all'}
+                  </button>
+                </div>
+                <div className="max-h-44 overflow-y-auto rounded-xl border border-[#E3E7EF] divide-y divide-[#E3E7EF]">
+                  {similar.map(({ line }) => (
+                    <label key={line.id} className="flex items-center gap-2.5 px-3 py-2 text-xs cursor-pointer hover:bg-[#F5F8FD]">
+                      <input
+                        type="checkbox"
+                        checked={alsoApply.includes(line.id)}
+                        onChange={() => setAlsoApply((ids) => (ids.includes(line.id) ? ids.filter((x) => x !== line.id) : [...ids, line.id]))}
+                        className="w-4 h-4 rounded border-[#D3DCEE]"
+                      />
+                      <span className="font-mono text-[11px] text-[#4A5878] shrink-0">{line.source_code}</span>
+                      <span className="flex-1 min-w-0 truncate font-semibold text-[#122654]">{line.source_name}</span>
+                      <span className="shrink-0 text-[10px] text-[#4A5878]">
+                        {line.blynt_code ? `now ${line.blynt_code}${line.status === 'confirmed' ? ', confirmed' : ''}` : 'not mapped'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#4A5878]">Ticked lines are mapped to {pendingCorrection.targetCode} and confirmed, and the rule covers them in future years too.</p>
               </div>
-            </div>
+            )}
+
+            {/* Scope Selection (DAT-09 UI step 1): the highlight follows the choice */}
+            <fieldset className="space-y-2">
+              <legend className="block text-xs font-bold text-[#122654] mb-2">Remember this for:</legend>
+              <div className="space-y-2 text-xs">
+                {(
+                  [
+                    ['client', `${clientName} only`, `Next year's import for ${clientName} maps ${patternsHint} the same way.`],
+                    [
+                      'practice',
+                      'Every client in the practice',
+                      canApprove
+                        ? 'Takes effect straight away for every client with an account named like this.'
+                        : 'A manager approves it first (Settings > Rules). Until then it applies only to the lines here.',
+                    ],
+                  ] as const
+                ).map(([scope, title, detail]) => (
+                  <label
+                    key={scope}
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer ${ruleScope === scope ? 'border-emerald-400 bg-emerald-50/50' : 'border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    <input type="radio" name="ruleScope" checked={ruleScope === scope} onChange={() => setRuleScope(scope)} className="mt-0.5" />
+                    <div>
+                      <div className={`font-bold ${ruleScope === scope ? 'text-[#0B6B52]' : 'text-[#122654]'}`}>{title}</div>
+                      <div className="text-[11px] text-[#4A5878]">{detail}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
@@ -1033,7 +1210,7 @@ export default function AccountMappingPage() {
                 onClick={handleSaveCorrectionWithRule}
                 className="px-5 py-2.5 bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold rounded-xl shadow-xs transition-transform active:scale-[0.98]"
               >
-                Save &amp; Apply Rule
+                {alsoApply.length ? `Map ${alsoApply.length + 1} lines and remember` : 'Map and remember'}
               </button>
             </div>
           </div>
