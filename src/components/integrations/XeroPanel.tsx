@@ -19,6 +19,7 @@ interface PullResult {
   lineCount: number;
   transactionCount?: number;
   notGathered?: string[];
+  rateLimited?: string;
   changes: { account_code: string; account_name: string; diff_p: string; direction: string }[];
   mapping: { by_rule: number; ready: number; check: number; exception: number };
 }
@@ -212,6 +213,11 @@ export function LedgerPanel({ provider, clientId, engagementId, reconnectNeeded 
             {result.mapping.check} to check, {result.mapping.exception} to map by hand.
           </p>
           {result.transactionCount !== undefined && <p>{result.transactionCount.toLocaleString('en-GB')} transactions gathered for the drill-down.</p>}
+          {result.rateLimited && (
+            <p className="text-[#6B4700]">
+              The transactions for the drill-down were not gathered: {result.rateLimited} Pull again then to add them; the trial balance above is saved.
+            </p>
+          )}
           {result.notGathered?.length ? (
             <p className="text-[#6B4700]">
               Could not gather {result.notGathered.join(', ')}. Disconnect and reconnect {P.name} for this client to allow it, then pull again.

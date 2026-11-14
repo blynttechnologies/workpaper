@@ -366,6 +366,34 @@ describe('Pulling the trial balance from Xero', () => {
     }
   });
 
+  it('waits when Xero asks for a minute or less, and keeps the trial balance when its daily limit stops the transactions', async () => {
+    await connected();
+    const xero = fakeXero();
+    // Xero refuses the invoice list `times` times, asking to wait `retryAfter` seconds
+    const limit = (retryAfter: string, times: number) => {
+      let refused = 0;
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).includes('/Invoices') && refused++ < times) return new Response('{}', { status: 429, headers: { 'Retry-After': retryAfter, 'X-Rate-Limit-Problem': 'minute' } });
+        return xero.impl(input, init);
+      }));
+    };
+    limit('1', 1);
+    const waited = await (await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }))).json();
+    expect(waited.rateLimited).toBeUndefined();
+    expect(waited.transactionCount).toBeGreaterThan(0);
+    expect(xero.calls.find((c) => c.url.includes('/Invoices'))!.url).toContain('pageSize=1000');
+
+    limit('86400', 99);
+    const res = await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.rateLimited).toMatch(/daily limit .* about 24 hours/);
+    expect(db.tb_snapshots.find((s) => s.id === body.snapshot.id)).toBeDefined();
+    expect(db.xero_connections.find((c) => c.client_id === CLIENT)!.last_synced_at).not.toBeNull();
+    // The transactions from the earlier pull stay
+    expect(db.transactions.some((x) => x.engagement_id === ENG && x.external_id === 'inv-1')).toBe(true);
+  });
+
   it('carries on and says what it could not gather, e.g. a connection made before payments were requested', async () => {
     await connected();
     fakeXero({ noExtras: true });
