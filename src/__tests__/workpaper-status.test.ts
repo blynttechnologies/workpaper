@@ -4,7 +4,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('@/lib/server/store', () => ({ syncIn: async () => {}, syncOut: async () => {}, currentVersion: () => 1, hasDatabase: () => false }));
 
 import { db } from '../lib/server/db';
-import { evaluatePaper, linkedFiles, paperStatus, reconAccounts } from '../lib/workpapers/engine';
+import { accountName, evaluatePaper, linkedFiles, paperStatus, reconAccounts, rowCode } from '../lib/workpapers/engine';
+import { newAccount } from '../lib/coa';
 import { services } from '../lib/server/services';
 import { blankPaperData, templateFor } from '../lib/workpapers/templates';
 
@@ -50,7 +51,7 @@ describe('status engine (WPS-04)', () => {
   it('bank and cash: one row per TB account, each reconciled on its own', () => {
     const wp = bankPaper();
     const r = evaluatePaper(wp)!;
-    const accounts = reconAccounts(wp.data_json, r.leads);
+    const accounts = reconAccounts(wp.data_json, r.leads, wp.engagement_id);
     expect(accounts.length).toBeGreaterThan(0);
     expect(accounts.every((a) => a.code !== '*' && a.statement_p === '')).toBe(true);
     // Every account agrees: reconciled
@@ -65,6 +66,37 @@ describe('status engine (WPS-04)', () => {
     expect(out.totals.difference).toBe(0n);
     expect(out.totals.unexplained).toBe(2000n);
     expect(paperStatus(wp)).toBe('unreconciled');
+  });
+
+  it('bank and cash: two bank accounts mapped to one code are reconciled as two rows that still add up to the TB', () => {
+    const wp = bankPaper();
+    const e = wp.engagement_id;
+    for (let i = db.account_mappings.length - 1; i >= 0; i--) if (db.account_mappings[i].engagement_id === e && db.account_mappings[i].blynt_code === '6000') db.account_mappings.splice(i, 1);
+    const add = (source_code: string, source_name: string, balance_p: string) =>
+      db.account_mappings.push({ id: `m_${source_code}`, engagement_id: e, source_code, source_name, source_type: 'Bank', balance_p, blynt_code: '6000', status: 'confirmed', confidence: 100, method: 'manual' } as any);
+    add('ACC-BELGRAVE', 'Belgrave', '555450');
+    add('ACC-PATCHAM', 'Patcham', '1954927');
+    const r = evaluatePaper(wp)!;
+    const rows = reconAccounts(wp.data_json, r.leads, e).filter((a) => a.code === '6000');
+    expect(rows.map((a) => [a.client_code, a.name])).toEqual([['ACC-BELGRAVE', 'Belgrave'], ['ACC-PATCHAM', 'Patcham']]);
+    const lead6000 = r.leads.find((l) => l.code === '6000')!.final;
+    const ledgers = rows.map((a) => r.totals[`${a.id}_ledger`]);
+    expect(ledgers[1]).toBe(1954927n);
+    expect(ledgers[0] + ledgers[1]).toBe(lead6000); // the first also carries any journals on 6000
+    expect(r.totals.ledger).toBe(r.leads.reduce((a, l) => a + l.final, 0n));
+    // A practice account made to work like 6000 is reconciled under 6000 but shows its own code
+    const own = newAccount(db.blynt_accounts, '6011', 'Patcham bank a/c', 'f1', '6000');
+    if (typeof own === 'string') throw new Error(own);
+    db.blynt_accounts.push(own);
+    db.account_mappings.find((m) => m.source_code === 'ACC-PATCHAM')!.blynt_code = '6011';
+    const patcham = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads, e).find((a) => a.client_code === 'ACC-PATCHAM')!;
+    expect([patcham.code, rowCode(patcham, e), accountName(patcham, e)]).toEqual(['6000', '6011', '6011 Patcham']);
+    db.blynt_accounts.splice(db.blynt_accounts.indexOf(own), 1);
+    // One card on its own code still gets its own named row
+    for (let i = db.account_mappings.length - 1; i >= 0; i--) if (db.account_mappings[i].engagement_id === e && db.account_mappings[i].blynt_code === '6300') db.account_mappings.splice(i, 1);
+    db.account_mappings.push({ id: 'm_card', engagement_id: e, source_code: 'ACC-SRICOMME', source_name: 'Sri - Commercial Card', source_type: 'Bank', balance_p: '-22844', blynt_code: '6300', status: 'confirmed', confidence: 100, method: 'manual' } as any);
+    const card = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads, e).filter((a) => a.code === '6300');
+    expect(card).toEqual([expect.objectContaining({ client_code: 'ACC-SRICOMME', name: 'Sri - Commercial Card' })]);
   });
 
   it('bank and cash: a paper saved with one statement keeps it as a single row covering every account', () => {

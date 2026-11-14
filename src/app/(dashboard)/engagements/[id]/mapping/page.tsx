@@ -18,6 +18,7 @@ import { db } from '@/lib/server/db';
 import { AccountMapping, LearnedRule } from '@/lib/types/models';
 import { asPence, formatPence } from '@/lib/money';
 import { getStatutoryDetails } from '@/lib/mapping/auto-mapper';
+import { whyNotConfirmed } from '@/lib/mapping/why';
 import { getActor } from '@/lib/session';
 import { engagementSummary } from '@/lib/api';
 import { NewAccountForm } from '@/components/coa/NewAccountForm';
@@ -226,15 +227,25 @@ export default function AccountMappingPage() {
     setSelectedIds((prev) => prev.filter((id) => !readyIds.includes(id)));
   };
 
+  const why = (m: AccountMapping) => whyNotConfirmed(m, db.blynt_accounts.find((a) => a.code === m.blynt_code)?.name);
+
   // Confirm selected Check or filtered items
-  const handleConfirmSelected = () => {
-    // Exception items with no mapping cannot be confirmed
-    const validIds = selectedIds.filter((id) => {
+  const handleConfirmSelected = () => confirmMappings(selectedIds);
+  const confirmMappings = (ids: string[]) => {
+    // Only a mapping with no chart account cannot be confirmed; say which, and why
+    const validIds = ids.filter((id) => {
       const m = db.account_mappings.find((x) => x.id === id);
       return m && m.blynt_code;
     });
-
-    if (validIds.length === 0) return;
+    const skipped = ids
+      .map((id) => db.account_mappings.find((x) => x.id === id))
+      .filter((m): m is AccountMapping => !!m && !m.blynt_code)
+      .map((m) => m.source_name || m.source_code);
+    if (validIds.length === 0) {
+      setCorrectionToast({ message: skipped.length ? `Not confirmed: ${skipped.join(', ')}. No chart account is chosen yet; pick one, then confirm.` : 'Select the accounts to confirm first.' });
+      setTimeout(() => setCorrectionToast(null), 5000);
+      return;
+    }
 
     const actor = getActor();
     const now = new Date().toISOString();
@@ -286,9 +297,9 @@ export default function AccountMappingPage() {
     });
 
     setCorrectionToast({
-      message: `Confirmed ${validIds.length} selected mappings.`,
+      message: `Confirmed ${validIds.length} mapping${validIds.length === 1 ? '' : 's'}.${skipped.length ? ` Not confirmed: ${skipped.join(', ')} (no chart account chosen yet).` : ''}`,
     });
-    setTimeout(() => setCorrectionToast(null), 3500);
+    setTimeout(() => setCorrectionToast(null), skipped.length ? 5000 : 3500);
     setSelectedIds((prev) => prev.filter((id) => !validIds.includes(id)));
   };
 
@@ -882,12 +893,12 @@ export default function AccountMappingPage() {
                           <span>Ready {row.confidence}%</span>
                         </span>
                       ) : gateName === 'check' ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 w-max">
+                        <span title={why(row).reasons.join(' ')} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 w-max">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                           <span>Check {row.confidence}%</span>
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 flex items-center gap-1 w-max">
+                        <span title={[why(row).blocker, ...why(row).reasons].filter(Boolean).join(' ')} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 flex items-center gap-1 w-max">
                           <AlertTriangle className="w-3 h-3" />
                           <span>Exception {row.confidence}%</span>
                         </span>
@@ -1080,6 +1091,20 @@ export default function AccountMappingPage() {
                 </div>
               </div>
 
+              {detailMapping.status !== 'confirmed' && (() => {
+                const w = why(detailMapping);
+                return (
+                  <div role="status" className={`p-3.5 rounded-xl border flex flex-col gap-1.5 ${w.blocker ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                    <span className="font-bold">{w.blocker ? 'Why this can’t be confirmed' : 'Why this isn’t confirmed yet'}</span>
+                    {w.blocker && <p>{w.blocker}</p>}
+                    {w.reasons.map((r) => (
+                      <p key={r}>{r}</p>
+                    ))}
+                    {!w.blocker && !w.reasons.length && <p>Nothing to check: confirm it when you are happy.</p>}
+                  </div>
+                );
+              })()}
+
               {/* AI Alternatives */}
               {(detailMapping.ai_alternatives ?? []).length > 0 && (
               <div>
@@ -1121,6 +1146,18 @@ export default function AccountMappingPage() {
               >
                 Close
               </button>
+              {detailMapping.status !== 'confirmed' && detailMapping.blynt_code && (!pickCode || pickCode === detailMapping.blynt_code) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    confirmMappings([detailMapping.id]);
+                    setActiveDetailId(null);
+                  }}
+                  className="ml-auto mr-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl"
+                >
+                  Confirm {detailMapping.blynt_code}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!pickCode || pickCode === detailMapping.blynt_code}

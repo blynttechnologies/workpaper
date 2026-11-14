@@ -1,7 +1,7 @@
 import { db } from '../server/db';
 import { asPence, formatPence } from '../money';
 import { CENTRAL_TAX_RATES } from '../tax-rates';
-import { addDays, daysBetween, journalCheck, ledgerFor, pair, type JLine, type PaperContext } from './common';
+import { addDays, daysBetween, inLead, journalCheck, ledgerFor, pair, type JLine, type PaperContext } from './common';
 import { ukDate } from '../dates';
 
 /**
@@ -40,7 +40,7 @@ export interface DlaDirector {
 }
 
 /** The client's accounts mapped to directors' loans. */
-export const dlaAccounts = (engagementId: string) => db.account_mappings.filter((m) => m.engagement_id === engagementId && (m.blynt_code?.startsWith('7400') || m.blynt_code?.startsWith('7980')));
+export const dlaAccounts = (engagementId: string) => db.account_mappings.filter((m) => m.engagement_id === engagementId && (inLead(m.blynt_code, '7400') || inLead(m.blynt_code, '7980')));
 
 const nameWords = (name: string) => name.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
 

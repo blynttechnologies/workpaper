@@ -318,7 +318,7 @@ export default function WorkpaperPage() {
     if (added.length) touchPaper();
     setUploading(false);
     // Bank and cash: a statement dropped on an account row opens beside the paper with what the AI read off it
-    if (t.kind === 'reconciliation' && linkRow && reconAccounts(live(), result!.leads).some((a) => a.id === linkRow)) {
+    if (t.kind === 'reconciliation' && linkRow && reconAccounts(live(), result!.leads, result!.engagementId).some((a) => a.id === linkRow)) {
       for (const [i, att] of added.entries()) await readStatementFor(att, linkRow, i === 0);
     }
     setMessage(
@@ -330,7 +330,7 @@ export default function WorkpaperPage() {
   }
 
   const saveAccount = (rowId: string, patch: Partial<ReconAccount>) =>
-    saveData({ accounts: reconAccounts(live(), result!.leads).map((a) => (a.id === rowId ? { ...a, ...patch } : a)) });
+    saveData({ accounts: reconAccounts(live(), result!.leads, result!.engagementId).map((a) => (a.id === rowId ? { ...a, ...patch } : a)) });
 
   /**
    * The AI reads a statement on the server: the balance at the year end and the balances either side.
@@ -384,6 +384,19 @@ export default function WorkpaperPage() {
     db.logAudit(engagement.firm_id, actor, 'LINK_ATTACHMENT', 'attachments', att.id, before, att);
     touchPaper();
     refresh();
+  };
+
+  // Files linked to one row go to the other, and the other's to the one
+  const swapEvidence = (rowA: string, rowB: string) => {
+    for (const att of db.attachments.filter((x) => x.workpaper_id === workpaper.id && !x.deleted_at)) {
+      const links = att.links ?? [];
+      if (!links.some((l: any) => l.anchor_json?.row === rowA || l.anchor_json?.row === rowB)) continue;
+      const before = { ...att, links: [...links] };
+      att.links = links.map((l: any) =>
+        l.anchor_json?.row === rowA ? { ...l, anchor_json: { ...l.anchor_json, row: rowB } } : l.anchor_json?.row === rowB ? { ...l, anchor_json: { ...l.anchor_json, row: rowA } } : l
+      );
+      db.logAudit(engagement.firm_id, actor, 'LINK_ATTACHMENT', 'attachments', att.id, before, att);
+    }
   };
 
   const removeFile = (att: Attachment) => {
@@ -696,9 +709,13 @@ export default function WorkpaperPage() {
     save: saveData,
     filesFor: (rowId: string) => linkedFiles(workpaper.id, rowId),
     attachTo,
-    preview: setPreview,
+    preview: (a: Attachment, expand?: boolean) => {
+      setPreview(a);
+      if (expand) setPreviewLarge(true);
+    },
     tickFor,
     live,
+    swapEvidence,
     dropFiles: (files: File[], rowId: string | null) => void doUpload(files, rowId),
     // The newest statement on the row, read again and shown beside the paper
     readStatement: (rowId: string) => {
@@ -706,7 +723,7 @@ export default function WorkpaperPage() {
       if (file) void readStatementFor(file, rowId, true);
     },
     pullFeed: () => {
-      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result.leads) });
+      if (!Array.isArray(live().accounts)) saveData({ accounts: reconAccounts(live(), result.leads, result.engagementId) });
       try {
         const { feedResponse } = services.reconcileBankWithOpenBanking(engagement.firm_id, actor, workpaper.id);
         touchPaper();
@@ -1816,7 +1833,7 @@ export default function WorkpaperPage() {
                         return (
                           <tr key={a.id}>
                             <td className="p-2">
-                              <button type="button" onClick={() => setPreview(a)} className="flex items-center gap-2 text-left hover:underline">
+                              <button type="button" onClick={() => setPreview(a)} onDoubleClick={() => (setPreview(a), setPreviewLarge(true))} className="flex items-center gap-2 text-left hover:underline">
                                 <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-[#122654] text-white">{fileKind(a)}</span>
                                 <span className="font-semibold break-all">{a.filename}</span>
                               </button>
@@ -1846,7 +1863,7 @@ export default function WorkpaperPage() {
                               {initials(a.uploaded_by_name)} · {fmtDate(a.uploaded_at)}
                             </td>
                             <td className="p-2 text-right whitespace-nowrap">
-                              <button type="button" onClick={() => setPreview(a)} className="font-bold text-[#122654] hover:underline mr-3">
+                              <button type="button" onClick={() => setPreview(a)} onDoubleClick={() => (setPreview(a), setPreviewLarge(true))} className="font-bold text-[#122654] hover:underline mr-3">
                                 Preview
                               </button>
                               <a href={fileUrl(a, true)} className="font-bold text-[#122654] hover:underline mr-3">
@@ -2017,7 +2034,30 @@ export default function WorkpaperPage() {
               setAiRead(null);
             }}
             top={
-              aiRead && preview?.id === aiRead.attId ? (
+              <>
+              {preview && !isLocked && (
+                // Any file can be moved to the line it belongs to from here, on every paper
+                <label className="flex items-center gap-2 px-3 py-2 border-b border-[#E3E7EF] text-[11px] text-[#4A5878] shrink-0">
+                  Linked to
+                  <select
+                    aria-label={`Link ${preview.filename} to`}
+                    value={((preview.links ?? [])[0]?.anchor_json as any)?.row ?? 'paper'}
+                    onChange={(e) => {
+                      relink(preview, e.target.value);
+                      setPreview({ ...db.attachments.find((x) => x.id === preview.id)! });
+                    }}
+                    className="flex-1 min-w-0 px-1.5 py-1 border border-[#D3DCEE] rounded-[8px] bg-white text-[#122654] font-semibold"
+                  >
+                    <option value="paper">Whole paper</option>
+                    {result.anchors.map((an) => (
+                      <option key={an.id} value={an.id}>
+                        {an.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {aiRead && preview?.id === aiRead.attId ? (
                 <div className="p-3 max-h-[50%] overflow-y-auto shrink-0 border-b border-[#E3E7EF] bg-[#FFF8F6] text-xs text-[#122654]">
                   <div className="flex items-center gap-1.5 font-bold">
                     <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> AI read{aiRead.bank ? ` · ${aiRead.bank}` : ''}
@@ -2028,7 +2068,7 @@ export default function WorkpaperPage() {
                   {aiRead.state === 'done' && (
                     <ul className="mt-2 flex flex-col gap-1">
                       {aiRead.options.map((b) => {
-                        const acc = reconAccounts(live(), result!.leads).find((a) => a.id === aiRead.rowId);
+                        const acc = reconAccounts(live(), result!.leads, result!.engagementId).find((a) => a.id === aiRead.rowId);
                         const inUse = !!acc && acc.statement_p !== '' && asPence(acc.statement_p) === asPence(b.balance_p) && (acc.statement_date ?? '') === b.date;
                         return (
                           <li key={`${b.date}:${b.balance_p}:${b.label}`} className="flex items-center gap-2 p-1.5 rounded-[8px] bg-white border border-[#E3E7EF]">
@@ -2055,7 +2095,8 @@ export default function WorkpaperPage() {
                   )}
                   <p className="mt-2 text-[10px] text-[#4A5878]">Check the figure against the statement below before using it.</p>
                 </div>
-              ) : null
+              ) : null}
+              </>
             }
           />
           {sideFolded ? (
@@ -2199,6 +2240,7 @@ export default function WorkpaperPage() {
                         key={a.id}
                         className="p-2.5 rounded-[10px] border border-[#D3DCEE] bg-white flex flex-col gap-1 hover:border-[#122654] cursor-pointer"
                         onClick={() => setPreview(a)}
+                        onDoubleClick={() => (setPreview(a), setPreviewLarge(true))}
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-[#122654] truncate max-w-[180px]">{a.filename}</span>

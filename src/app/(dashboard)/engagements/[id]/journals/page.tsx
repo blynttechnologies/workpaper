@@ -6,6 +6,7 @@ import { AlertCircle, Check, Paperclip, Plus, RotateCcw, Trash2, X } from 'lucid
 import { db } from '@/lib/server/db';
 import { formatPence, toPence } from '@/lib/money';
 import { TEMPLATES } from '@/lib/workpapers/templates';
+import { inLead } from '@/lib/workpapers/common';
 import { getActor } from '@/lib/session';
 import { Adjustment } from '@/lib/types/models';
 import { registerTotals } from '@/lib/workpapers/engine';
@@ -70,7 +71,7 @@ const total = (j: Adjustment) => j.lines.reduce((a, l) => a + BigInt(l.debit_p),
 
 /** The schedules whose lead codes a journal touches, e.g. "K-20, P-10". */
 const schedulesTouched = (codes: string[]) =>
-  TEMPLATES.filter((t) => t.leads.some((l) => codes.some((c) => c.startsWith(l.code)))).map((t) => t.ref);
+  TEMPLATES.filter((t) => t.leads.some((l) => codes.some((c) => inLead(c, l.code)))).map((t) => t.ref);
 
 const MIME: Record<string, string> = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', csv: 'text/csv', txt: 'text/plain' };
 /** Journal evidence as a file the shared preview can show. */

@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+import { inLead } from '@/lib/workpapers/common';
 import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, ArrowRight, ChevronDown, ChevronRight, Upload } from 'lucide-react';
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
-import { reconAccounts, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
+import { reconAccounts, leadSources, rowCode, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
 import { Tiles, type Tone } from './kit';
@@ -18,14 +20,14 @@ export interface ScheduleProps {
   save: (patch: Record<string, any>) => void;
   filesFor: (rowId: string) => Attachment[];
   attachTo: (rowId: string) => void;
-  preview: (a: Attachment) => void;
+  preview: (a: Attachment, expand?: boolean) => void;
   tickFor: (rowId: string, label: string) => React.ReactNode;
   /** The paper's latest data. Writes build on this, so quick successive edits never overwrite each other. */
   live: () => Record<string, any>;
   /** Upload files and link them to a row (null: the whole paper). */
   dropFiles?: (files: File[], rowId: string | null) => void;
-  /** Bank and cash: pull the Open Banking balance onto the schedule. */
-  pullFeed?: () => void;
+  /** Swap the files linked to two rows. */
+  swapEvidence?: (rowA: string, rowB: string) => void;
   /** Bank and cash: read the row's statement with AI and show what it found beside the paper. */
   readStatement?: (rowId: string) => void;
 }
@@ -46,42 +48,63 @@ function RemoveButton({ onClick, label, disabled }: { onClick: () => void; label
 
 /* ---------- B-10 style: bank and cash, one row per account ---------- */
 const KIND_LABEL = { bank: 'Bank', cash: 'Cash', card: 'Credit card' } as const;
+/** A balance with its sign and side spelt out: + Dr for money held, − Cr for owed or overdrawn. */
+const signed = (p: bigint) => (p === 0n ? formatPence(p) : `${p < 0n ? '−' : '+'}${formatPence(p < 0n ? -p : p)} ${p < 0n ? 'Cr' : 'Dr'}`);
 const abs = (x: bigint) => (x < 0n ? -x : x);
 
-/** Which account a statement file is for, from the account code or name in its file name. */
-function matchAccount(filename: string, accounts: ReconAccount[]): ReconAccount | undefined {
-  const f = filename.toLowerCase();
-  const words = (a: ReconAccount) => `${a.name} ${a.detail ?? ''}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3 && !['account', 'bank', 'business'].includes(w));
-  return (
-    accounts.find((a) => a.code !== '*' && new RegExp(`(^|\\D)${a.code}(\\D|$)`).test(f)) ??
-    accounts.find((a) => words(a).some((w) => f.includes(w))) ??
-    accounts.find((a) => (accountKind(a.code) === 'cash' && /petty|cash count|till/.test(f)) || (accountKind(a.code) === 'card' && /card|amex|visa|mastercard/.test(f))) ??
-    (accounts.length === 1 ? accounts[0] : undefined)
-  );
-}
-
-export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, pullFeed, readStatement }: ScheduleProps) {
+export function ReconciliationSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, readStatement, swapEvidence }: ScheduleProps) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [splitting, setSplitting] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
-  const uploadInput = React.useRef<HTMLInputElement | null>(null);
   const leads = result.leads;
-  const accounts = reconAccounts(data, leads);
+  const accounts = reconAccounts(data, leads, result.engagementId);
+  const sourcesOf = (code: string) => leadSources(result.engagementId, code);
+  // Mapped here but not confirmed: not in the trial balance, so not on this paper until confirmed
+  const pending = db.account_mappings.filter((m) => m.engagement_id === result.engagementId && m.status !== 'confirmed' && result.template.leads.some((l) => inLead(m.blynt_code, l.code)));
   const tolerance = result.totals.tolerance ?? 100n;
   const tot = (key: string) => result.totals[key] ?? 0n;
   const periodEnd = db.engagements.find((e) => e.id === result.engagementId)?.period_end ?? '';
 
   // Writes always store the full account list, built on the latest data
-  const saveAccounts = (fn: (as: ReconAccount[]) => ReconAccount[]) => save({ accounts: fn(reconAccounts(live(), leads)) });
+  const saveAccounts = (fn: (as: ReconAccount[]) => ReconAccount[]) => save({ accounts: fn(reconAccounts(live(), leads, result.engagementId)) });
   const updateAcc = (id: string, patch: Partial<ReconAccount>) => saveAccounts((as) => as.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   const updateItems = (id: string, side: 'less' | 'add', fn: (rows: ReconItem[]) => ReconItem[]) =>
     saveAccounts((as) => as.map((a) => (a.id === id ? { ...a, [side]: fn(a[side] ?? []) } : a)));
-  const addAccount = (code: string) => {
+  const addAccount = (value: string) => {
+    const [code, source] = value.split('|');
     const lead = result.template.leads.find((l) => l.code === code);
     if (!lead) return;
-    saveAccounts((as) => [...as, { id: newId('acc'), code, name: lead.label, statement_p: '', less: [], add: [] }]);
+    const m = source ? sourcesOf(code).find((x) => x.source_code === source) : undefined;
+    saveAccounts((as) => [...as, { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] }]);
+  };
+  // Several client accounts on one code: one row each. What was entered on the combined row, and its files, go to the account it belongs to
+  const splitAccount = (a: ReconAccount, keep: string) => {
+    const src = sourcesOf(a.code);
+    setSplitting(null);
+    saveAccounts((as) =>
+      as.flatMap((x) =>
+        x.id !== a.id
+          ? [x]
+          : src.map((m) => ({ ...(m.source_code === keep ? x : { id: newId('acc'), statement_p: '', less: [], add: [] }), code: a.code, client_code: m.source_code, name: m.source_name || m.source_code }))
+      )
+    );
+  };
+  // A statement, its reading, the reconciling items and the files on the wrong row: swap them with the right one
+  const moveDetails = (from: ReconAccount, toId: string) => {
+    const to = accounts.find((x) => x.id === toId);
+    if (!to) return;
+    const fields = ['statement_p', 'statement_date', 'ai_balances', 'source', 'synced_at', 'confirmation_p', 'less', 'add'] as const;
+    const pick = (x: ReconAccount) => Object.fromEntries(fields.map((k) => [k, x[k]]));
+    const swapField = (field: string) =>
+      field.startsWith(`accounts.${from.id}.`) ? field.replace(`accounts.${from.id}.`, `accounts.${to.id}.`) : field.startsWith(`accounts.${to.id}.`) ? field.replace(`accounts.${to.id}.`, `accounts.${from.id}.`) : field;
+    swapEvidence?.(from.id, to.id);
+    save({
+      accounts: reconAccounts(live(), leads, result.engagementId).map((x) => (x.id === from.id ? { ...x, ...pick(to) } : x.id === to.id ? { ...x, ...pick(from) } : x)),
+      confidence_gate_items: (live().confidence_gate_items ?? []).map((g: any) => ({ ...g, field: swapField(String(g.field ?? '')) })),
+    });
   };
   const removeAccount = (a: ReconAccount) => {
-    if (confirm(`Remove ${accountName(a)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
+    if (confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
   };
   const onDrop = (e: React.DragEvent, rowId: string) => {
     e.preventDefault();
@@ -89,19 +112,9 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const files = Array.from(e.dataTransfer.files ?? []);
     if (files.length && !locked && dropFiles) dropFiles(files, rowId);
   };
-  const uploadStatements = (files: File[]) => {
-    if (!dropFiles) return;
-    const byAccount = new Map<string | null, File[]>();
-    for (const f of files) {
-      const id = matchAccount(f.name, accounts)?.id ?? null;
-      byAccount.set(id, [...(byAccount.get(id) ?? []), f]);
-    }
-    byAccount.forEach((fs, id) => dropFiles(fs, id));
-  };
-
   const rows = accounts.map((a) => {
     const kind = accountKind(a.code);
-    const ledger = accountLedger(a, accounts, leads, result.template.creditArea);
+    const ledger = accountLedger(a, accounts, leads, result.template.creditArea, result.engagementId);
     const entered = statementEntered(a);
     const diff = tot(`${a.id}_diff`);
     const files = filesFor(a.id);
@@ -114,7 +127,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const reconciled = rows.filter((r) => r.status === 'done' || r.status === 'evidence').length;
   const withEvidence = rows.filter((r) => r.files.length).length;
   const todo = rows.filter((r) => !r.entered).length;
-  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code));
+  const unused = result.template.leads.filter((l) => !accounts.some((a) => a.code === l.code) && sourcesOf(l.code).length === 0);
+  const unusedSources = result.template.leads.flatMap((l) => {
+    const src = sourcesOf(l.code);
+    return src.length > 0 && !accounts.some((a) => a.code === l.code && !a.client_code) ? src.filter((m) => !accounts.some((a) => a.code === l.code && a.client_code === m.source_code)).map((m) => ({ l, m })) : [];
+  });
   const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
   const pill = {
     todo: 'bg-[#EEF1F6] text-[#4A5878]',
@@ -129,7 +146,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className={tile}>
           <div className="text-[11px] text-[#4A5878]">Ledger balance, all accounts</div>
-          <div className="text-lg font-bold font-mono text-[#122654]">{formatPence(tot('ledger'))}</div>
+          <div className="text-lg font-bold font-mono text-[#122654] whitespace-nowrap">{signed(tot('ledger'))}</div>
         </div>
         <div className={tile}>
           <div className="text-[11px] text-[#4A5878]">Accounts reconciled</div>
@@ -151,32 +168,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
 
       {!locked && (
         <div className="flex flex-wrap items-center gap-2">
-          {pullFeed && rows.some((r) => r.kind === 'bank') && (
-            <button type="button" onClick={pullFeed} className="inline-flex items-center gap-1.5 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px]">
-              <RefreshCw className="w-3.5 h-3.5" /> Pull Open Banking feed
-            </button>
-          )}
-          {dropFiles && (
-            <>
-              <button type="button" onClick={() => uploadInput.current?.click()} className={addBtn}>
-                <Upload className="w-3.5 h-3.5" /> Upload statements
-              </button>
-              <input
-                ref={uploadInput}
-                type="file"
-                multiple
-                className="hidden"
-                accept=".pdf,.csv,.xls,.xlsx,.png,.jpg,.jpeg"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  e.target.value = '';
-                  if (files.length) uploadStatements(files);
-                }}
-              />
-              <span className="text-[11px] text-[#4A5878]">Choose several at once: each goes to the account named in its file name, and a blank closing balance is read from it.</span>
-            </>
-          )}
-          {unused.length > 0 && (
+          {unused.length + unusedSources.length > 0 && (
             <select
               aria-label="Add account"
               value=""
@@ -184,6 +176,11 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               className="ml-auto min-h-[32px] px-2 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] rounded-[8px]"
             >
               <option value="">+ Add account</option>
+              {unusedSources.map(({ l, m }) => (
+                <option key={`${l.code}|${m.source_code}`} value={`${l.code}|${m.source_code}`}>
+                  {l.code} {m.source_name || m.source_code} · {formatPence(asPence(m.balance_p))}
+                </option>
+              ))}
               {unused
                 .map((l) => ({ l, bal: leads.find((x) => x.code === l.code)?.final ?? 0n }))
                 .sort((a, b) => (b.bal !== 0n ? 1 : 0) - (a.bal !== 0n ? 1 : 0))
@@ -195,6 +192,19 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                 ))}
             </select>
           )}
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div role="status" className="flex items-start gap-2 p-3 rounded-[10px] bg-[#FFF4DB] border border-[#F0D9A0] text-xs text-[#5C4100]">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            {pending.length === 1 ? '1 account is' : `${pending.length} accounts are`} mapped here but not confirmed, so not in the trial balance or on this paper:{' '}
+            <span className="font-semibold">{pending.map((m) => `${m.source_name || m.source_code} (${m.blynt_code})`).join(', ')}</span>.{' '}
+            <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="font-bold underline">
+              Confirm on Mapping
+            </Link>
+          </div>
         </div>
       )}
 
@@ -225,7 +235,9 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               const less = tot(`${a.id}_less`);
               const add = tot(`${a.id}_add`);
               const items = (a.less ?? []).length + (a.add ?? []).length;
-              const name = accountName(a);
+              const name = accountName(a, result.engagementId);
+              // A row from before accounts were named, with one client account on its code: show that account's name
+              const single = !a.client_code && a.code !== '*' && sourcesOf(a.code).length === 1 ? sourcesOf(a.code)[0] : null;
               return (
                 <React.Fragment key={a.id}>
                   <tr
@@ -251,13 +263,50 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                     </td>
                     <td className="p-2 align-top">
                       <div className="font-bold">
-                        {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{a.code}</span>}
-                        {a.name}
+                        {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{single?.blynt_code ?? rowCode(a, result.engagementId)}</span>}
+                        {single ? single.source_name || single.source_code : a.name}
                       </div>
                       <div className="text-[10px] text-[#4A5878]">
                         {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
+                        {a.client_code || single ? ` · ${a.client_code ?? single!.source_code}` : ''}
                         {a.detail ? ` · ${a.detail}` : ''}
                       </div>
+                      {!locked && !a.client_code && a.code !== '*' && sourcesOf(a.code).length > 1 && (
+                        splitting === a.id ? (
+                          <div className="mt-1 p-2 rounded-[8px] border border-[#D3DCEE] bg-[#F5F8FD] text-[10px] text-[#122654] space-y-1">
+                            <div className="font-bold">{statementEntered(a) || files.length || items ? 'What is entered on this row, and its files, belong to:' : 'Split into one row per account:'}</div>
+                            <div className="flex flex-wrap gap-1">
+                              {sourcesOf(a.code).map((m) => (
+                                <button key={m.source_code} type="button" onClick={() => splitAccount(a, m.source_code)} className="px-2 py-0.5 rounded-[6px] border border-[#122654] font-bold hover:bg-white">
+                                  {m.source_name || m.source_code}
+                                </button>
+                              ))}
+                              <button type="button" onClick={() => setSplitting(null)} className="px-2 py-0.5 font-semibold text-[#4A5878]">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setSplitting(a.id)} className="mt-0.5 text-[10px] font-bold text-[#B8432F] hover:underline">
+                            Split into {sourcesOf(a.code).length} accounts
+                          </button>
+                        )
+                      )}
+                      {!locked && (statementEntered(a) || files.length > 0 || items > 0) && accounts.length > 1 && (
+                        <select
+                          aria-label={`Move the statement, items and files on ${name} to another account`}
+                          value=""
+                          onChange={(e) => e.target.value && moveDetails(a, e.target.value)}
+                          className="mt-0.5 block max-w-[180px] text-[10px] text-[#4A5878] bg-transparent border border-transparent hover:border-[#D3DCEE] rounded"
+                        >
+                          <option value="">Wrong account? Move to…</option>
+                          {accounts.filter((x) => x.id !== a.id).map((x) => (
+                            <option key={x.id} value={x.id}>
+                              {accountName(x, result.engagementId)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       {note && (
                         <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#B8432F]">
                           <AlertTriangle className="w-3 h-3 shrink-0" /> {note}
@@ -265,7 +314,9 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                       )}
                     </td>
                     <td className="p-2 align-top text-right">
-                      <div className="font-mono font-bold">{formatPence(ledger.final)}</div>
+                      <div className="font-mono font-bold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
+                        {signed(ledger.final)}
+                      </div>
                       <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
                     </td>
                     <td className="p-1.5 align-top">
@@ -451,8 +502,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                 <td className="p-2">
                   Total · {rows.length} account{rows.length === 1 ? '' : 's'}
                 </td>
-                <td className="p-2 text-right font-mono">{formatPence(tot('ledger'))}</td>
-                <td className="p-2 text-right font-mono">{formatPence(tot('statement'))}</td>
+                <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('ledger'))}</td>
+                <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('statement'))}</td>
                 <td className="p-2 text-right font-mono">{formatPence(tot('adjusted') - tot('statement'))}</td>
                 <td className={`p-2 text-right font-mono ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
                   {formatPence(rows.filter((r) => r.entered).reduce((acc, r) => acc + abs(r.diff), 0n))}

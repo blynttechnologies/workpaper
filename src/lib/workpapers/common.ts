@@ -1,6 +1,7 @@
 import { db } from '../server/db';
 import { asPence } from '../money';
 import type { LedgerTransaction } from '../types/models';
+import { TEMPLATES } from './templates';
 import type { Anchor, LeadFigure, PaperCheck } from './engine';
 
 /**
@@ -68,9 +69,27 @@ export function journalCheck(sent: { ref?: string; sig?: string } | undefined, l
 
 const mapped = (engagementId: string) => db.account_mappings.filter((m) => m.engagement_id === engagementId && m.blynt_code);
 
+/** The code papers route an account by: a practice's own account goes wherever the standard account it was created beside goes. */
+export function routeCode(code: string) {
+  if (parents?.of !== db.blynt_accounts || parents.n !== db.blynt_accounts.length) {
+    parents = { of: db.blynt_accounts, n: db.blynt_accounts.length, map: new Map(db.blynt_accounts.filter((a) => a.parent_code).map((a) => [a.code, a.parent_code!])) };
+  }
+  return parents.map.get(code) ?? code;
+}
+let parents: { of: unknown; n: number; map: Map<string, string> } | null = null;
+
+/** Whether a chart code falls under a paper's lead code (a code or a prefix). */
+export const inLead = (code: string | null | undefined, lead: string) => !!code && (code === lead || routeCode(code).startsWith(lead));
+
+// Summary and planning papers read every code; they are not where an account is worked
+export const NOT_A_SCHEDULE = new Set(['A-10', 'Z-10', 'Z-20', 'Z-30', 'Z-40', 'R-10', 'R-20']);
+
+/** The schedule papers an account is worked on. */
+export const papersForCode = (code: string) => TEMPLATES.filter((t) => !NOT_A_SCHEDULE.has(t.ref) && t.leads.some((l) => inLead(code, l.code)));
+
 /** Ledger transactions on the client accounts mapped to any of these chart codes or prefixes. */
 export function ledgerFor(engagementId: string, prefixes: string[]): LedgerTransaction[] {
-  const codes = new Set(mapped(engagementId).filter((m) => prefixes.some((p) => m.blynt_code!.startsWith(p))).map((m) => m.source_code));
+  const codes = new Set(mapped(engagementId).filter((m) => prefixes.some((p) => inLead(m.blynt_code, p))).map((m) => m.source_code));
   return db.transactions.filter((t) => t.engagement_id === engagementId && codes.has(t.account_code));
 }
 
