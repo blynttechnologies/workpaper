@@ -86,6 +86,7 @@ export default function AccountMappingPage() {
 
   // The AI system reads every unconfirmed line and suggests an account; each stays a suggestion until someone confirms it
   const [aiBusy, setAiBusy] = useState(false);
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
   const mapWithAi = async () => {
     const open = db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status !== 'confirmed');
     if (!open.length) {
@@ -108,9 +109,28 @@ export default function AccountMappingPage() {
       }
       const actor = getActor();
       let changed = 0;
-      for (const r of body.results as { id: string; suggested_blynt_code: string | null; confidence: number; reason: string; source: string; model?: string }[]) {
+      let toCreate = 0;
+      for (const r of body.results as { id: string; suggested_blynt_code: string | null; confidence: number; reason: string; source: string; model?: string; new_account?: { name: string; parent_code: string } | null }[]) {
         const m = db.account_mappings.find((x) => x.id === r.id && x.status !== 'confirmed');
-        if (!m || r.source !== 'ai' || !r.suggested_blynt_code) continue;
+        if (!m || r.source !== 'ai') continue;
+        // Nothing in the chart fits: the line waits for someone to create the proposed account, or pick one
+        if (!r.suggested_blynt_code && r.new_account) {
+          Object.assign(m, {
+            blynt_code: null,
+            status: 'needs_you',
+            confidence: 0,
+            method: 'ai',
+            ai_reason: `AI: ${r.reason}`,
+            evidence_used: r.model ? `AI model ${r.model}` : 'AI',
+            gate: 'exception',
+            ai_new_account: r.new_account,
+            sign_mismatch: false,
+          });
+          toCreate++;
+          continue;
+        }
+        if (!r.suggested_blynt_code) continue;
+        m.ai_new_account = null;
         const stat = getStatutoryDetails(r.suggested_blynt_code, m.source_name, m.source_type);
         const bal = asPence(m.balance_p);
         if (m.blynt_code !== r.suggested_blynt_code) changed++;
@@ -128,9 +148,11 @@ export default function AccountMappingPage() {
           sign_mismatch: (stat.is_credit_area && bal > 0n) || (!stat.is_credit_area && bal < 0n),
         });
       }
-      db.logAudit(firmId, actor, 'AI_MAPPING_SUGGESTED', 'engagements', engagementId, null, { lines: open.length, changed, model: body.model });
+      db.logAudit(firmId, actor, 'AI_MAPPING_SUGGESTED', 'engagements', engagementId, null, { lines: open.length, changed, to_create: toCreate, model: body.model });
       reloadData();
-      setCorrectionToast({ message: `AI read ${open.length} unconfirmed lines and changed the suggestion on ${changed}. Check them on the Ready, Check and Exception tabs, then confirm.` });
+      setCorrectionToast({
+        message: `AI read ${open.length} unconfirmed lines and changed the suggestion on ${changed}${toCreate ? `; ${toCreate} fit no chart account and have a new account to create` : ''}. AI lines are marked ✦ AI: check them, then confirm.`,
+      });
     } catch (err) {
       setCorrectionToast({ message: (err as Error).message });
     } finally {
@@ -449,6 +471,7 @@ export default function AccountMappingPage() {
         confidence: 100,
         method: 'manual',
         ai_reason: `Applied with the correction to ${sourceName}`,
+        ai_new_account: null,
         gate: 'ready',
         statutory_line: stat.statutory_line,
         schedule_ref: stat.schedule_ref,
@@ -473,6 +496,7 @@ export default function AccountMappingPage() {
       item.confirmed_by = actor.id;
       item.confirmed_at = now;
       item.gate = 'ready';
+      item.ai_new_account = null;
 
       // Log to AI Action Log (AUD-03)
       db.ai_action_logs.push({
@@ -1014,6 +1038,14 @@ export default function AccountMappingPage() {
                           <span>Exception {row.confidence}%</span>
                         </span>
                       )}
+                      {row.method === 'ai' && (
+                        <span
+                          title={row.ai_reason || 'Mapped by the AI'}
+                          className="mt-1 inline-flex items-center gap-0.5 mr-1 px-1.5 py-0.5 text-[10px] font-bold text-[#B8432F] bg-[#FFF1EE] border border-[#FF7A66]/40 rounded-full"
+                        >
+                          <Sparkles className="w-3 h-3" /> AI
+                        </span>
+                      )}
                       {row.status !== 'confirmed' && row.blynt_code && (
                         <button
                           type="button"
@@ -1057,6 +1089,39 @@ export default function AccountMappingPage() {
                         suggestName={row.source_name}
                         onPick={(code) => handleInitiateChangeMapping(row.id, code)}
                       />
+                      {/* No chart account fits: the AI's proposed new account, created only when someone approves it */}
+                      {row.status !== 'confirmed' && row.ai_new_account && (
+                        creatingFor === row.id ? (
+                          <div className="mt-2 max-w-sm">
+                            <NewAccountForm
+                              firmId={firmId}
+                              clientId={engagementClientId ?? undefined}
+                              initialName={row.ai_new_account.name}
+                              initialBase={row.ai_new_account.parent_code}
+                              onCancel={() => setCreatingFor(null)}
+                              onUseExisting={(code) => {
+                                setCreatingFor(null);
+                                handleInitiateChangeMapping(row.id, code);
+                              }}
+                              onCreated={(acc) => {
+                                setCreatingFor(null);
+                                const m = db.account_mappings.find((x) => x.id === row.id);
+                                if (m) m.ai_new_account = null;
+                                handleInitiateChangeMapping(row.id, acc.code);
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="mt-1 max-w-[260px] text-[10px] text-[#4A5878]">
+                            <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
+                            AI: no chart account fits.{' '}
+                            <button type="button" onClick={() => setCreatingFor(row.id)} className="font-bold text-[#B8432F] hover:underline">
+                              Create &ldquo;{row.ai_new_account.name}&rdquo;
+                            </button>{' '}
+                            (works like {row.ai_new_account.parent_code})
+                          </div>
+                        )
+                      )}
                     </td>
                   </tr>
                 );
