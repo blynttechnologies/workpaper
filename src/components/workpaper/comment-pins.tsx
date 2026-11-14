@@ -18,6 +18,8 @@ export interface PinAnchor {
   y: number;
   /** Pixels from the top of the paper, for a pin not on a row */
   top?: number;
+  /** The paper's tabs that were open when it was left (a director, a view); it shows only on those */
+  view?: string[];
   label: string;
 }
 
@@ -25,23 +27,34 @@ export type CommentType = Comment['type'];
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 export const rowKey = (tr: HTMLTableRowElement) => norm(Array.from(tr.cells).slice(0, 2).map((c) => c.textContent ?? '').join(' '));
+/** The tabs open on the paper now. */
+export const openTabs = (paper: HTMLElement) => Array.from(paper.querySelectorAll('[role="tab"][aria-selected="true"]')).map((t) => norm(t.textContent ?? '')).filter(Boolean);
+
 export const isPin = (a: unknown): a is PinAnchor => !!a && (a as PinAnchor).kind === 'pin' && typeof (a as PinAnchor).x === 'number';
 
 /** The anchor for a click on the paper. */
 export function anchorAt(paper: HTMLElement, target: HTMLElement, clientX: number, clientY: number): PinAnchor {
+  const tabs = openTabs(paper);
+  const view = tabs.length ? { view: tabs } : {};
+  const on = (label: string) => (tabs.length ? `${label} · ${tabs.join(' · ')}` : label);
   const tr = target.closest('tr');
   if (tr && paper.contains(tr) && rowKey(tr)) {
     const r = tr.getBoundingClientRect();
-    return { kind: 'pin', row: rowKey(tr), x: (clientX - r.left) / r.width, y: (clientY - r.top) / r.height, label: rowKey(tr) };
+    return { kind: 'pin', row: rowKey(tr), x: (clientX - r.left) / r.width, y: (clientY - r.top) / r.height, ...view, label: on(rowKey(tr)) };
   }
   const p = paper.getBoundingClientRect();
   const heading = target.closest('section, fieldset, [class*="rounded"]')?.querySelector('h2, h3, legend, .font-bold')?.textContent;
   // shortcut: off a table row the pin keeps its distance from the top of the paper, so it drifts if something above it grows; anchor to sections if that matters
-  return { kind: 'pin', x: (clientX - p.left) / p.width, y: 0, top: clientY - p.top, label: heading ? norm(heading) : 'On the paper' };
+  return { kind: 'pin', x: (clientX - p.left) / p.width, y: 0, top: clientY - p.top, ...view, label: on(heading ? norm(heading) : 'On the paper') };
 }
 
 /** Where a pin sits on the paper now, or null when its row has gone. */
 export function placeOf(paper: HTMLElement, a: PinAnchor): { left: number; top: number } | null {
+  // Left on another tab of the paper: hidden until that tab is open again
+  if (a.view?.length) {
+    const open = openTabs(paper);
+    if (!a.view.every((v) => open.includes(v))) return null;
+  }
   const p = paper.getBoundingClientRect();
   if (a.row) {
     const tr = Array.from(paper.querySelectorAll('tr')).find((t) => rowKey(t) === a.row);

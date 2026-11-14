@@ -30,6 +30,22 @@ describe('comment pins', () => {
     expect(placeOf(el, a)).toBeNull();
   });
 
+  it('left on one tab of the paper, shows only while that tab is open', () => {
+    const el = paper();
+    const tabs = document.createElement('div');
+    tabs.innerHTML = '<button role="tab" aria-selected="true">Sri</button><button role="tab" aria-selected="false">Chand</button>';
+    el.prepend(tabs);
+    const tr = el.querySelector('tr')!;
+    tr.getBoundingClientRect = () => rect(100, 150, 800, 40);
+    const a = anchorAt(el, el.querySelector('#amt') as HTMLElement, 700, 160);
+    expect(a).toMatchObject({ view: ['Sri'], label: '6100 Savings account Bank · Sri' });
+    expect(placeOf(el, a)).not.toBeNull();
+    const [sri, chand] = Array.from(tabs.querySelectorAll('button'));
+    sri.setAttribute('aria-selected', 'false');
+    chand.setAttribute('aria-selected', 'true');
+    expect(placeOf(el, a)).toBeNull();
+  });
+
   it('off a row, keeps its place on the paper', () => {
     const el = paper();
     const a = anchorAt(el, el.querySelector('.free') as HTMLElement, 500, 400);

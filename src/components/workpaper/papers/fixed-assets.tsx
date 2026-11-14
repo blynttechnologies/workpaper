@@ -87,9 +87,9 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-[8px] border border-[#D3DCEE] overflow-hidden" role="group" aria-label="View">
+        <div className="inline-flex rounded-[8px] border border-[#D3DCEE] overflow-hidden" role="tablist" aria-label="View">
           {(['summary', 'register'] as const).map((v) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} className={`px-3 py-1.5 text-xs font-bold ${view === v ? 'bg-[#122654] text-white' : 'bg-white text-[#122654]'}`}>
+            <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)} className={`px-3 py-1.5 text-xs font-bold ${view === v ? 'bg-[#122654] text-white' : 'bg-white text-[#122654]'}`}>
               {v === 'summary' ? 'Summary by class' : 'Asset register'}
             </button>
           ))}

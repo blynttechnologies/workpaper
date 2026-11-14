@@ -450,7 +450,7 @@ export type AnchorJson =
   | { kind: 'row'; table: string; row: string }
   | { kind: 'file'; attachment_id: string }
   /** Pinned anywhere on the paper: a table row (by its first cells' text) and the spot within it, or a place on the paper */
-  | { kind: 'pin'; row?: string; x: number; y: number; top?: number; label: string }
+  | { kind: 'pin'; row?: string; x: number; y: number; top?: number; view?: string[]; label: string }
   | { kind: 'paper' };
 
 export interface Comment {
