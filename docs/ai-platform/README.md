@@ -2,7 +2,7 @@
 
 How the multi-AI platform is built, what is finished, and how to switch it on. Read this with [gap-assessment.md](gap-assessment.md), the Phase A audit it answers.
 
-Status at 14 November 2026: built and tested on branch `feat/ai-platform`, **not pushed and not deployed** (every push deploys to production).
+Status at 14 November 2026: **deployed to production**. Claude, OpenAI (`gpt-6.1-sol`) and Gemini (`gemini-4-hydrogen`) keys are set (Claude's key is the `CLAUDE_API_KEY` row of `workpaper/app`, passed to the app as `ANTHROPIC_API_KEY`), the Lambda timeout is 300 seconds, and `MCP_ENABLED=1`. Every practice still has outside assistants off until a partner or admin turns them on. Copilot is parked.
 
 ---
 
@@ -122,6 +122,7 @@ Pushing any branch deploys. Do these in order.
 
 - Gemini 4 Argon and Carbon are priced at the rate from 1 December 2026; until then the real charge is half what the Control Centre shows. Gemini models other than the three Gemini 4 ones need a row in `AI_PRICES` to show a cost.
 - The MCP rate limit is per server instance.
+- The Lambda function URL renames the `WWW-Authenticate` header on a 401 to `x-amzn-Remapped-www-authenticate`, so assistants find the sign-in through the fallback `/.well-known/oauth-protected-resource` address instead (served, checked live). Putting CloudFront or API Gateway in front would keep the header.
 - AI request logs without a database (local development) are kept in memory only.
 - Writes from outside assistants share the whole-workspace save lock, and retry once on a conflict.
 - Research uses Workpaper's own standards library only. No web search, by decision.
