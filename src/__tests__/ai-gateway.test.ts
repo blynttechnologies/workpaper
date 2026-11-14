@@ -252,6 +252,19 @@ describe('cost and usage', () => {
   });
 });
 
+describe('OpenAI adapter errors', () => {
+  it('an empty credit balance is a plain message with no retries; a real rate limit is retried', async () => {
+    const { openaiProvider } = await import('@/lib/server/ai/providers/openai');
+    const reply = (status: number, body: unknown) => vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify(body), { status }));
+    const c = { model: 'gpt-6.1-sol', system: 's', messages: [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'hi' }] }], maxTokens: 10, effort: 'low' as const, timeoutMs: 1000 };
+    reply(429, { error: { type: 'insufficient_quota', code: 'credit_balance_exhausted', message: 'You have no credits remaining.' } });
+    await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'provider', retryable: false, message: expect.stringMatching(/no credit left/) });
+    reply(429, { error: { type: 'requests', message: 'Rate limit reached' } });
+    await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'rate_limited', retryable: true });
+    vi.restoreAllMocks();
+  });
+});
+
 describe('restore', () => {
   it('puts the real providers back', () => {
     Object.assign(providers, original);

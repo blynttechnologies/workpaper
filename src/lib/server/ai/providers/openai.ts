@@ -29,7 +29,8 @@ function input(msgs: Msg[]): Item[] {
   });
 }
 
-const isReasoning = (model: string) => /^(gpt-5|o\d)/.test(model);
+// Models that take a reasoning effort (GPT-5 onwards and the o-series)
+const isReasoning = (model: string) => /^(gpt-([5-9]|\d{2})|o\d)/.test(model);
 
 export const openaiProvider: Provider = {
   id: 'openai',
@@ -61,7 +62,7 @@ export const openaiProvider: Provider = {
       throw new AiError('Could not reach OpenAI.', 'provider', true);
     }
     const json = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string };
+      error?: { message?: string; type?: string; code?: string };
       status?: string;
       incomplete_details?: { reason?: string };
       model?: string;
@@ -70,6 +71,8 @@ export const openaiProvider: Provider = {
     };
     if (!res.ok) {
       const msg = json.error?.message?.slice(0, 200) ?? `status ${res.status}`;
+      // OpenAI also answers 429 when the account is out of credit: retrying cannot help, so say so and fall back
+      if (res.status === 429 && json.error?.type === 'insufficient_quota') throw new AiError('The OpenAI account has no credit left. Add credit in the OpenAI billing settings.', 'provider');
       if (res.status === 429) throw new AiError('OpenAI is rate limiting requests.', 'rate_limited', true);
       if (res.status === 401 || res.status === 403) throw new AiError('The OpenAI API key was refused.', 'not_configured');
       if (res.status >= 500) throw new AiError(`OpenAI returned an error (${res.status}).`, 'provider', true);
