@@ -242,6 +242,30 @@ export const services = {
    * DAT-06: account-level movements between two snapshots (net pence, debit positive).
    * Direction follows the size of the balance, as accountants read it: a credit balance that grows has increased.
    */
+  /**
+   * Bank, card and cash accounts that are nil this year still need reconciling (a nil statement, or proof
+   * the account closed), so each gets a mapping from the latest trial balance, which puts it on the bank paper.
+   * Returns how many were added.
+   */
+  addNilCashMappings(firmId: string, engagementId: string): number {
+    const snap = db.tb_snapshots.filter((s) => s.engagement_id === engagementId).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    if (!snap) return 0;
+    const have = new Set(db.account_mappings.filter((m) => m.engagement_id === engagementId).map((m) => m.source_code));
+    // Blynt's bank, card and cash codes are 6000-6499 (custom accounts too, as they stay in their section's range)
+    const cashCode = (code: string | null) => !!code && Number(code) >= 6000 && Number(code) <= 6499;
+    let added = 0;
+    db.tb_lines
+      .filter((l) => l.snapshot_id === snap.id && !have.has(l.source_code) && asPence(l.debit_p) === asPence(l.credit_p))
+      .forEach((l) => {
+        const m = this.buildMapping(firmId, engagementId, `map_${snap.id}_nil_${l.source_code}`, { code: l.source_code, name: l.source_name, type: l.source_type }, 0n);
+        if (!/bank|credit card|cash/i.test(l.source_type) && !cashCode(m.blynt_code)) return;
+        db.account_mappings.push(m);
+        have.add(l.source_code);
+        added++;
+      });
+    return added;
+  },
+
   diffSnapshots(priorSnapshotId: string | null | undefined, lines: { code: string; name: string; net_p: bigint }[]): TbSnapshotDiff[] {
     if (!priorSnapshotId) return [];
     const prior = new Map<string, { name: string; net: bigint }>();

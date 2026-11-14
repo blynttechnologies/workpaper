@@ -159,6 +159,8 @@ export function importTrialBalance(
     snapshot.changes = services.diffSnapshots(prior?.id, nets);
 
     db.tb_snapshots.push(snapshot);
+    // Nil bank, card and cash accounts are skipped above like other last-year-only lines, but still need reconciling
+    services.addNilCashMappings(actor.firmId, engagementId);
     db.logAudit(actor.firmId, actor, 'CREATE_SNAPSHOT', 'tb_snapshots', snapshot.id, null, {
       sha256,
       line_count: lines.length,
