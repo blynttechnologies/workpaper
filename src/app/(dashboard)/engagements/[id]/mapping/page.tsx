@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { Fragment, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -23,6 +23,7 @@ import { getActor } from '@/lib/session';
 import { engagementSummary } from '@/lib/api';
 import { NewAccountForm } from '@/components/coa/NewAccountForm';
 import { AccountPicker } from '@/components/coa/AccountPicker';
+import { groupMappings } from '@/lib/mapping/group';
 
 function ChartOptions({ engagementId }: { engagementId: string }) {
   return (
@@ -48,6 +49,7 @@ export default function AccountMappingPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'ready' | 'check' | 'exception' | 'confirmed'>('all');
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'amount' | 'code'>('amount');
   const [activeDetailId, setActiveDetailId] = useState<string | null>(null);
   const [typeFilter] = useState('all');
   const [statutoryFilter] = useState('all');
@@ -140,6 +142,8 @@ export default function AccountMappingPage() {
       return true;
     });
   }, [mappings, search, typeFilter, statutoryFilter, activeTab]);
+  const groups = useMemo(() => groupMappings(filteredMappings, sortBy), [filteredMappings, sortBy]);
+  const columns = 5 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
 
   // Active detail mapping for slide-over facts (DAT-03 UI step 3)
   const detailMapping = mappings.find((m) => m.id === activeDetailId) || null;
@@ -723,6 +727,16 @@ export default function AccountMappingPage() {
               />
             </div>
 
+            <select
+              aria-label="Order within each type"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'amount' | 'code')}
+              className="min-h-[38px] px-2 text-xs font-semibold text-[#122654] bg-white border border-[#D3DCEE] rounded-xl"
+            >
+              <option value="amount">Largest balance first</option>
+              <option value="code">Code order</option>
+            </select>
+
             {/* Optional columns */}
             {([
               ['statutory line', showStatutory, setShowStatutory],
@@ -800,7 +814,17 @@ export default function AccountMappingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E3E7EF]">
-              {filteredMappings.map((row) => {
+              {groups.map((g) => (
+                <Fragment key={g.type}>
+                  <tr className="bg-[#F5F8FD]">
+                    <th scope="rowgroup" colSpan={columns} className="px-4 py-2 text-left text-[11px] font-bold text-[#122654]">
+                      {g.type}
+                      <span className="ml-2 font-normal text-[#4A5878]">
+                        {g.rows.length} account{g.rows.length === 1 ? '' : 's'} · {formatPence(g.total, { accountingFormat: true })}
+                      </span>
+                    </th>
+                  </tr>
+              {g.rows.map((row) => {
                 const isSelected = selectedIds.includes(row.id);
                 const stat = getStatutoryDetails(row.blynt_code, row.source_name, row.source_type);
                 const isSignMismatch =
@@ -937,6 +961,8 @@ export default function AccountMappingPage() {
                   </tr>
                 );
               })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
