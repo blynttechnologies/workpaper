@@ -99,6 +99,47 @@ describe('status engine (WPS-04)', () => {
     expect(card).toEqual([expect.objectContaining({ client_code: 'ACC-SRICOMME', name: 'Sri - Commercial Card' })]);
   });
 
+  it('bank and cash: an account confirmed after the rows were saved gets a row, even at nil; one removed stays removed', () => {
+    const wp = bankPaper();
+    const e = wp.engagement_id;
+    for (let i = db.account_mappings.length - 1; i >= 0; i--) if (db.account_mappings[i].engagement_id === e && db.account_mappings[i].blynt_code === '6000') db.account_mappings.splice(i, 1);
+    const add = (source_code: string, source_name: string, balance_p: string) =>
+      db.account_mappings.push({ id: `m_${source_code}`, engagement_id: e, source_code, source_name, source_type: 'Bank', balance_p, blynt_code: '6000', status: 'confirmed', confidence: 100, method: 'manual' } as any);
+    add('901', 'Main Current Account', '3041997');
+    const leads = () => evaluatePaper(wp)!.leads;
+    // Rows saved while only 901 was confirmed
+    wp.data_json = { ...wp.data_json, accounts: reconAccounts(wp.data_json, leads(), e).map((a) => (a.client_code === '901' ? { ...a, statement_p: '3041997' } : a)) };
+    add('902', 'Account 2 - Hailsham', '0');
+    add('904', 'Account 4 - Brighton', '0');
+    const rows = reconAccounts(wp.data_json, leads(), e).filter((a) => a.code === '6000');
+    expect(rows.map((a) => [a.client_code, a.statement_p])).toEqual([['901', '3041997'], ['902', ''], ['904', '']]);
+    // What was entered on the saved row is kept, and the rows still add up to the TB
+    const r = evaluatePaper(wp)!;
+    expect(r.totals.ledger).toBe(r.leads.reduce((acc, l) => acc + l.final, 0n));
+    // Removed: remembered, not added back
+    wp.data_json = { ...wp.data_json, dismissed_accounts: ['6000|904'] };
+    expect(reconAccounts(wp.data_json, leads(), e).filter((a) => a.code === '6000').map((a) => a.client_code)).toEqual(['901', '902']);
+  });
+
+  it('bank and cash: a bank account nil this year (last year only) is mapped and shows on the paper; a nil expense is not', () => {
+    const wp = bankPaper();
+    const e = wp.engagement_id;
+    const firm = db.engagements.find((x) => x.id === e)!.firm_id;
+    const snap = db.tb_snapshots.filter((s) => s.engagement_id === e).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    const line = (source_code: string, source_name: string, source_type: string) =>
+      db.tb_lines.push({ id: `tbl_${source_code}`, snapshot_id: snap.id, source_code, source_name, source_type, debit_p: '0', credit_p: '0', comparative_p: '9245' } as any);
+    line('902', 'Account 2 - Hailsham - South East', 'Bank');
+    line('X77', 'Old office rent', 'Expense');
+    expect(services.addNilCashMappings(firm, e)).toBe(1);
+    expect(services.addNilCashMappings(firm, e)).toBe(0); // once only
+    const m = db.account_mappings.find((x) => x.engagement_id === e && x.source_code === '902')!;
+    expect(Number(m.blynt_code)).toBeGreaterThanOrEqual(6000);
+    expect(db.account_mappings.some((x) => x.engagement_id === e && x.source_code === 'X77')).toBe(false);
+    // Not confirmed yet, but on the paper as its own nil row
+    const row = reconAccounts(wp.data_json, evaluatePaper(wp)!.leads, e).find((a) => a.client_code === '902');
+    expect(row).toMatchObject({ name: 'Account 2 - Hailsham - South East', statement_p: '' });
+  });
+
   it('bank and cash: a paper saved with one statement keeps it as a single row covering every account', () => {
     const wp = bankPaper();
     wp.data_json.statement_p = '1';

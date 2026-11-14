@@ -86,6 +86,7 @@ export default function AccountMappingPage() {
 
   // The AI system reads every unconfirmed line and suggests an account; each stays a suggestion until someone confirms it
   const [aiBusy, setAiBusy] = useState(false);
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
   const mapWithAi = async () => {
     const open = db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status !== 'confirmed');
     if (!open.length) {
@@ -108,9 +109,28 @@ export default function AccountMappingPage() {
       }
       const actor = getActor();
       let changed = 0;
-      for (const r of body.results as { id: string; suggested_blynt_code: string | null; confidence: number; reason: string; source: string; model?: string }[]) {
+      let toCreate = 0;
+      for (const r of body.results as { id: string; suggested_blynt_code: string | null; confidence: number; reason: string; source: string; model?: string; new_account?: { name: string; parent_code: string } | null }[]) {
         const m = db.account_mappings.find((x) => x.id === r.id && x.status !== 'confirmed');
-        if (!m || r.source !== 'ai' || !r.suggested_blynt_code) continue;
+        if (!m || r.source !== 'ai') continue;
+        // Nothing in the chart fits: the line waits for someone to create the proposed account, or pick one
+        if (!r.suggested_blynt_code && r.new_account) {
+          Object.assign(m, {
+            blynt_code: null,
+            status: 'needs_you',
+            confidence: 0,
+            method: 'ai',
+            ai_reason: `AI: ${r.reason}`,
+            evidence_used: r.model ? `AI model ${r.model}` : 'AI',
+            gate: 'exception',
+            ai_new_account: r.new_account,
+            sign_mismatch: false,
+          });
+          toCreate++;
+          continue;
+        }
+        if (!r.suggested_blynt_code) continue;
+        m.ai_new_account = null;
         const stat = getStatutoryDetails(r.suggested_blynt_code, m.source_name, m.source_type);
         const bal = asPence(m.balance_p);
         if (m.blynt_code !== r.suggested_blynt_code) changed++;
@@ -128,9 +148,11 @@ export default function AccountMappingPage() {
           sign_mismatch: (stat.is_credit_area && bal > 0n) || (!stat.is_credit_area && bal < 0n),
         });
       }
-      db.logAudit(firmId, actor, 'AI_MAPPING_SUGGESTED', 'engagements', engagementId, null, { lines: open.length, changed, model: body.model });
+      db.logAudit(firmId, actor, 'AI_MAPPING_SUGGESTED', 'engagements', engagementId, null, { lines: open.length, changed, to_create: toCreate, model: body.model });
       reloadData();
-      setCorrectionToast({ message: `AI read ${open.length} unconfirmed lines and changed the suggestion on ${changed}. Check them on the Ready, Check and Exception tabs, then confirm.` });
+      setCorrectionToast({
+        message: `AI read ${open.length} unconfirmed lines and changed the suggestion on ${changed}${toCreate ? `; ${toCreate} fit no chart account and have a new account to create` : ''}. AI lines are marked ✦ AI: check them, then confirm.`,
+      });
     } catch (err) {
       setCorrectionToast({ message: (err as Error).message });
     } finally {
@@ -449,6 +471,7 @@ export default function AccountMappingPage() {
         confidence: 100,
         method: 'manual',
         ai_reason: `Applied with the correction to ${sourceName}`,
+        ai_new_account: null,
         gate: 'ready',
         statutory_line: stat.statutory_line,
         schedule_ref: stat.schedule_ref,
@@ -473,6 +496,7 @@ export default function AccountMappingPage() {
       item.confirmed_by = actor.id;
       item.confirmed_at = now;
       item.gate = 'ready';
+      item.ai_new_account = null;
 
       // Log to AI Action Log (AUD-03)
       db.ai_action_logs.push({
@@ -926,6 +950,11 @@ export default function AccountMappingPage() {
                     : row.confidence >= 70
                     ? 'check'
                     : 'exception';
+                // A new account to offer: the AI's, or for a weak match one named as the client names it, starting from the guess
+                const proposal =
+                  row.status === 'confirmed'
+                    ? null
+                    : row.ai_new_account ?? (gateName === 'exception' ? { name: row.source_name, parent_code: row.blynt_code ?? '' } : null);
 
                 return (
                   <tr
@@ -1014,6 +1043,27 @@ export default function AccountMappingPage() {
                           <span>Exception {row.confidence}%</span>
                         </span>
                       )}
+                      {row.method === 'ai' && (
+                        <span
+                          title={row.ai_reason || 'Mapped by the AI'}
+                          className="mt-1 inline-flex items-center gap-0.5 mr-1 px-1.5 py-0.5 text-[10px] font-bold text-[#B8432F] bg-[#FFF1EE] border border-[#FF7A66]/40 rounded-full"
+                        >
+                          <Sparkles className="w-3 h-3" /> AI
+                        </span>
+                      )}
+                      {row.status !== 'confirmed' && row.blynt_code && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            confirmMappings([row.id]);
+                          }}
+                          aria-label={`Confirm ${row.source_code} ${row.source_name} as ${row.blynt_code}`}
+                          className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-white bg-[#122654] hover:bg-[#0B1A3B] rounded-full"
+                        >
+                          <Check className="w-3 h-3 stroke-[2.5]" /> Confirm
+                        </button>
+                      )}
                     </td>
 
                     {/* AI Reason & Evidence (hoverable) */}
@@ -1044,6 +1094,45 @@ export default function AccountMappingPage() {
                         suggestName={row.source_name}
                         onPick={(code) => handleInitiateChangeMapping(row.id, code)}
                       />
+                      {/* No chart account fits (the AI says so, or the match is weak): offer a new account, created only when someone approves it */}
+                      {proposal && (
+                        creatingFor === row.id ? (
+                          <div className="mt-2 max-w-sm">
+                            <NewAccountForm
+                              firmId={firmId}
+                              clientId={engagementClientId ?? undefined}
+                              initialName={proposal.name}
+                              initialBase={proposal.parent_code || undefined}
+                              onCancel={() => setCreatingFor(null)}
+                              onUseExisting={(code) => {
+                                setCreatingFor(null);
+                                handleInitiateChangeMapping(row.id, code);
+                              }}
+                              onCreated={(acc) => {
+                                setCreatingFor(null);
+                                const m = db.account_mappings.find((x) => x.id === row.id);
+                                if (m) m.ai_new_account = null;
+                                handleInitiateChangeMapping(row.id, acc.code);
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="mt-1 max-w-[260px] text-[10px] text-[#4A5878]">
+                            {row.ai_new_account ? (
+                              <>
+                                <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
+                                AI: no chart account fits.{' '}
+                              </>
+                            ) : (
+                              'Weak match. Not in the chart? '
+                            )}
+                            <button type="button" onClick={() => setCreatingFor(row.id)} className="font-bold text-[#B8432F] hover:underline">
+                              Create &ldquo;{proposal.name}&rdquo;
+                            </button>
+                            {proposal.parent_code ? ` (works like ${proposal.parent_code})` : ''}
+                          </div>
+                        )
+                      )}
                     </td>
                   </tr>
                 );
@@ -1054,10 +1143,28 @@ export default function AccountMappingPage() {
           </table>
         </div>
         {/* Room for the action bar, so it never covers the last row */}
-        {selectedIds.length > 0 && <div className="h-20" aria-hidden="true" />}
+        {(selectedIds.length > 0 || confirmedCount < totalImported) && <div className="h-20" aria-hidden="true" />}
       </div>
 
-      {/* Ticked lines: the actions follow the page down, so confirming never means scrolling back up */}
+      {/* The confirm actions follow the page down, so confirming never means scrolling back up */}
+      {selectedIds.length === 0 && confirmedCount < totalImported && !ruleModalOpen && (
+        <div role="region" aria-label="Confirm lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">
+            <span className="text-xs mr-auto">
+              <span className="font-bold">{totalImported - confirmedCount} to confirm</span>
+              <span className="text-white/70"> · tick lines to confirm or remap several, or use Confirm on a row</span>
+            </span>
+            <button
+              type="button"
+              disabled={readyCount === 0}
+              onClick={handleConfirmAllReady}
+              className="min-h-[36px] px-4 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Check className="w-4 h-4 stroke-[2.5]" /> Confirm all Ready ({readyCount})
+            </button>
+          </div>
+        </div>
+      )}
       {selectedIds.length > 0 && !ruleModalOpen && (
         <div role="region" aria-label="Selected lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
           <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">

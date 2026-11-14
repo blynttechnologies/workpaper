@@ -7,6 +7,7 @@ import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, Re
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
+import { services } from '@/lib/server/services';
 import { reconAccounts, leadSources, rowCode, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
@@ -56,9 +57,17 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [splitting, setSplitting] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // Nil bank, card and cash accounts from the trial balance that were never mapped get a mapping, so every one shows here
+  const [, setBackfilled] = useState(0);
+  React.useEffect(() => {
+    const firmId = db.engagements.find((e) => e.id === result.engagementId)?.firm_id;
+    if (!locked && firmId && services.addNilCashMappings(firmId, result.engagementId)) setBackfilled((n) => n + 1);
+  }, [locked, result.engagementId]);
   const leads = result.leads;
   const accounts = reconAccounts(data, leads, result.engagementId);
-  const sourcesOf = (code: string) => leadSources(result.engagementId, code);
+  const sourcesOf = (code: string) => leadSources(result.engagementId, code, true);
+  const waiting = (a: ReconAccount) =>
+    !!a.client_code && db.account_mappings.some((m) => m.engagement_id === result.engagementId && m.source_code === a.client_code && m.status !== 'confirmed' && inLead(m.blynt_code, a.code));
   // Mapped here but not confirmed: not in the trial balance, so not on this paper until confirmed
   const pending = db.account_mappings.filter((m) => m.engagement_id === result.engagementId && m.status !== 'confirmed' && result.template.leads.some((l) => inLead(m.blynt_code, l.code)));
   const tolerance = result.totals.tolerance ?? 100n;
@@ -75,7 +84,14 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const lead = result.template.leads.find((l) => l.code === code);
     if (!lead) return;
     const m = source ? sourcesOf(code).find((x) => x.source_code === source) : undefined;
-    saveAccounts((as) => [...as, { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] }]);
+    const dismissed = ((live().dismissed_accounts ?? []) as string[]).filter((k) => k !== `${code}|${source}`);
+    save({
+      dismissed_accounts: dismissed,
+      accounts: [
+        ...reconAccounts({ ...live(), dismissed_accounts: dismissed }, leads, result.engagementId).filter((x) => !(m && x.code === code && x.client_code === m.source_code)),
+        { id: newId('acc'), code, ...(m ? { client_code: m.source_code, name: m.source_name || m.source_code } : { name: lead.label }), statement_p: '', less: [], add: [] },
+      ],
+    });
   };
   // Several client accounts on one code: one row each. What was entered on the combined row, and its files, go to the account it belongs to
   const splitAccount = (a: ReconAccount, keep: string) => {
@@ -104,7 +120,10 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     });
   };
   const removeAccount = (a: ReconAccount) => {
-    if (confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) saveAccounts((as) => as.filter((x) => x.id !== a.id));
+    if (!confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) return;
+    // A client account is remembered as removed, so it isn't added back as a new row
+    const dismissed = a.client_code ? [...new Set([...(live().dismissed_accounts ?? []), `${a.code}|${a.client_code}`])] : live().dismissed_accounts;
+    save({ dismissed_accounts: dismissed, accounts: reconAccounts({ ...live(), dismissed_accounts: dismissed }, leads, result.engagementId).filter((x) => x.id !== a.id) });
   };
   const onDrop = (e: React.DragEvent, rowId: string) => {
     e.preventDefault();
@@ -317,7 +336,13 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                       <div className="font-mono font-bold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
                         {signed(ledger.final)}
                       </div>
-                      <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
+                      {waiting(a) ? (
+                        <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="text-[10px] font-semibold text-[#8A5A00] underline">
+                          Not confirmed on Mapping
+                        </Link>
+                      ) : (
+                        <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
+                      )}
                     </td>
                     <td className="p-1.5 align-top">
                       <MoneyInput

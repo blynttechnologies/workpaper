@@ -146,11 +146,26 @@ function foldAdd(a: any): ReconAccount {
 }
 
 /** Confirmed client accounts mapped under a lead code. */
-export const leadSources = (engagementId: string, code: string) =>
-  db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status === 'confirmed' && inLead(m.blynt_code, code));
+/** Client accounts mapped under a lead: confirmed ones, or with `any`, also those still waiting on the Mapping page. */
+export const leadSources = (engagementId: string, code: string, any = false) =>
+  db.account_mappings.filter((m) => m.engagement_id === engagementId && (any || m.status === 'confirmed') && inLead(m.blynt_code, code));
 
 export function reconAccounts(data: Record<string, any>, leads: LeadFigure[], engagementId = ''): ReconAccount[] {
-  if (Array.isArray(data.accounts)) return data.accounts.map(foldAdd);
+  if (Array.isArray(data.accounts)) {
+    const saved: ReconAccount[] = data.accounts.map(foldAdd);
+    if (!engagementId || saved.some((a) => a.code === '*')) return saved;
+    // A client account confirmed after the rows were saved gets its own row too (a nil one still needs its statement),
+    // unless someone removed it, or the code is still reconciled as one combined row (split that from the row)
+    const dismissed = new Set<string>(data.dismissed_accounts ?? []);
+    const added = leads.flatMap((l) =>
+      saved.some((a) => a.code === l.code && !a.client_code)
+        ? []
+        : leadSources(engagementId, l.code, true)
+            .filter((m) => !dismissed.has(`${l.code}|${m.source_code}`) && !saved.some((a) => a.code === l.code && a.client_code === m.source_code))
+            .map((m) => ({ id: `acc_${l.code}_${m.source_code}`, code: l.code, client_code: m.source_code, name: m.source_name || m.source_code, statement_p: '', less: [], add: [] }))
+    );
+    return [...saved, ...added];
+  }
   const sections: any[] = data.sections ?? [];
   const rowsOf = (neg: boolean) => sections.filter((s) => Number(s.sign) < 0 === neg).flatMap((s) => s.rows ?? []);
   if (asPence(data.statement_p) !== 0n || sections.some((s) => s.rows?.length)) {
@@ -158,9 +173,9 @@ export function reconAccounts(data: Record<string, any>, leads: LeadFigure[], en
   }
   // Each client account is reconciled on its own row, named as the client names it
   return leads
-    .filter((l) => l.mapped || l.final !== 0n)
+    .filter((l) => l.mapped || l.final !== 0n || (engagementId && leadSources(engagementId, l.code, true).length))
     .flatMap((l) => {
-      const src = engagementId ? leadSources(engagementId, l.code) : [];
+      const src = engagementId ? leadSources(engagementId, l.code, true) : [];
       return src.length
         ? src.map((m) => ({ id: `acc_${l.code}_${m.source_code}`, code: l.code, client_code: m.source_code, name: m.source_name || m.source_code, statement_p: '', less: [], add: [] }))
         : [{ id: `acc_${l.code}`, code: l.code, name: l.label, statement_p: '', less: [], add: [] }];

@@ -161,7 +161,7 @@ describe('bank statement read through the gateway', () => {
 
 describe('accounting, review and reporting services', () => {
   it('mapping: rules first; AI only for accounts the rules cannot place; codes not in the chart are dropped', async () => {
-    replies.push({ text: JSON.stringify({ suggestions: [{ id: 'b', code: '4000', confidence: 88, reason: 'Consultancy is an overhead' }, { id: 'c', code: 'NOPE', confidence: 99, reason: 'made up' }] }) });
+    replies.push({ text: JSON.stringify({ suggestions: [{ id: 'b', code: '4000', confidence: 88, reason: 'Consultancy is an overhead', new_name: '', parent_code: '' }, { id: 'c', code: 'NOPE', confidence: 99, reason: 'made up', new_name: '', parent_code: '' }] }) });
     const r = await suggestMappings(preparer, [
       { id: 'a', name: 'Sales Ledger Control Account', type: 'Current Asset' },
       { id: 'b', name: 'Special Transition Consulting Fee', type: 'Other' },
@@ -179,13 +179,32 @@ describe('accounting, review and reporting services', () => {
 
   it('mapping with all: every account goes to the AI in batches, and its reading wins over the name matcher', async () => {
     const items = Array.from({ length: 85 }, (_, n) => ({ id: `i${n}`, name: n === 0 ? 'Sales Ledger Control Account' : `Account ${n}`, type: 'Expense' }));
-    const answer = (ids: string[]) => ({ text: JSON.stringify({ suggestions: ids.map((id) => ({ id, code: '4000', confidence: 91, reason: 'Read as an overhead' })) }) });
+    const answer = (ids: string[]) => ({ text: JSON.stringify({ suggestions: ids.map((id) => ({ id, code: '4000', confidence: 91, reason: 'Read as an overhead', new_name: '', parent_code: '' })) }) });
     replies.push(answer(items.slice(0, 80).map((i) => i.id)), answer(items.slice(80).map((i) => i.id)));
     const r = await suggestMappings(preparer, items, 'app', { all: true, engagementId });
     expect(calls).toHaveLength(2); // 80 + 5
     expect(JSON.stringify(calls[0].messages)).toContain('Sales Ledger Control Account');
     expect(r.results.find((x) => x.id === 'i0')).toMatchObject({ source: 'ai', suggested_blynt_code: '4000', confidence: 91 });
     expect(r.results.every((x) => x.source === 'ai')).toBe(true);
+  });
+
+  it('mapping: the AI gets each account code, and proposes a new account when nothing in the chart fits', async () => {
+    replies.push({
+      text: JSON.stringify({
+        suggestions: [
+          { id: 'a', code: '', confidence: 0, reason: 'Bus service operating subsidy has no chart account', new_name: 'Bus service operating grants', parent_code: '1000' },
+          { id: 'b', code: '', confidence: 0, reason: 'nothing fits', new_name: 'Made up', parent_code: 'NOPE' },
+        ],
+      }),
+    });
+    const r = await suggestMappings(preparer, [
+      { id: 'a', code: 'BSOG', name: 'BSOG', type: 'Revenue' },
+      { id: 'b', code: 'X1', name: 'Zzzq', type: 'Other' },
+    ], 'app', { all: true });
+    expect(JSON.stringify(calls[0].messages)).toContain('\\"code\\":\\"BSOG\\"');
+    expect(r.results.find((x) => x.id === 'a')).toMatchObject({ source: 'ai', suggested_blynt_code: null, new_account: { name: 'Bus service operating grants', parent_code: '1000' } });
+    // A "works like" account not in the chart is dropped
+    expect(r.results.find((x) => x.id === 'b')!.new_account).toBeNull();
   });
 
   it('AI review findings join the paper and block sign-off until dealt with; a new review replaces the old open ones', async () => {

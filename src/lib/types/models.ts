@@ -373,6 +373,8 @@ export interface AccountMapping {
   sign_mismatch?: boolean;
   gate?: 'ready' | 'check' | 'exception';
   ai_alternatives?: { blynt_code: string; name: string; reason: string; confidence: number }[];
+  /** The AI found no chart account that fits and proposes creating this one */
+  ai_new_account?: { name: string; parent_code: string } | null;
   confirmed_by: string | null;
   confirmed_at: string | null;
   comment_count?: number;

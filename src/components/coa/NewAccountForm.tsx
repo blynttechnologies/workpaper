@@ -13,18 +13,20 @@ const field = 'w-full py-1.5 px-2 border border-[#D3DCEE] rounded-lg bg-white te
  * Creates a practice account: the name recommends a category, the code is the next free number
  * in that category's range and cannot leave it. Nothing is created until the user approves it.
  */
-export function NewAccountForm({ firmId, clientId, initialName = '', onCreated, onCancel, onUseExisting }: { firmId: string; clientId?: string; initialName?: string; onCreated: (acc: BlyntAccount) => void; onCancel: () => void; onUseExisting?: (code: string) => void }) {
+export function NewAccountForm({ firmId, clientId, initialName = '', initialBase, onCreated, onCancel, onUseExisting }: { firmId: string; clientId?: string; initialName?: string; initialBase?: string; onCreated: (acc: BlyntAccount) => void; onCancel: () => void; onUseExisting?: (code: string) => void }) {
   const recommend = (n: string) => {
     const rec = newAccountBase(n) ?? (n.trim() ? matchBlyntAccount(n)?.blynt_code : null);
     const cat = (rec && categoryOf(rec)) || CATEGORIES.find((c) => c.other === '4990')!;
     return { cat: CATEGORIES.indexOf(cat), base: rec && categoryOf(rec) ? rec : cat.other };
   };
-  const first = recommend(initialName);
+  // A suggested "works like" account (from the AI) is the starting point; otherwise the name decides
+  const given = initialBase ? categoryOf(initialBase) : undefined;
+  const first = given ? { cat: CATEGORIES.indexOf(given), base: initialBase! } : recommend(initialName);
   const [name, setName] = useState(initialName);
   const [catIdx, setCatIdx] = useState(first.cat);
   const [base, setBase] = useState(first.base);
   const [code, setCode] = useState(nextCode(db.blynt_accounts, CATEGORIES[first.cat], first.base) ?? '');
-  const [touched, setTouched] = useState(false);
+  const [touched, setTouched] = useState(!!given);
   const [error, setError] = useState('');
   const cat = CATEGORIES[catIdx];
   const papers = papersForCode(base);
