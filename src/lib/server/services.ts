@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { completionBlockers } from '../completion';
 import { mentionsIn } from '../mentions';
 import { db } from './db';
-import { TbSnapshotDiff, UserRole, AccountMapping, Workpaper, Comment, Attachment, BlyntAccount, AnchorJson } from '../types/models';
+import { TbSnapshotDiff, UserRole, AccountMapping, Workpaper, Comment, Attachment, BlyntAccount, AnchorJson, AttachmentCategory, AiDocumentSummary } from '../types/models';
 import { asPence } from '../money';
 import { runGated, learnFromCorrection, recordDecision, GatedResult } from './gate';
 import { matchBlyntAccount } from '../mapping/auto-mapper';
@@ -594,6 +594,8 @@ export const services = {
       category?: any;
       is_permanent?: boolean;
       folder?: 'current' | 'permanent';
+      /** Where the file's bytes are stored (store.saveFile), so it can be opened and read with AI */
+      file_key?: string;
     }
   ) {
     if (file.size > 50 * 1024 * 1024) {
@@ -640,13 +642,14 @@ export const services = {
       existingFile.uploaded_at = new Date().toISOString();
       existingFile.uploaded_by = actor.id;
       existingFile.uploaded_by_name = actor.name;
+      if (file.file_key) existingFile.file_key = file.file_key;
       attachment = existingFile;
     } else {
       attachment = {
         id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         engagement_id: engagementId,
         workpaper_id: workpaperId,
-        file_key: `uploads/${engagementId}/${file.filename}`,
+        file_key: file.file_key ?? `uploads/${engagementId}/${file.filename}`,
         filename: file.filename,
         mime: file.mime,
         size: file.size,
@@ -1141,6 +1144,26 @@ export const services = {
     return { attachment, summary: result.summary, data: result.data };
   },
 
+  /** The same, reading the stored file with AI through the gateway. Call between syncIn and syncOut of a fresh write. */
+  applyExtraction(
+    firmId: string,
+    actor: { id: string; name: string; role: UserRole },
+    attachmentId: string,
+    result: { category: AttachmentCategory; summary: AiDocumentSummary; data: Record<string, any>; ai: boolean; note?: string }
+  ) {
+    const attachment = db.attachments.find((a) => a.id === attachmentId);
+    if (!attachment) throw new ServiceError('Document not found', 404);
+    attachment.category = result.category;
+    attachment.ai_summary = result.summary;
+    attachment.extracted_data = result.data;
+    db.logAudit(firmId, actor, 'EXTRACT_DOCUMENT', 'attachments', attachment.id, null, {
+      category: result.category,
+      bulletsCount: result.summary.bullets.length,
+      ai: result.ai ? result.data._source ?? true : false,
+    });
+    return { attachment, summary: result.summary, data: result.data, ai: result.ai, note: result.note };
+  },
+
   fillScheduleFromDocument(
     firmId: string,
     actor: { id: string; name: string; role: UserRole },
@@ -1167,6 +1190,21 @@ export const services = {
     item.confirmed = true;
     item.confirmed_by = actor.id;
     item.confirmed_at = new Date().toISOString();
+    // Which model and prompt produced a value a person accepted
+    if (item.ai) {
+      db.ai_lineage.push({
+        id: `lin_${crypto.randomUUID()}`,
+        entity: 'workpapers',
+        entity_id: wp.id,
+        field: item.field,
+        source_attachment_id: item.source_attachment_id ?? null,
+        page: item.page ?? null,
+        model: `${item.ai.provider}:${item.ai.model}`,
+        prompt_version: `${item.ai.task_version} (${item.ai.request_id})`,
+        accepted_by: actor.id,
+        accepted_at: item.confirmed_at,
+      });
+    }
     wpData.values_to_confirm_count = items.filter((i) => !i.confirmed).length;
     wp.data_json = wpData;
     wp.updated_at = new Date().toISOString();

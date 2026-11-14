@@ -127,7 +127,19 @@ export interface Firm {
     defaults?: PracticeDefaults;
     // QTR-02: shown on every client-facing output produced from now on
     branding?: { logo_file_key?: string; colour?: string; footer?: string; disclaimer?: string };
+    ai?: AiSettings;
   };
+}
+
+/** AI Control Centre settings for one practice. No secrets: API keys live only in the server's environment. */
+export interface AiSettings {
+  /** A provider is on when its key is set on the server, unless switched off here. */
+  providers?: Partial<Record<'anthropic' | 'openai', { enabled?: boolean; model?: string }>>;
+  /** Per task: which provider goes first, single / review (two read independently) / collaborate (one drafts, one checks), and whether to fall back. */
+  routes?: Record<string, { provider?: 'anthropic' | 'openai'; mode?: 'single' | 'review' | 'collaborate'; fallback?: boolean }>;
+  monthly_limit_usd?: number | null;
+  /** Outside assistants (ChatGPT, Microsoft Copilot): off until an admin turns them on. */
+  mcp?: { enabled?: boolean; disabled_tools?: string[] };
 }
 
 export type Regulator = 'ICAEW' | 'ACCA' | 'ICAS' | 'CAI' | 'AAT' | 'CIMA' | 'ATT' | 'CIOT';
@@ -726,6 +738,10 @@ export interface AiReviewFinding {
   rated_useful?: boolean | null;
   feedback?: 'useful' | 'not_useful' | null;
   created_at: string;
+  /** Raised by an AI review (provider:model); absent for findings from rules */
+  source?: 'ai';
+  model?: string;
+  second_opinion_differs?: boolean;
 }
 
 export interface ScheduleVersion {

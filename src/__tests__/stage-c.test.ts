@@ -99,14 +99,31 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         folder: 'permanent',
       });
 
+      // Without AI a lease is not read: every field is blank and marked Check, never a sample figure
       const leaseExtraction = services.extractDocument(firmId, preparer, leaseDoc.id, 'Lease agreement');
       expect(leaseExtraction.attachment.category).toBe('Lease agreement');
-      expect(leaseExtraction.summary.bullets.length).toBeGreaterThanOrEqual(3);
-      // Clause references in summary bullets
-      const hasClauseRefs = leaseExtraction.summary.bullets.some(
-        (b: any) => b.clause?.includes('Cl.') || b.text.includes('Cl.') || b.reference?.includes('Cl.')
-      );
-      expect(hasClauseRefs).toBe(true);
+      expect(leaseExtraction.data.lessor).toMatchObject({ value: '', gate: 'check', confidence: 0 });
+      expect(leaseExtraction.data.rent_per_annum_p.value).toBe('');
+      expect(leaseExtraction.data.commitments.within_1y_p.gate).toBe('check');
+
+      // Read by a model: typed fields with confidence and clause/page links, money in pence
+      const read = aiExtractionService.buildExtraction(firmId, 'Lease agreement', {
+        found: true,
+        confidence: 96,
+        rows: [],
+        fields: {
+          lessor: { value: 'Grosvenor Estates PLC', page: 2, clause: 'Cl. 1.1' },
+          rent_per_annum_p: { value: '£10,200.00', page: 5, clause: 'Cl. 3.1' },
+          term_years: { value: '5', page: 4, clause: 'Cl. 2.1' },
+          start_date: { value: '1 April 2025', page: 4, clause: 'Cl. 2.1' }, // not ISO: refused, left blank
+        },
+        summary: [{ text: 'Annual rent £10,200 payable quarterly', page: 5, clause: 'Cl. 3.1' }],
+      });
+      expect(read.data.lessor).toMatchObject({ value: 'Grosvenor Estates PLC', confidence: 96, page: 2, clause: 'Cl. 1.1', gate: 'ready' });
+      expect(read.data.rent_per_annum_p.value).toBe('1020000');
+      expect(read.data.term_years.value).toBe(5);
+      expect(read.data.start_date).toMatchObject({ value: '', gate: 'check' });
+      expect(read.summary.bullets[0]).toMatchObject({ clause: 'Cl. 3.1', page: 5 });
     });
 
     it('DOC-05: Auto-fill schedule from document places figures with AI badges until confirmed', () => {
@@ -380,11 +397,32 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
         category: 'Signed accounts',
       });
 
+      // Not read yet (no AI): nothing is made up, and blank accounts do not "agree"
+      const unread = services.importPriorYearAccounts(firmId, preparer, engagementId, pyDoc.id);
+      expect(unread.prefilled_schedules.some((s: string) => s.includes('F-10') || s.includes('E-10'))).toBe(false);
+      expect(unread.agrees_to_balance_sheet).toBe(false);
+
+      // As read by the AI (extractWithAi): the schedules take the printed figures and the balance sheet check runs
+      const ex = aiExtractionService.buildExtraction(firmId, 'Prior-year accounts', {
+        found: true,
+        confidence: 97,
+        rows: [],
+        summary: [],
+        fields: {
+          net_assets_p: { value: '72600.00', page: 4, clause: 'Balance sheet' },
+          share_capital_p: { value: '100.00', page: 4, clause: 'Capital and reserves' },
+          retained_reserves_p: { value: '72500.00', page: 4, clause: 'Capital and reserves' },
+          'accounting_policies.depreciation': { value: 'Computer equipment 25% straight line', page: 6, clause: 'Note 1' },
+        },
+      });
+      db.attachments.find((a) => a.id === pyDoc.id)!.extracted_data = ex.data;
       const res = services.importPriorYearAccounts(firmId, preparer, engagementId, pyDoc.id);
       expect(res.prefilled_schedules.some((s: string) => s.includes('F-10'))).toBe(true);
       expect(res.prefilled_schedules.some((s: string) => s.includes('L-10'))).toBe(true);
       expect(res.prefilled_schedules.some((s: string) => s.includes('E-10'))).toBe(true);
       expect(res.agrees_to_balance_sheet).toBe(true);
+      const e10 = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref.startsWith('E-'))!;
+      expect(e10.data_json.lines[0].amount_p).toBe('10000');
     });
   });
 

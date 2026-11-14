@@ -73,6 +73,7 @@ import { AnalyticalSchedule } from '@/components/workpaper/review-schedules';
 import { CheckChips } from '@/components/workpaper/kit';
 import { Avatar, CommentPins, EditBox, isPin, KEEP_LABEL, TYPE_TONE, type CommentType, type PinAnchor } from '@/components/workpaper/comment-pins';
 import { ukDate } from '@/lib/dates';
+import { AiPaperActions } from '@/components/workpaper/AiPaperActions';
 
 const ROLE_ORDER = ['preparer', 'reviewer', 'partner'] as const;
 type SignRole = (typeof ROLE_ORDER)[number];
@@ -2278,6 +2279,15 @@ export default function WorkpaperPage() {
                   </span>
                   <span className="text-[10px] text-[#4A5878]">Automated checks</span>
                 </div>
+                <AiPaperActions
+                  workpaperId={workpaper.id}
+                  readOnly={readOnly || isLocked}
+                  onDone={refresh}
+                  onUseDraft={(text) => {
+                    setConclusionDraft(null);
+                    saveData({ conclusion: { ...(data.conclusion ?? {}), text, source: 'ai', accepted_by: actor.name } });
+                  }}
+                />
                 {db.ai_review_findings.filter((f) => f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref).length === 0 ? (
                   <div className="p-3.5 rounded-[10px] bg-[#E6F4EF] border border-[#0B6B52]/30 flex flex-col gap-1">
                     <div className="font-bold text-[#0B6B52] flex items-center gap-1.5">

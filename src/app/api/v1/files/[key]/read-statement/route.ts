@@ -11,9 +11,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: Request, props: { params: Promise<{ key: string }> }) {
   const { key } = await props.params;
+  let actor;
   try {
     await syncIn();
-    if (!canAccessFile(getActorFromRequest(req), key)) return jsonResponse({ error: 'File not found' }, 404);
+    actor = getActorFromRequest(req);
+    if (!canAccessFile(actor, key)) return jsonResponse({ error: 'File not found' }, 404);
   } catch (err) {
     return errorResponse(err);
   }
@@ -21,7 +23,8 @@ export async function POST(req: Request, props: { params: Promise<{ key: string 
   if (!file) return jsonResponse({ error: 'File not found' }, 404);
   const body = await req.json().catch(() => ({}));
   try {
-    return jsonResponse({ read: await readStatement(file, typeof body?.period_end === 'string' ? body.period_end : undefined) });
+    const periodEnd = typeof body?.period_end === 'string' ? body.period_end : undefined;
+    return jsonResponse({ read: await readStatement(file, periodEnd, { firmId: actor.firmId, userId: actor.id, channel: 'app' }) });
   } catch (err) {
     // The file is attached either way; a failed read leaves the balance for someone to type
     logError('read-statement', err);

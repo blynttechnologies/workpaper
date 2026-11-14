@@ -558,50 +558,31 @@ export class RollForwardService {
     const attachment = db.attachments.find((a) => a.id === attachmentId);
     if (!attachment) throw new Error('Attachment not found');
 
-    const res = aiExtractionService.extract(firmId, attachment, 'Prior-year accounts');
-    attachment.extracted_data = res.data;
-    attachment.ai_summary = res.summary;
-
-    const data = res.data;
+    // What was read from the accounts (by AI, through the documents route), or blank values for a person to fill
+    if (!attachment.extracted_data?.net_assets_p) {
+      const res = aiExtractionService.extract(firmId, attachment, 'Prior-year accounts');
+      attachment.extracted_data = res.data;
+      attachment.ai_summary = res.summary;
+    }
+    const data = attachment.extracted_data as Record<string, any>;
     const prefilledSchedules: string[] = [];
 
-    // Pre-fill Fixed Assets Register (REC-03 F-10)
+    // Fixed assets (REC-03 F-10): the depreciation policy as written in the accounts. Opening cost and
+    // depreciation by class come from the prior-year paper on roll forward, not from the PDF.
     let f10 = db.workpapers.find((w) => w.engagement_id === engagementId && (w.ref === 'F-10' || w.ref.startsWith('F-')));
     if (!f10) f10 = db.addWorkpaper(engagementId, 'F-10') || undefined;
-    if (f10) {
-      const f10Data = { ...f10.data_json };
-      f10Data.classes = [
-        {
-          id: 'c1',
-          name: 'Computer equipment',
-          cost_opening_p: '600000',
-          deprec_opening_p: '250000',
-          rate: '25',
-          deprec_rate: '25% straight line',
-        },
-        {
-          id: 'c2',
-          name: 'Fixtures & fittings',
-          cost_opening_p: '450000',
-          deprec_opening_p: '90000',
-          rate: '20',
-          deprec_rate: '20% straight line',
-        },
-      ];
-      f10Data.policy = data.accounting_policies?.depreciation || 'Straight line on cost.';
-      f10.data_json = f10Data;
+    const policy = data.accounting_policies?.depreciation?.value;
+    if (f10 && policy) {
+      f10.data_json = { ...f10.data_json, policy };
       prefilledSchedules.push('F-10 Fixed Assets');
     }
 
-    // Pre-fill Share capital (REC-12 E-10)
+    // Share capital (REC-12 E-10): the total as printed; share class and number stay for a person
     let e10 = db.workpapers.find((w) => w.engagement_id === engagementId && (w.ref === 'E-10' || w.ref.startsWith('E-')));
     if (!e10) e10 = db.addWorkpaper(engagementId, 'E-10') || undefined;
-    if (e10) {
-      const e10Data = { ...e10.data_json };
-      e10Data.lines = [
-        { id: 'sc_1', class: 'Ordinary £1.00 shares', number: '1000', nominal_val: '1.00', amount_p: data.share_capital_p?.value || '10000' },
-      ];
-      e10.data_json = e10Data;
+    const shareCapital = data.share_capital_p?.value;
+    if (e10 && shareCapital) {
+      e10.data_json = { ...e10.data_json, lines: [{ id: 'sc_1', class: '', number: '', nominal_val: '', amount_p: shareCapital }] };
       prefilledSchedules.push('E-10 Share Capital');
     }
 
@@ -615,7 +596,8 @@ export class RollForwardService {
     // Check balance sheet tie: Assets = Liabilities + Equity
     const netAssets = asPence(data.net_assets_p?.value || '0');
     const equity = asPence(data.share_capital_p?.value || '0') + asPence(data.retained_reserves_p?.value || '0');
-    const agrees = netAssets === equity;
+    // Only figures actually read can agree: blank accounts are not "in balance"
+    const agrees = !!data.net_assets_p?.value && netAssets === equity;
 
     db.logAudit(firmId, actor, 'IMPORT_PRIOR_YEAR_PDF', 'engagements', engagementId, null, {
       attachmentId,
