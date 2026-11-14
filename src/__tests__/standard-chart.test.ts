@@ -4,6 +4,8 @@ import { db } from '@/lib/server/db';
 import { TEMPLATES } from '@/lib/workpapers/templates';
 import { matchBlyntAccount } from '@/lib/mapping/auto-mapper';
 import { migrateCodes } from '@/lib/coa-migration';
+import { inLead, papersForCode } from '@/lib/workpapers/common';
+import { newAccount } from '@/lib/coa';
 
 describe('Blynt standard chart (four-digit, v3)', () => {
   it('has the 302 accounts from the v3 chart, unique four-digit codes, and seeds the database', () => {
@@ -55,6 +57,25 @@ describe('Blynt standard chart (four-digit, v3)', () => {
       for (const l of t.leads ?? []) {
         expect(STANDARD_CHART.some((a) => a.code.startsWith(l.code)), `${t.ref} lead ${l.code}`).toBe(true);
       }
+    }
+  });
+
+  it('every standard account lands on a schedule paper, once per paper', () => {
+    // Finance income, finance costs and tax charges (5xxx) are reviewed on Z-30 and read by code on the tax and loans papers
+    const missing = STANDARD_CHART.filter((a) => !a.code.startsWith('5') && papersForCode(a.code).length === 0).map((a) => `${a.code} ${a.name}`);
+    expect(missing).toEqual([]);
+    for (const t of TEMPLATES) for (const a of STANDARD_CHART) expect(t.leads.filter((l) => inLead(a.code, l.code)).length, `${t.ref} ${a.code}`).toBeLessThanOrEqual(1);
+  });
+
+  it('a practice account goes where the standard account it was created beside goes', () => {
+    const acc = newAccount(db.blynt_accounts, '6311', 'Siva commercial card', 'f1', '6300');
+    if (typeof acc === 'string') throw new Error(acc);
+    db.blynt_accounts.push(acc);
+    try {
+      expect(papersForCode('6311').map((t) => t.ref)).toEqual(['B-10']);
+      expect(inLead('6311', '6300')).toBe(true);
+    } finally {
+      db.blynt_accounts.splice(db.blynt_accounts.indexOf(acc), 1);
     }
   });
 

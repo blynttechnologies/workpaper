@@ -7,7 +7,7 @@ import { dlaReview } from './dla';
 import { reservesReview } from './reserves';
 import { PL_GROUPS } from './pl-analysis';
 import { ukDate } from '../dates';
-import type { PaperContext } from './common';
+import { NOT_A_SCHEDULE, inLead, type PaperContext } from './common';
 
 /**
  * Balance sheet analysis (Z-40): every balance sheet line linked to the paper that supports it,
@@ -28,7 +28,6 @@ const SECTIONS = [
 ] as const satisfies readonly (readonly [keyof Accounts['bs'], string])[];
 
 // Papers that review the whole file rather than a balance
-const NOT_A_SCHEDULE = new Set(['Z-10', 'Z-20', 'Z-30', 'Z-40', 'R-10', 'R-20']);
 
 export interface BsSchedule {
   ref: string;
@@ -56,7 +55,7 @@ const DONE = ['prepared', 'signed_off'];
 
 /** The papers whose lead codes cover any of these chart codes, as added to this engagement. */
 function schedulesFor(engagementId: string, codes: string[]): BsSchedule[] {
-  const refs = TEMPLATES.filter((t) => !NOT_A_SCHEDULE.has(t.ref) && t.leads.some((l) => codes.some((c) => c.startsWith(l.code))));
+  const refs = TEMPLATES.filter((t) => !NOT_A_SCHEDULE.has(t.ref) && t.leads.some((l) => codes.some((c) => inLead(c, l.code))));
   return refs.map((t) => {
     const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === t.ref);
     return { ref: t.ref, title: t.title, wpId: wp?.id ?? null, status: wp ? STATUS_DEFINITIONS[wp.status]?.label ?? wp.status : 'Not added', done: !!wp && DONE.includes(wp.status) };

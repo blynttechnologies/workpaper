@@ -8,6 +8,8 @@
  * The schedule kind decides how the schedule is laid out and calculated.
  */
 
+import { STANDARD_CHART } from '../standard-chart';
+
 export type ScheduleKind =
   | 'reconciliation'
   | 'assets'
@@ -70,6 +72,9 @@ export interface TemplateDef {
   alternativeTemplates?: AlternativeTemplate[];
 }
 
+/** Standard accounts as lead rows, labelled as the chart names them. */
+const std = (codes: string) => codes.split(' ').map((code) => ({ code, label: STANDARD_CHART.find((a) => a.code === code)!.name }));
+
 export const TEMPLATES: TemplateDef[] = [
   // A-10 Planning & Materiality (STD-01, WPS-01)
   {
@@ -122,6 +127,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '6400', label: 'Payment processor account' },
       { code: '6450', label: 'Cash in transit' },
       { code: '6490', label: 'Other bank account' },
+      ...std('6010 6020 6050 6110 6150 6210 6310 6410'),
     ],
     kind: 'reconciliation',
     rollsForward: false,
@@ -151,6 +157,7 @@ export const TEMPLATES: TemplateDef[] = [
     leads: [
       { code: '7100', label: 'Trade receivables control' },
       { code: '7110', label: 'Bad debt provision' },
+      ...std('7120 7130'),
     ],
     kind: 'lines',
     rollsForward: false,
@@ -185,6 +192,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Cut-off', 'Valuation', 'Accuracy'],
     leads: [
       { code: '7300', label: 'Prepayments' },
+      ...std('7310'),
     ],
     kind: 'lines',
     rollsForward: false,
@@ -219,6 +227,7 @@ export const TEMPLATES: TemplateDef[] = [
     leads: [
       { code: '7200', label: 'Other receivables' },
       { code: '7490', label: 'Other current assets' },
+      ...std('7210 7220 7230 7240 7250 7260 7270 7280 7290'),
     ],
     kind: 'lines',
     rollsForward: false,
@@ -245,6 +254,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Existence', 'Valuation', 'Completeness'],
     leads: [
       { code: '7000', label: 'Inventory' },
+      ...std('7010 7020 7030 7040 7050 7060'),
     ],
     kind: 'lines',
     rollsForward: false,
@@ -306,6 +316,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '8500', label: 'Ordinary share capital' },
       { code: '8600', label: 'Other share capital' },
       { code: '8700', label: 'Share premium account' },
+      ...std('8510 8910 8920 8940'),
     ],
     creditArea: true,
     kind: 'lines',
@@ -338,6 +349,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '8900', label: 'Retained earnings' },
       { code: '8990', label: 'Current-year earnings' },
       { code: '8800', label: 'Other reserves' },
+      ...std('8710 8720 8730 8740 8750 8810 8930'),
     ],
     creditArea: true,
     kind: 'lines',
@@ -380,6 +392,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '6960', label: 'Accumulated impairment' },
       { code: '4920', label: 'Depreciation charge' },
       { code: '4930', label: 'Profit or loss on disposal' },
+      ...std('6520 6530 6540 6550 6560 6570 6580 6590 6620 6630 6640 6650 6720 6730 6970 6971 6975 6976 6980 6981 6985 6986 6990 6991 6995 6996'),
     ],
     kind: 'assets',
     rollsForward: true,
@@ -407,6 +420,7 @@ export const TEMPLATES: TemplateDef[] = [
     objective: 'Confirm investments exist and are valued in accordance with FRS 102/105.',
     assertions: ['Existence', 'Valuation'],
     leads: [
+      ...std('6920 6925 6930 6935 6940 6945 6950 6955 7350'),
     ],
     kind: 'lines',
     rollsForward: true,
@@ -442,6 +456,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '1200', label: 'Export sales' },
       { code: '1400', label: 'Other operating income' },
       { code: '1900', label: 'Sales returns and discounts' },
+      ...std('1020 1050 1060 1110 1120 1130 1150 1160 1410 1420 1430 1440 1450 1490'),
     ],
     creditArea: true,
     kind: 'lines',
@@ -471,6 +486,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Completeness', 'Accuracy', 'Cut-off'],
     leads: [
       { code: '7500', label: 'Trade payables control' },
+      ...std('7510 7520'),
     ],
     creditArea: true,
     kind: 'lines',
@@ -505,6 +521,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Completeness', 'Cut-off'],
     leads: [
       { code: '7600', label: 'Accruals and deferred income' },
+      ...std('7610 7620 7630 7700 7710 7720 7730 7740 7750 7830 8350'),
     ],
     creditArea: true,
     kind: 'lines',
@@ -537,6 +554,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Classification', 'Completeness', 'Accuracy'],
     leads: [
       { code: '8200', label: 'Lease liabilities' },
+      ...std('7992'),
     ],
     creditArea: true,
     kind: 'leases',
@@ -566,6 +584,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '7990', label: 'Current portion of loans' },
       { code: '8000', label: 'Bank loans' },
       { code: '8300', label: 'Other long-term borrowings' },
+      ...std('7993 8010 8020 8310 8320 8330'),
     ],
     creditArea: true,
     kind: 'loans',
@@ -594,6 +613,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Completeness', 'Accuracy'],
     leads: [
       { code: '8100', label: 'Hire purchase liabilities' },
+      ...std('7991'),
     ],
     creditArea: true,
     kind: 'loans',
@@ -647,6 +667,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '7890', label: 'Wages payable control' },
       { code: '7900', label: 'PAYE and NIC payable' },
       { code: '7910', label: 'Pensions payable' },
+      ...std('7820 7920'),
     ],
     kind: 'payroll',
     rollsForward: false,
@@ -674,6 +695,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Valuation', 'Obligation'],
     leads: [
       { code: '8400', label: 'Provisions for liabilities' },
+      ...std('8410 8420 8430 8490'),
     ],
     creditArea: true,
     kind: 'lines',
@@ -763,6 +785,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '9200', label: 'Payroll clearing' },
       { code: '9300', label: 'Payment clearing' },
       { code: '9990', label: 'System balancing account' },
+      ...std('9400 9500 9600 9700'),
     ],
     kind: 'lines',
     rollsForward: false,
@@ -791,6 +814,7 @@ export const TEMPLATES: TemplateDef[] = [
       { code: '7950', label: 'Corporation tax payable' },
       { code: '7450', label: 'Corporation tax recoverable' },
       { code: '5000', label: 'Corporation tax charge' },
+      ...std('7960'),
     ],
     creditArea: true,
     kind: 'tax',
@@ -818,6 +842,7 @@ export const TEMPLATES: TemplateDef[] = [
     assertions: ['Completeness', 'Accuracy', 'Cut-off'],
     leads: [
       { code: '7800', label: 'VAT control liability' },
+      ...std('7810'),
     ],
     creditArea: true,
     kind: 'vat',

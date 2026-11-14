@@ -9,6 +9,7 @@ import { getActor } from '@/lib/session';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, contextOf, ExpandButton, FlowsTo, JournalPanel, money, newId, Pill, th, Tiles, useOpen } from '../kit';
+import { inLead } from '@/lib/workpapers/common';
 import { facilitiesOf, loansReview, rowSig, type Facility, type MonthEdit } from '@/lib/workpapers/loans';
 
 const REVIEWERS = ['reviewer', 'manager', 'partner', 'admin'];
@@ -36,7 +37,7 @@ export function LoansSchedule({ data, result, locked, save, filesFor, attachTo, 
   };
   // The client's ledger accounts that feed this paper, to tie each facility to its own
   const leadCodes = result.leads.map((l) => l.code);
-  const accounts = db.account_mappings.filter((m) => m.engagement_id === ctx.engagementId && leadCodes.some((c) => m.blynt_code?.startsWith(c)));
+  const accounts = db.account_mappings.filter((m) => m.engagement_id === ctx.engagementId && leadCodes.some((c) => inLead(m.blynt_code, c)));
   const active = r.ws.find((w) => w.f.id === tab) ?? r.ws[0];
   const vouchMatched = () => {
     const f = active.f;

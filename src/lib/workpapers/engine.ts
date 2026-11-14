@@ -5,7 +5,7 @@ import { JOURNAL_IN_TB, type Workpaper } from '../types/models';
 import { analyticalReview, analyticalRows } from './analytical';
 import { debtorView, type DebtorLine } from './debtors';
 import { PAPER_REVIEWS } from './reviews';
-import type { PaperContext } from './common';
+import { inLead, type PaperContext } from './common';
 
 /**
  * Calculations for every working paper: lead figures from the Blynt chart,
@@ -47,7 +47,7 @@ export interface PaperResult {
   totals: Record<string, bigint>;
 }
 
-const matches = (code: string | null, prefix: string) => !!code && code.startsWith(prefix);
+const matches = inLead;
 
 function tbFor(engagementId: string, prefix: string) {
   const rows = db.account_mappings.filter(

@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { db } from '@/lib/server/db';
 import { BlyntAccount } from '@/lib/types/models';
-import { CATEGORIES, accountsForClient, categoryOf, newAccount, newAccountBase, nextCode, similarAccounts } from '@/lib/coa';
+import { CATEGORIES, accountsForClient, accountsIn, categoryOf, newAccount, newAccountBase, nextCode, similarAccounts } from '@/lib/coa';
+import { papersForCode } from '@/lib/workpapers/common';
 import { matchBlyntAccount } from '@/lib/mapping/auto-mapper';
 
 const field = 'w-full py-1.5 px-2 border border-[#D3DCEE] rounded-lg bg-white text-xs text-[#122654]';
@@ -26,6 +27,7 @@ export function NewAccountForm({ firmId, clientId, initialName = '', onCreated, 
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState('');
   const cat = CATEGORIES[catIdx];
+  const papers = papersForCode(base);
   const similar = similarAccounts(accountsForClient(db.blynt_accounts, db.clients.find((c) => c.id === clientId)), name);
 
   const choose = (idx: number, b: string) => {
@@ -73,6 +75,17 @@ export function NewAccountForm({ firmId, clientId, initialName = '', onCreated, 
             <option key={c.name} value={i}>{c.from}–{c.to} {c.name}</option>
           ))}
         </select>
+      </label>
+      <label className="block space-y-1">
+        <span className="font-semibold">Works like</span>
+        <select value={base} onChange={(e) => { setTouched(true); choose(catIdx, e.target.value); }} className={field}>
+          {accountsIn(cat).map((a) => (
+            <option key={a.code} value={a.code}>{a.code} {a.name}</option>
+          ))}
+        </select>
+        <span className="block">
+          Shows on {papers.length ? papers.map((t) => `${t.ref} ${t.title}`).join(', ') : 'the P&L analysis (Z-30) only'}
+        </span>
       </label>
       <label className="block space-y-1">
         <span className="font-semibold">Code (next free, {cat.from}–{cat.to})</span>

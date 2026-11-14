@@ -1,6 +1,7 @@
 'use client';
 
 import { TEMPLATES } from '@/lib/workpapers/templates';
+import { inLead } from '@/lib/workpapers/common';
 
 import { getActor } from '@/lib/session';
 
@@ -177,7 +178,7 @@ export default function TrialBalancePage() {
     // A-10 shares revenue codes with I-10, so it is not a lead schedule
     const areaTemplates = TEMPLATES.filter((t) => t.leads.length > 0 && t.ref !== 'A-10');
     const templateForCode = (code: string | null) =>
-      code ? areaTemplates.find((t) => t.leads.some((l) => code.startsWith(l.code))) : undefined;
+      code ? areaTemplates.find((t) => t.leads.some((l) => inLead(code, l.code))) : undefined;
     const leadsMap: Record<string, Lead> = {};
     const leadFor = (code: string | null): Lead => {
       const t = templateForCode(code);
