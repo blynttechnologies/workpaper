@@ -15,10 +15,12 @@ import {
   draftConclusionTask,
   summariseEngagementTask,
   riskReviewTask,
+  suggestProvisionTask,
   researchTask,
   type PaperInput,
 } from './tasks/accounting';
 import type { UserRole } from '../../types/models';
+import { debtorView, type DebtorLine } from '../../workpapers/debtors';
 
 /**
  * Shared AI services: one place each Workpaper module, and the MCP tools, call for AI help.
@@ -234,6 +236,40 @@ export async function riskReview(actor: Actor, engagementId: string, channel?: R
   if (!input.lines.length) return { anomalies: [], note: 'No trial balance has been imported for this engagement yet.' };
   const r = await run(riskReviewTask, input, ctxOf(actor, engagementId, channel));
   return { anomalies: r.output.anomalies, provider: r.provider, model: r.model, gate: gateFor(actor.firmId, 'finding', 80) };
+}
+
+// ------------------------------------------------------------ Debtors: a provision to suggest
+
+/**
+ * The AI's suggested provision for one customer on a debtors paper, as a share of what is still due after
+ * receipts since the period end. Nothing is saved: the person picks the amount.
+ */
+export async function suggestProvision(actor: Actor, engagementId: string, ref: string, lineId: string, channel?: RunCtx['channel']) {
+  const eng = engagementOf(engagementId);
+  const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === ref);
+  const line = ((wp?.data_json?.lines ?? []) as DebtorLine[]).find((l) => l.id === lineId);
+  if (!wp || !line) throw new ServiceError('That customer is not on the paper. Refresh the page and try again.', 404, 'NOT_FOUND');
+  const v = debtorView(line);
+  if (v.stillDue <= 0n) return { percent: 0, amount_p: '0', reason: 'Nothing is still due from this customer once receipts after the period end are counted.' };
+  const byDue = wp.data_json?.basis === 'due';
+  const r = await run(
+    suggestProvisionTask,
+    {
+      period_end: eng.period_end,
+      ageing: byDue ? 'days past the due date at the period end' : 'days since the invoice date at the period end',
+      customer: line.desc,
+      balance_p: v.total.toString(),
+      ageing_columns: byDue
+        ? { not_due_p: line.current_p, overdue_1_30_p: line.d30_p, overdue_31_60_p: line.d60_p, overdue_over_60_p: line.d90_p }
+        : { up_to_30_days_p: line.current_p, days_31_60_p: line.d30_p, days_61_90_p: line.d60_p, over_90_days_p: line.d90_p },
+      received_after_period_end_p: v.after.toString(),
+      still_due_p: v.stillDue.toString(),
+      invoices: (line.invoices ?? []).map((i) => ({ ref: i.ref, date: i.date, due: i.due, days: i.days, open_at_period_end_p: i.amount_p, total_p: i.total_p, payments: i.payments })),
+    },
+    ctxOf(actor, engagementId, channel)
+  );
+  const percent = Math.min(100, Math.max(0, Math.round(Number(r.output.percent) || 0)));
+  return { percent, amount_p: ((v.stillDue * BigInt(percent)) / 100n).toString(), reason: r.output.reason, provider: r.provider, model: r.model };
 }
 
 // ------------------------------------------------------------ Research intelligence (internal sources)

@@ -23,6 +23,7 @@ export interface DebtorLine {
   after_date_p: string;
   decision?: DebtorDecision;
   provision_p?: string;
+  provision_reason?: string; // how the provision was set: a share of what is still due, the AI suggestion, or a custom amount
   reason?: string;
   oldest_days?: number;
   invoices?: { ref: string; date: string; due?: string; days: number; amount_p: string; url?: string; total_p?: string; payments?: DebtorPayment[] }[];
@@ -131,7 +132,7 @@ export function agedDebtorsFromLedger(engagementId: string, existing: DebtorLine
       oldest_days: open.length ? open[0].days : 0,
       invoices: open.map((o) => ({ ref: o.ref, date: o.date, days: o.days, amount_p: o.amount.toString(), ...(o.url ? { url: o.url } : {}) })),
       receipts: receipts.map((t) => ({ date: t.date, desc: t.description, amount_p: (-asPence(t.amount_p)).toString(), ...(t.external_url ? { url: t.external_url } : {}) })),
-      ...(prev?.decision ? { decision: prev.decision, provision_p: prev.provision_p, reason: prev.reason } : {}),
+      ...(prev?.decision ? { decision: prev.decision, provision_p: prev.provision_p, reason: prev.reason, provision_reason: prev.provision_reason } : {}),
     });
   }
   // Without anything dated after the period end, receipts after it can't be known
@@ -181,7 +182,7 @@ export function agedFromOpenItems(items: DebtorOpenItem[], pe: string, existing:
       receipts: its
         .filter((it) => asPence(it.received_after_p) > 0n)
         .map((it) => ({ date: it.received_after_on ?? '', desc: `Paid against ${it.ref}`, amount_p: it.received_after_p, ...(it.url ? { url: it.url } : {}) })),
-      ...(prev?.decision ? { decision: prev.decision, provision_p: prev.provision_p, reason: prev.reason } : {}),
+      ...(prev?.decision ? { decision: prev.decision, provision_p: prev.provision_p, reason: prev.reason, provision_reason: prev.provision_reason } : {}),
     });
   }
   return lines;
