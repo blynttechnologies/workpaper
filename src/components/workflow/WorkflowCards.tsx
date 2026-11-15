@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { getActor } from '@/lib/session';
-import { allWorkflowsOf, canCustomise, workflowProgress, workflowsOf } from '@/lib/workflows';
+import { allWorkflowsOf, archiveWorkflow, canCustomise, deleteWorkflow, workflowProgress, workflowsOf } from '@/lib/workflows';
 import { AddWorkflowDialog } from '@/components/workflow/AddWorkflowDialog';
 import { ukDate } from '@/lib/dates';
 
@@ -19,8 +19,18 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
   const cards = engagementIds.flatMap((id) => workflowsOf(id));
   const multiplePeriods = engagementIds.length > 1;
   const [showArchived, setShowArchived] = useState(false);
-  // Only managers and above can restore, so only they are shown the archive
-  const archived = canCustomise(getActor().role) ? engagementIds.flatMap((id) => allWorkflowsOf(id)).filter((w) => w.archived_at) : [];
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const actor = getActor();
+  // Only managers and above can archive, delete or restore, so only they see those options
+  const manager = canCustomise(actor.role);
+  const archived = manager ? engagementIds.flatMap((id) => allWorkflowsOf(id)).filter((w) => w.archived_at) : [];
+
+  const run = (fn: typeof archiveWorkflow, engagementId: string, workflowId: string) => {
+    setError(fn(engagementId, workflowId, actor) ?? '');
+    setConfirmDelete(null);
+    refresh((n) => n + 1);
+  };
 
   return (
     <section aria-labelledby="workflows-heading">
@@ -36,6 +46,7 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
         </button>
       </div>
 
+      {error && <p role="alert" className="mb-3 text-xs text-[#B8432F]">{error}</p>}
       {cards.length === 0 && <p className="text-xs text-[#4A5878]">No workflows yet. Add one to start working on a client year.</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -46,11 +57,9 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
           // "UK Working Papers - Partnership" shows as a small label over the name
           const [eyebrow, title] = wf.name.includes(' - ') ? [wf.name.slice(0, wf.name.indexOf(' - ')), wf.name.slice(wf.name.indexOf(' - ') + 3)] : ['', wf.name];
           return (
-            <Link
-              key={wf.id}
-              href={`/engagements/${wf.engagement_id}/workflows/${wf.id}`}
-              aria-label={`${wf.name}, ${p.percent}% complete`}
-              className="flex flex-col p-5 bg-white border border-[#E3E7EF] rounded-2xl shadow-2xs hover:border-[#122654] hover:shadow-sm transition-all"
+            <div
+              key={`${wf.engagement_id}:${wf.id}`}
+              className="flex flex-col p-5 bg-white border border-[#E3E7EF] rounded-2xl shadow-2xs"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -81,10 +90,32 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
                 ))}
               </ul>
 
-              <span className="mt-4 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-[#122654] text-white text-xs font-bold">
-                Continue working papers <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-              </span>
-            </Link>
+              {confirmDelete === `${wf.engagement_id}:${wf.id}` ? (
+                <div role="alertdialog" aria-label="Delete workflow" className="mt-4 p-3 rounded-xl border border-[#F0C2BA] bg-[#FFF8F6] text-xs text-[#122654] space-y-2">
+                  <p>Delete <strong>{wf.name}</strong>? Its {p.total} working papers and their work stay, but the workflow cannot be brought back. Archive it if you may need it again.</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => run(deleteWorkflow, wf.engagement_id, wf.id)} className="min-h-[36px] px-3 rounded-lg bg-[#B8432F] text-white font-bold cursor-pointer">Delete workflow</button>
+                    <button type="button" onClick={() => setConfirmDelete(null)} className="min-h-[36px] px-3 rounded-lg border border-[#D3DCEE] bg-white font-semibold cursor-pointer">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 flex items-center gap-3">
+                  <Link
+                    href={`/engagements/${wf.engagement_id}/workflows/${wf.id}`}
+                    aria-label={`Continue ${wf.name}, ${p.percent}% complete`}
+                    className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold transition-colors"
+                  >
+                    Continue working papers <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  </Link>
+                  {manager && eng.status !== 'locked' && (
+                    <>
+                      <button type="button" onClick={() => run(archiveWorkflow, wf.engagement_id, wf.id)} aria-label={`Archive ${wf.name}`} className="text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer">Archive</button>
+                      <button type="button" onClick={() => setConfirmDelete(`${wf.engagement_id}:${wf.id}`)} aria-label={`Delete ${wf.name}`} className="text-xs font-semibold text-[#4A5878] hover:text-[#B8432F] cursor-pointer">Delete</button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

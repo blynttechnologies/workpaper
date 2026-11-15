@@ -2,18 +2,16 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Search,
   Plus,
   AlertCircle,
-  ArrowUpRight,
+  ArrowRight,
   Building2,
   Trash2,
   AlertTriangle,
   X,
   Archive,
-  ArchiveRestore,
 } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { Client } from '@/lib/types/models';
@@ -21,7 +19,6 @@ import { useCompany } from '@/context/CompanyContext';
 import { mustKeep, RETENTION_YEARS } from '@/lib/periods';
 
 export default function ClientsPage() {
-  const router = useRouter();
   const { clients, deleteCompany, setActiveCompanyId, refreshCompanyData, activeCompanyId } = useCompany();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -84,74 +81,65 @@ export default function ClientsPage() {
     return matchesSearch && matchesType && matchesSource;
   });
 
+  // Accounts still to map across the active clients' latest years, for the header line
+  const toMap = clients
+    .filter((c) => !c.archived_at)
+    .reduce((n, c) => {
+      const eng = db.engagements.find((e) => e.client_id === c.id);
+      return n + (eng ? db.account_mappings.filter((m) => m.engagement_id === eng.id && m.status !== 'confirmed').length : 0);
+    }, 0);
+
+  const pill = (on: boolean) =>
+    `min-h-[40px] px-4 rounded-xl text-xs font-semibold border transition-colors cursor-pointer ${
+      on ? 'bg-[#122654] border-[#122654] text-white' : 'bg-white border-[#D3DCEE] text-[#122654] hover:border-[#122654]'
+    }`;
+
   return (
     <div className="flex flex-col gap-6 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#122654] tracking-tight">
-            Client portfolio
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#122654] tracking-tight">Clients</h1>
           <p className="text-xs text-[#4A5878] mt-1">
-            Manage company types, accounting data connections, and current working paper stages.
+            {activeCount} active · {toMap === 0 ? 'all accounts mapped' : `${toMap} account${toMap === 1 ? '' : 's'} to map`}
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <Link
-            href="/engagements/new"
-            className="min-h-[44px] px-4 py-2 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-[10px] flex items-center gap-2 shadow-sm transition-transform active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            New engagement
-          </Link>
-        </div>
+        <Link
+          href="/engagements/new"
+          className="min-h-[44px] px-5 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-colors self-start sm:self-auto"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+          New engagement
+        </Link>
       </div>
 
-      {/* Search and Filters */}
-      <div className="blynt-card p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full xl:w-auto">
-        <div role="tablist" aria-label="Client status" className="inline-flex p-1 rounded-[10px] bg-[#F5F8FD] border border-[#D3DCEE] shrink-0">
-          {(
-            [
-              ['active', 'Active', activeCount],
-              ['archived', 'Archived', archivedCount],
-            ] as const
-          ).map(([key, text, count]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={view === key}
-              onClick={() => setView(key)}
-              className={`min-h-[36px] px-3.5 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors ${
-                view === key ? 'bg-white text-[#122654] shadow-2xs border border-[#E3E7EF]' : 'text-[#4A5878] hover:text-[#122654]'
-              }`}
-            >
-              {text}
-              <span className={`text-[10px] font-bold px-1.5 rounded-full ${view === key ? 'bg-[#EAF5FC] text-[#1D4E89]' : 'bg-[#E3E7EF] text-[#4A5878]'}`}>{count}</span>
-            </button>
-          ))}
-        </div>
-        <div className="relative w-full sm:w-80">
+      {/* Search and filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="relative flex-1">
           <Search className="w-4 h-4 text-[#4A5878] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input aria-label="Search by client name or company number"
+          <input
+            aria-label="Search by client name or company number"
             type="text"
-            placeholder="Search by client name or company number..."
+            placeholder="Search by client name or company number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full min-h-[44px] pl-10 pr-3 text-xs bg-[#F5F8FD] border border-[#D3DCEE] rounded-[10px] text-[#122654] outline-none focus:border-[#FF7A66]"
+            className="w-full min-h-[40px] pl-10 pr-3 text-xs bg-white border border-[#D3DCEE] rounded-xl text-[#122654] outline-none focus:border-[#FF7A66]"
           />
         </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-          {/* Company Type Filter */}
-          <select aria-label="Filter by client type"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="min-h-[44px] px-3 text-xs bg-[#F5F8FD] border border-[#D3DCEE] rounded-[10px] text-[#122654] outline-none focus:border-[#FF7A66]"
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="tablist" aria-label="Client status" className="flex gap-2">
+            {(
+              [
+                ['active', 'Active', activeCount],
+                ['archived', 'Archived', archivedCount],
+              ] as const
+            ).map(([key, text, count]) => (
+              <button key={key} type="button" role="tab" aria-selected={view === key} onClick={() => setView(key)} className={pill(view === key)}>
+                {text} {count}
+              </button>
+            ))}
+          </div>
+          <select aria-label="Filter by client type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={pill(false)}>
             <option value="all">All company types</option>
             <option value="Small company (FRS 102 1A)">Small company (FRS 102 1A)</option>
             <option value="Medium/large (FRS 102)">Medium/large (FRS 102)</option>
@@ -159,13 +147,7 @@ export default function ClientsPage() {
             <option value="IFRS company/group">IFRS company/group</option>
             <option value="LLP (FRS 102 + LLP SORP)">LLP (FRS 102 + LLP SORP)</option>
           </select>
-
-          {/* Data Source Filter */}
-          <select aria-label="Filter by data source"
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="min-h-[44px] px-3 text-xs bg-[#F5F8FD] border border-[#D3DCEE] rounded-[10px] text-[#122654] outline-none focus:border-[#FF7A66]"
-          >
+          <select aria-label="Filter by data source" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className={pill(false)}>
             <option value="all">All data sources</option>
             <option value="blynt">Blynt Accounting</option>
             <option value="xero">Xero</option>
@@ -181,227 +163,145 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {/* Clients Table */}
-      <div className="blynt-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-[#122654]">
-            <caption className="sr-only">List of accounting clients and engagements</caption>
-            <thead className="bg-[#F5F8FD] text-[#4A5878] uppercase text-[10px] font-bold tracking-wider border-b border-[#E3E7EF]">
-              <tr>
-                <th scope="col" className="p-4 pl-6">Client</th>
-                <th scope="col" className="p-4">Company Type</th>
-                <th scope="col" className="p-4">Year End</th>
-                <th scope="col" className="p-4">Data Source</th>
-                <th scope="col" className="p-4">Mapping Status</th>
-                <th scope="col" className="p-4">Stage</th>
-                <th scope="col" className="p-4 pr-6 text-right">Open</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E3E7EF]">
-              {filteredClients.map((client) => {
-                const eng = db.engagements.find((e) => e.client_id === client.id);
-                const mappings = eng
-                  ? db.account_mappings.filter((m) => m.engagement_id === eng.id)
-                  : [];
-                const unconfirmedCount = mappings.filter((m) => m.status !== 'confirmed').length;
+      {/* Client cards */}
+      <ul aria-label="Clients" className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {filteredClients.map((client) => {
+          const eng = db.engagements.find((e) => e.client_id === client.id);
+          const mappings = eng ? db.account_mappings.filter((m) => m.engagement_id === eng.id) : [];
+          const unconfirmedCount = mappings.filter((m) => m.status !== 'confirmed').length;
+          const yearEnd = client.year_end || client.yearEnd;
 
-                return (
-                  <tr
-                    key={client.id}
-                    className={`hover:bg-[#F5F8FD] transition-colors cursor-pointer group ${client.archived_at ? 'text-[#4A5878]' : ''}`}
-                    onClick={() => {
-                      if (eng) router.push(`/engagements/${eng.id}/trial-balance`);
-                    }}
-                  >
-                    <td className="p-4 pl-6">
-                      <Link
-                        href={`/clients/${client.id}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveCompanyId(client.id);
-                        }}
-                        className="font-bold text-[#122654] text-sm hover:text-[#FF7A66] transition-colors block"
-                      >
-                        {client.name}
-                      </Link>
-                      <div className="text-[11px] text-[#4A5878] font-mono">
-                        {client.company_no ? `Co #${client.company_no}` : client.company_type || ''}
-                      </div>
-                      {client.archived_at && (
-                        <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#F5F8FD] border border-[#D3DCEE] text-[#4A5878]" title={client.archive_reason || undefined}>
-                          <Archive className="w-3 h-3" />
-                          Archived {new Date(client.archived_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {client.archive_reason ? ` · ${client.archive_reason}` : ''}
-                        </div>
-                      )}
-                    </td>
+          return (
+            <li key={client.id} className="blynt-card p-5 flex flex-col">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-[#122654] truncate">{client.name}</h2>
+                  <p className="text-[11px] text-[#4A5878]">{client.company_type}</p>
+                </div>
+                {eng && (
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#EAF0FB] text-[#1D4E89]">
+                    {eng.status}
+                  </span>
+                )}
+              </div>
 
-                    <td className="p-4">
-                      <span className="px-2 py-0.5 rounded bg-[#F5F8FD] border border-[#D3DCEE] text-[11px] font-medium">
-                        {client.company_type}
+              <dl className="grid grid-cols-2 gap-3 mt-4">
+                <div>
+                  <dt className="text-[10px] text-[#4A5878]">Year end</dt>
+                  <dd className="text-sm font-bold text-[#122654] font-mono-numbers">
+                    {yearEnd ? new Date(yearEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] text-[#4A5878]">Data source</dt>
+                  <dd className="text-sm font-bold text-[#122654] flex items-center gap-1.5 capitalize">
+                    {client.data_source === 'csv' ? 'CSV / Excel' : client.data_source}
+                    {client.reconnect_needed ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF4DB] text-[#6B4700] normal-case">
+                        <AlertCircle className="w-3 h-3" /> Reconnect needed
                       </span>
-                    </td>
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" title="Connected" />
+                    )}
+                  </dd>
+                </div>
+              </dl>
 
-                    <td className="p-4 font-mono-numbers text-[11px]">
-                      {new Date(client.year_end || client.yearEnd || '2026-09-30').toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </td>
-
-                    <td className="p-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold capitalize text-[#122654]">
-                          {client.data_source === 'csv' ? 'CSV / Excel' : client.data_source}
-                        </span>
-                        {client.reconnect_needed ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF4DB] text-[#6B4700]">
-                            <AlertCircle className="w-3 h-3" /> Reconnect needed
-                          </span>
-                        ) : (
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" title="Connected" />
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="p-4">
-                      {mappings.length === 0 ? (
-                        <span className="text-[#4A5878] text-[11px]">○ No trial balance</span>
-                      ) : unconfirmedCount === 0 ? (
-                        <span className="text-[#0B6B52] bg-[#E6F4EF] px-2 py-0.5 rounded-full text-[10px] font-bold">
-                          ✓ All mapped
-                        </span>
-                      ) : (
-                        <span className="text-[#A23A27] bg-[#FFF1EE] px-2 py-0.5 rounded-full text-[10px] font-bold">
-                          ! {unconfirmedCount} to map
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-4">
-                      {eng ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EAF5FC] text-[#1D4E89]">
-                          {eng.status}
-                        </span>
-                      ) : (
-                        <span className="text-[#4A5878]">None</span>
-                      )}
-                    </td>
-
-                    <td className="p-4 pr-6 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        {eng ? (
-                          <Link
-                            href={`/engagements/${eng.id}/trial-balance`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveCompanyId(client.id);
-                            }}
-                            className="inline-flex items-center gap-1 text-xs font-bold text-[#B8432F] hover:underline"
-                          >
-                            <span>Open</span>
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                          </Link>
-                        ) : client.archived_at ? (
-                          <span className="text-xs text-[#4A5878]">No engagement</span>
-                        ) : (
-                          <Link
-                            href={`/engagements/new?client_id=${client.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveCompanyId(client.id);
-                            }}
-                            className="text-xs text-[#122654] font-semibold hover:underline"
-                          >
-                            Start engagement
-                          </Link>
-                        )}
-
-                        {client.archived_at ? (
-                          <button
-                            type="button"
-                            disabled={archiveBusy}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setArchived(client, false);
-                            }}
-                            className="inline-flex items-center gap-1 p-1.5 rounded-lg text-xs font-semibold text-[#1D4E89] hover:bg-[#EAF5FC] transition-colors cursor-pointer"
-                            title={`Restore ${client.name}`}
-                            aria-label={`Restore ${client.name}`}
-                          >
-                            <ArchiveRestore className="w-3.5 h-3.5" />
-                            <span>Restore</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setArchiveReason('');
-                              setArchiveError('');
-                              setArchiveTarget(client);
-                            }}
-                            className="p-1.5 rounded-lg text-[#4A5878] hover:text-[#122654] hover:bg-[#EAF5FC] transition-colors cursor-pointer"
-                            title={`Archive ${client.name}`}
-                            aria-label={`Archive ${client.name}`}
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(client);
-                          }}
-                          className="p-1.5 rounded-lg text-[#4A5878] hover:text-[#B42318] hover:bg-[#FDECEA] transition-colors cursor-pointer"
-                          title={`Delete ${client.name}`}
-                          aria-label={`Delete ${client.name}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {filteredClients.length === 0 && view === 'archived' && (
-            <div className="p-12 text-center flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-xl bg-[#F5F8FD] border border-[#E3E7EF] flex items-center justify-center text-[#4A5878] mb-3">
-                <Archive className="w-6 h-6" />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {mappings.length === 0 ? (
+                  <span className="text-[#4A5878] text-[10px] font-semibold">○ No trial balance</span>
+                ) : unconfirmedCount === 0 ? (
+                  <span className="text-[#0B6B52] bg-[#E6F4EF] px-2 py-0.5 rounded-md text-[10px] font-bold">✓ All mapped</span>
+                ) : (
+                  <span className="text-[#A23A27] bg-[#FFF1EE] px-2 py-0.5 rounded-md text-[10px] font-bold">! {unconfirmedCount} to map</span>
+                )}
+                {client.archived_at && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#F5F8FD] border border-[#D3DCEE] text-[#4A5878]" title={client.archive_reason || undefined}>
+                    <Archive className="w-3 h-3" />
+                    Archived {new Date(client.archived_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {client.archive_reason ? ` · ${client.archive_reason}` : ''}
+                  </span>
+                )}
               </div>
-              <h3 className="text-sm font-bold text-[#122654]">No archived clients</h3>
-              <p className="text-xs text-[#4A5878] max-w-sm mt-1">
-                Archive clients you no longer act for. Their files are kept, read-only, and you can restore them any time.
-              </p>
-            </div>
-          )}
 
-          {filteredClients.length === 0 && view === 'active' && (
-            <div className="p-12 text-center flex flex-col items-center justify-center">
-              <div className="w-12 h-12 rounded-xl bg-[#F5F8FD] border border-[#E3E7EF] flex items-center justify-center text-[#4A5878] mb-3">
-                <Building2 className="w-6 h-6" />
+              <div className="mt-4 pt-4 border-t border-[#E3E7EF] flex items-center justify-between gap-3">
+                <Link
+                  href={`/clients/${client.id}`}
+                  onClick={() => setActiveCompanyId(client.id)}
+                  className="min-h-[40px] px-4 flex items-center gap-1.5 rounded-xl bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold transition-colors"
+                >
+                  Open client <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                </Link>
+                <div className="flex items-center gap-4">
+                  {client.archived_at ? (
+                    <button
+                      type="button"
+                      disabled={archiveBusy}
+                      onClick={() => setArchived(client, false)}
+                      aria-label={`Restore ${client.name}`}
+                      className="text-xs font-semibold text-[#1D4E89] hover:underline cursor-pointer"
+                    >
+                      Restore
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setArchiveReason('');
+                        setArchiveError('');
+                        setArchiveTarget(client);
+                      }}
+                      aria-label={`Archive ${client.name}`}
+                      className="text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer"
+                    >
+                      Archive
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(client)}
+                    aria-label={`Delete ${client.name}`}
+                    className="text-xs font-semibold text-[#4A5878] hover:text-[#B42318] cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <h3 className="text-sm font-bold text-[#122654]">No clients found</h3>
-              <p className="text-xs text-[#4A5878] max-w-sm mt-1 mb-4">
-                There are no clients in the system yet. Add your first client to start preparing statutory workpapers.
-              </p>
-              <Link
-                href="/engagements/new"
-                className="px-4 py-2 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Add First Client</span>
-              </Link>
-            </div>
-          )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {filteredClients.length === 0 && view === 'archived' && (
+        <div className="blynt-card p-12 text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-[#F5F8FD] border border-[#E3E7EF] flex items-center justify-center text-[#4A5878] mb-3">
+            <Archive className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-[#122654]">No archived clients</h3>
+          <p className="text-xs text-[#4A5878] max-w-sm mt-1">
+            Archive clients you no longer act for. Their files are kept, read-only, and you can restore them any time.
+          </p>
         </div>
-      </div>
+      )}
+
+      {filteredClients.length === 0 && view === 'active' && (
+        <div className="blynt-card p-12 text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-xl bg-[#F5F8FD] border border-[#E3E7EF] flex items-center justify-center text-[#4A5878] mb-3">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-[#122654]">No clients found</h3>
+          <p className="text-xs text-[#4A5878] max-w-sm mt-1 mb-4">
+            There are no clients in the system yet. Add your first client to start preparing statutory workpapers.
+          </p>
+          <Link
+            href="/engagements/new"
+            className="px-4 py-2 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add First Client</span>
+          </Link>
+        </div>
+      )}
 
       {/* Archive confirmation */}
       {archiveTarget && (
