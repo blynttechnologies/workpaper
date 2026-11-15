@@ -70,7 +70,9 @@ export function ProvisionPicker({
   const chip = 'px-2 py-1 text-[11px] font-semibold rounded-[6px] border border-[#D3DCEE] bg-white text-[#122654] hover:border-[#122654]/40 cursor-pointer';
 
   return (
-    <div role="dialog" aria-label={`Provision for ${customer}`} className="absolute right-0 top-full mt-1 z-30 w-80 p-3 bg-white border border-[#D3DCEE] rounded-[10px] shadow-xl text-left text-[11px] text-[#122654] flex flex-col gap-2">
+    // Over the page, not inside the table: the table scrolls, which clipped a pop-up opened within it
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+    <div role="dialog" aria-modal="true" aria-label={`Provision for ${customer}`} className="w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 bg-white border border-[#D3DCEE] rounded-[12px] shadow-xl text-left text-[11px] text-[#122654] flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="font-bold">Provision for {customer}</span>
         <button type="button" onClick={onCancel} aria-label="Close" className="text-[#4A5878] cursor-pointer">
@@ -133,6 +135,7 @@ export function ProvisionPicker({
           Provide {valid ? formatPence(pence!) : ''}
         </button>
       </div>
+    </div>
     </div>
   );
 }
