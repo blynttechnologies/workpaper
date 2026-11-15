@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
+import { BackToTopBot } from './BackToTopBot';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -49,6 +50,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({ children }) => {
           {children}
         </main>
       </div>
+      <BackToTopBot />
     </div>
   );
 };
