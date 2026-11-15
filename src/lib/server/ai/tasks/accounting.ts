@@ -226,6 +226,50 @@ export const riskReviewTask: TaskDef<RiskInput, RiskOutput> = {
   effort: 'high',
 };
 
+// ---------------------------------------------------------------- debtors: specific bad debt provision
+
+export interface ProvisionInput {
+  period_end: string;
+  ageing: string;
+  customer: string;
+  balance_p: string;
+  ageing_columns: Record<string, string>;
+  received_after_period_end_p: string;
+  still_due_p: string;
+  invoices: { ref: string; date: string; due?: string; days: number; open_at_period_end_p: string; total_p?: string; payments?: { date: string; amount_p: string; how: string }[] }[];
+}
+export interface ProvisionOutput {
+  percent: number;
+  reason: string;
+}
+
+export const suggestProvisionTask: TaskDef<ProvisionInput, ProvisionOutput> = {
+  id: 'suggest_provision',
+  module: 'debtors',
+  version: '2026-11-15',
+  system: BASE,
+  build: (d) => [
+    json('customer_balance', d),
+    {
+      type: 'text',
+      text:
+        'Suggest a specific bad debt provision for this customer at the period end, for a UK company under FRS 102 (provide where ' +
+        'there is objective evidence the amount will not be collected). Weigh how long each invoice was overdue at the period end, ' +
+        'what was received after the period end, each invoice\'s payment history and any part payments. Give the whole-number ' +
+        'percentage (0 to 100) of still_due_p to provide, and a reason of one or two sentences naming the evidence, for a reviewer to ' +
+        'check. Use 0 when the evidence points to collection and 100 when it points to none.',
+    },
+  ],
+  schema: {
+    type: 'object',
+    properties: { percent: { type: 'integer' }, reason: { type: 'string' } },
+    required: ['percent', 'reason'],
+    additionalProperties: false,
+  },
+  maxTokens: 2000,
+  effort: 'low',
+};
+
 // ---------------------------------------------------------------- research (internal sources only)
 
 export interface ResearchOutput {

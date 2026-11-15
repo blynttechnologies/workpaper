@@ -14,6 +14,7 @@ import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
 import { Tiles, type Tone } from './kit';
 import { ukDate } from '@/lib/dates';
 import { OpenItemsTable } from './OpenItemsTable';
+import { ProvisionPicker } from './ProvisionPicker';
 
 export interface ScheduleProps {
   data: Record<string, any>;
@@ -658,6 +659,25 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const money = (p: bigint) => (p === 0n ? '–' : formatPence(p, { symbol: '', accountingFormat: true }));
   const btn = 'px-2 py-1 text-[11px] font-bold rounded-[6px]';
 
+  // Choosing how much to provide: a share of what is still due, a custom amount, or the AI's suggestion
+  const [picking, setPicking] = useState<string | null>(null);
+  const picker = (v: ReturnType<typeof debtorView>, start: bigint) =>
+    picking === v.line.id && (
+      <ProvisionPicker
+        engagementId={result.engagementId}
+        paperRef={result.template.ref}
+        lineId={v.line.id}
+        customer={v.line.desc}
+        stillDue={v.stillDue}
+        start={start > v.stillDue ? v.stillDue : start}
+        onCancel={() => setPicking(null)}
+        onSave={(amount_p, why) => {
+          setLine(v.line.id, { decision: 'provide', provision_p: amount_p, provision_reason: why });
+          setPicking(null);
+        }}
+      />
+    );
+
   const recoverability = (v: ReturnType<typeof debtorView>) => {
     const undo = !locked && (
       <button type="button" onClick={() => decide(v, undefined)} className="text-[10px] text-[#1D4E89] underline">
@@ -667,18 +687,19 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
     switch (v.status) {
       case 'suggest':
         return (
-          <div className="flex flex-col items-end gap-1">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF4DB] text-[#8A5A00]">AI: provide {formatPence(v.suggestion!.amount)}</span>
+          <div className="relative flex flex-col items-end gap-1">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF4DB] text-[#8A5A00]">Suggested: provide {formatPence(v.suggestion!.amount)}</span>
             {!locked && (
               <div className="flex gap-1">
-                <button type="button" onClick={() => decide(v, 'provide')} className={`${btn} bg-[#122654] text-white`}>
-                  Provide
+                <button type="button" onClick={() => setPicking(v.line.id)} aria-expanded={picking === v.line.id} className={`${btn} bg-[#122654] text-white`}>
+                  Provide…
                 </button>
                 <button type="button" onClick={() => decide(v, 'no_provision')} className={`${btn} border border-[#D3DCEE] bg-white text-[#122654]`}>
                   No provision
                 </button>
               </div>
             )}
+            {picker(v, v.suggestion!.amount)}
           </div>
         );
       case 'credit':
@@ -699,9 +720,18 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         );
       case 'provided':
         return (
-          <div className="flex flex-col items-end gap-1">
+          <div className="relative flex flex-col items-end gap-1 max-w-[260px]">
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#122654]">Provided {formatPence(v.provision)}</span>
-            {undo}
+            {v.line.provision_reason && <span className="text-[10px] text-[#4A5878] text-right">{v.line.provision_reason}</span>}
+            {!locked && (
+              <span className="flex gap-2">
+                <button type="button" onClick={() => setPicking(v.line.id)} className="text-[10px] text-[#1D4E89] underline">
+                  Change
+                </button>
+                {undo}
+              </span>
+            )}
+            {picker(v, v.provision)}
           </div>
         );
       case 'moved':
