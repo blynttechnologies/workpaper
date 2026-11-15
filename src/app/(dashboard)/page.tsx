@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, ArrowUpRight, Building2, CalendarClock, Mess
 import { db } from '@/lib/server/db';
 import { useCompany } from '@/context/CompanyContext';
 import { useLocale } from '@/context/LocaleContext';
+import { DashboardBanner } from '@/components/dashboard/DashboardBanner';
 import { Workpaper } from '@/lib/types/models';
 
 // Where a paper stands, in order. One blue ramp (validated ordinal) plus orange for papers that need attention.
@@ -185,8 +186,9 @@ export default function PracticeHomePage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-8 flex flex-col gap-5">
             {/* Client list with each client's progress */}
-            <section aria-labelledby="clients-heading" className={`${card} lg:col-span-8 p-4`}>
+            <section aria-labelledby="clients-heading" className={`${card} p-4`}>
               <div className="flex items-center justify-between mb-2">
                 <h2 id="clients-heading" className="text-sm font-bold text-[#122654]">Clients</h2>
                 <Link href="/clients" className="text-xs font-semibold text-[#122654] hover:underline flex items-center gap-1">
@@ -223,6 +225,10 @@ export default function PracticeHomePage() {
                 ))}
               </ul>
             </section>
+
+            {/* Banner under the client list: working-paper news, then what Blynt can do */}
+            <DashboardBanner />
+            </div>
 
             {/* Charts */}
             <div className="lg:col-span-4 flex flex-col gap-5">
