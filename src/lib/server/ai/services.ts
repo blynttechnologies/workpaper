@@ -22,6 +22,7 @@ import {
 import type { UserRole } from '../../types/models';
 import { debtorView, type DebtorLine } from '../../workpapers/debtors';
 import { mappingExamples } from '../learning';
+import { vatFactsFor } from '../../tax';
 
 /**
  * Shared AI services: one place each Workpaper module, and the MCP tools, call for AI help.
@@ -127,6 +128,8 @@ function paperInput(workpaperId: string): { input: PaperInput; engagementId: str
       title: wp.custom_template?.title ?? templateFor(wp.ref)?.title ?? wp.ref,
       framework: eng.framework,
       period_end: eng.period_end,
+      // The client's VAT position from the tax library: rates and limits in force at the period end, not remembered ones
+      vat: vatFactsFor(eng.id),
       data,
       checks: paperChecks(wp),
       procedures: db.procedures.filter((p) => p.workpaper_id === wp.id).map((p) => ({ text: p.text, done: !!p.done_by, not_applicable_reason: p.not_applicable_reason })),
@@ -191,6 +194,7 @@ export function engagementFacts(engagementId: string) {
   const paperIds = new Set(papers.map((w) => w.id));
   return {
     engagement: { id: eng.id, client: client?.name ?? eng.client_id, period_start: eng.period_start, period_end: eng.period_end, framework: eng.framework, status: eng.status },
+    vat: vatFactsFor(engagementId),
     workpapers: papers.map((w) => ({
       id: w.id,
       ref: w.ref,

@@ -128,6 +128,8 @@ export interface Firm {
     // QTR-02: shown on every client-facing output produced from now on
     branding?: { logo_file_key?: string; colour?: string; footer?: string; disclaimer?: string };
     ai?: AiSettings;
+    /** The practice's own dated tax entries (a new rate or threshold); they win over the built-in library for their dates */
+    tax_entries?: import('../tax').TaxEntry[];
   };
 }
 
@@ -220,6 +222,8 @@ export interface Client {
   vat_number?: string;
   vat_registered?: boolean;
   vat_scheme?: 'standard' | 'flat_rate' | 'cash' | 'annual';
+  vat_flat_rate_category?: string; // a key from the tax library's flat rate percentages
+  vat_registered_on?: string; // the effective date of registration: the flat rate first-year discount runs a year from it
   payroll?: boolean;
   services?: ('year_end' | 'management' | 'vat' | 'payroll' | 'quarterly' | 'corporation_tax')[];
   signoff_levels?: 1 | 2 | 3; // overrides the practice default

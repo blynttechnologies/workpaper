@@ -14,6 +14,7 @@ import {
   Lock,
   FileSpreadsheet,
   BookOpen,
+  Percent,
   ArrowUpRight,
   Sliders,
   Globe,
@@ -423,6 +424,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             >
               <BookOpen className="w-4 h-4 shrink-0" />
               <span>Standards library</span>
+            </Link>
+
+            <Link
+              href="/library/tax"
+              onClick={onMobileClose}
+              aria-current={isLinkActive('/library/tax') ? 'page' : undefined}
+              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+                isLinkActive('/library/tax')
+                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
+                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
+              }`}
+            >
+              <Percent className="w-4 h-4 shrink-0" />
+              <span>Tax library</span>
             </Link>
           </nav>
         </div>
