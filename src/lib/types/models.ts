@@ -130,6 +130,8 @@ export interface Firm {
     ai?: AiSettings;
     /** The practice's own dated tax entries (a new rate or threshold); they win over the built-in library for their dates */
     tax_entries?: import('../tax').TaxEntry[];
+    /** Weekly GOV.UK check of the pages the tax library cites (lib/server/tax-watch) */
+    tax_watch?: import('../server/tax-watch').TaxWatch;
   };
 }
 
