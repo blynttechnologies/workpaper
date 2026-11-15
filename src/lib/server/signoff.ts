@@ -120,8 +120,9 @@ export function unreview(actor: Actor, wpId: string, reason: string) {
 }
 
 export interface WorkItem {
-  kind: 'assigned' | 'mention' | 'review_point' | 'changed_after_review' | 'journal_to_approve';
+  kind: 'assigned' | 'mention' | 'review_point' | 'changed_after_review' | 'journal_to_approve' | 'ledger_changed' | 'reconnect';
   engagement_id: string;
+  client_id?: string;
   workpaper_id?: string;
   ref: string;
   detail: string;
@@ -158,6 +159,17 @@ export function myWork(actor: Actor & { clientIds?: string[] | null }): WorkItem
     for (const j of db.adjustments.filter((a) => engIds.has(a.engagement_id) && (a.status === 'accepted' || a.status === 'proposed') && a.proposed_by !== actor.id)) {
       items.push({ kind: 'journal_to_approve', engagement_id: j.engagement_id, ref: j.ref, detail: `${j.status === 'proposed' ? 'Draft' : 'To approve'}: ${j.narrative}`, overdue: false });
     }
+  }
+  // The end-of-day Xero sync: what it pulled in the last day, and connections it couldn't use
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+  for (const c of db.xero_connections.filter((x) => x.firm_id === actor.firmId && x.auto_sync && x.auto_sync.at > dayAgo && engIds.has(x.auto_sync.engagement_id))) {
+    const { at, engagement_id, changes } = c.auto_sync!;
+    const time = new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+    const name = db.clients.find((x) => x.id === c.client_id)?.name ?? c.tenant_name;
+    items.push({ kind: 'ledger_changed', engagement_id, client_id: c.client_id, ref: name, detail: `Pulled from Xero at ${time}: ${changes} account${changes === 1 ? '' : 's'} changed`, overdue: false });
+  }
+  for (const client of db.clients.filter((x) => x.reconnect_needed && !x.archived_at && (!visible || visible.includes(x.id)) && db.xero_connections.some((c) => c.firm_id === actor.firmId && c.client_id === x.id))) {
+    items.push({ kind: 'reconnect', engagement_id: '', client_id: client.id, ref: client.name, detail: 'Xero needs reconnecting: the end-of-day sync has stopped for this client', overdue: false });
   }
   return items.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'));
 }

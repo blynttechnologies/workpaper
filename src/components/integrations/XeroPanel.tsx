@@ -170,6 +170,11 @@ export function LedgerPanel({ provider, clientId, engagementId, reconnectNeeded 
             <dt className="text-[#4A5878]">Last pulled</dt>
             <dd className="text-[#122654]">{when(status.last_synced_at)}</dd>
           </dl>
+          {provider === 'xero' && (
+            <p className="text-[11px] text-[#4A5878]">
+              Blynt checks Xero at the end of each day and pulls again when a balance has moved, then tells you in My work. Pull now to update straight away.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             {tooOld ? (
               <span className="text-[11px] text-[#4A5878]">
