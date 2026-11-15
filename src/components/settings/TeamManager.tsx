@@ -19,7 +19,6 @@ interface OpenInvite {
 type Removing = { kind: 'staff' | 'invite'; id: string; name: string };
 
 const cardCls = (on: boolean) => `relative rounded-[10px] border ${on ? 'bg-[#EEF2F9] border-[#1D4E89] ring-1 ring-[#1D4E89]' : 'bg-white border-[#D3DCEE] hover:border-[#A6B4D0]'}`;
-const iconCls = 'p-1.5 rounded hover:bg-white text-[#1D4E89] cursor-pointer';
 
 /** The Team step: tick who works on a client, and add, change or remove staff without leaving it. */
 export function TeamManager({ clientId, clientName, team, setTeam, invited, setInvited }: {
@@ -86,18 +85,29 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
   const toggle = (id: string) => setTeam((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
   const toggleInvite = (id: string) => setInvited((v) => ((v ?? []).includes(id) ? (v ?? []).filter((x) => x !== id) : [...(v ?? []), id]));
 
-  const card = (id: string, on: boolean, onToggle: () => void, name: string, detail: string, actions: React.ReactNode) => (
-    <div key={id} className={cardCls(on)}>
-      <button type="button" role="checkbox" aria-checked={on} aria-label={`${name} works on ${who}`} onClick={onToggle} className="w-full text-left pl-9 pr-16 py-3 cursor-pointer">
-        <span aria-hidden="true" className={`absolute left-3 top-3.5 w-4 h-4 rounded border flex items-center justify-center ${on ? 'bg-[#1D4E89] border-[#1D4E89]' : 'bg-white border-[#A6B4D0]'}`}>
+  // One person: assign tick, initial, name, role tag and access, then Edit/Remove (greyed out below admin or partner)
+  const card = (id: string, on: boolean, onToggle: () => void, name: string, role: string, detail: string, actions: React.ReactNode) => (
+    <div key={id} className={`${cardCls(on)} flex items-center gap-3 px-3 py-2.5`}>
+      <button type="button" role="checkbox" aria-checked={on} aria-label={`${name} works on ${who}`} onClick={onToggle} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
+        <span aria-hidden="true" className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${on ? 'bg-[#1D4E89] border-[#1D4E89]' : 'bg-white border-[#A6B4D0]'}`}>
           {on && <Check className="w-3 h-3 text-white" />}
         </span>
-        <span className="block text-sm font-semibold text-[#122654] truncate">{name}</span>
-        <span className="block text-[11px] text-[#4A5878] mt-0.5">{detail}</span>
+        <span aria-hidden="true" className="w-8 h-8 rounded-full bg-[#122654] text-white text-xs font-bold flex items-center justify-center shrink-0">
+          {name.charAt(0).toUpperCase()}
+        </span>
+        <span className="min-w-0">
+          <span className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-[#122654] truncate">{name}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#F5F8FD] border border-[#E3E7EF] text-[#4A5878] shrink-0">{role}</span>
+          </span>
+          <span className="block text-[10px] text-[#4A5878] truncate">{detail}</span>
+        </span>
       </button>
-      {canManage && <div className="absolute right-1.5 top-2 flex">{actions}</div>}
+      <span className="flex items-center gap-2.5 shrink-0">{actions}</span>
     </div>
   );
+  const actionCls = 'text-[11px] font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]';
+  const hintId = canManage ? undefined : 'team-manage-hint';
 
   return (
     <div className="mt-6 space-y-3">
@@ -112,36 +122,49 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="group" aria-label="Team">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold text-[#4A5878]">
+          {staff ? `${staff.length} staff${invites.length ? ` · ${invites.length} invited` : ''} · tick who works on ${who}` : ''}
+        </p>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          disabled={!canManage}
+          aria-describedby={hintId}
+          className="inline-flex items-center gap-1.5 min-h-[32px] px-3 bg-[#122654] hover:bg-[#0B1A3B] rounded-lg text-[11px] font-bold text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <UserPlus className="w-3.5 h-3.5" /> Add staff
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2" role="group" aria-label="Team">
         {staff?.map((s) =>
-          card(s.id, team.includes(s.id), () => toggle(s.id), s.name, `${cap(s.role)} · ${s.access === 'all' ? 'All clients' : `${s.client_count} ${s.client_count === 1 ? 'client' : 'clients'}`}`, (
+          card(s.id, team.includes(s.id), () => toggle(s.id), s.name, cap(s.role), s.access === 'all' ? 'Sees all clients' : `${s.client_count} ${s.client_count === 1 ? 'client' : 'clients'}`, (
             <>
-              <button type="button" onClick={() => setEditing(s)} aria-label={`Edit ${s.name}`} className={iconCls}>
-                <Pencil className="w-3.5 h-3.5" />
+              <button type="button" onClick={() => setEditing(s)} disabled={!canManage} aria-describedby={hintId} aria-label={`Edit ${s.name}`} className={actionCls}>
+                <Pencil className="w-3 h-3 inline mr-0.5" aria-hidden="true" />Edit
               </button>
               {s.id !== me && (
-                <button type="button" onClick={() => setRemoving({ kind: 'staff', id: s.id, name: s.name })} aria-label={`Remove ${s.name}`} className={iconCls}>
-                  <Trash2 className="w-3.5 h-3.5" />
+                <button type="button" onClick={() => setRemoving({ kind: 'staff', id: s.id, name: s.name })} disabled={!canManage} aria-describedby={hintId} aria-label={`Remove ${s.name}`} className={`${actionCls} hover:text-[#B42318]`}>
+                  <Trash2 className="w-3 h-3 inline mr-0.5" aria-hidden="true" />Remove
                 </button>
               )}
             </>
           ))
         )}
         {invites.map((i) =>
-          card(i.id, Boolean(invited?.includes(i.id)), () => toggleInvite(i.id), i.name, `${cap(i.role)} · Invited, not joined yet`, (
-            <button type="button" onClick={() => setRemoving({ kind: 'invite', id: i.id, name: i.name })} aria-label={`Cancel invitation for ${i.name}`} className={iconCls}>
-              <Trash2 className="w-3.5 h-3.5" />
+          card(i.id, Boolean(invited?.includes(i.id)), () => toggleInvite(i.id), i.name, cap(i.role), 'Invited, not joined yet', (
+            <button type="button" onClick={() => setRemoving({ kind: 'invite', id: i.id, name: i.name })} disabled={!canManage} aria-describedby={hintId} aria-label={`Cancel invitation for ${i.name}`} className={`${actionCls} hover:text-[#B42318]`}>
+              <Trash2 className="w-3 h-3 inline mr-0.5" aria-hidden="true" />Cancel
             </button>
           ))
         )}
       </div>
 
-      {canManage ? (
-        <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 bg-white border border-[#D3DCEE] rounded-[10px] text-xs font-bold text-[#122654] hover:border-[#A6B4D0] cursor-pointer">
-          <UserPlus className="w-3.5 h-3.5" /> Add staff
-        </button>
-      ) : (
-        staff && <p className="text-[11px] text-[#4A5878]">Only an admin or partner can add staff or change which clients they can open.</p>
+      {!canManage && staff && (
+        <p id="team-manage-hint" className="text-[11px] text-[#6B4700]">
+          Only an admin or partner can add, edit or remove staff. Anyone can tick who works on this client.
+        </p>
       )}
 
       {removing && (

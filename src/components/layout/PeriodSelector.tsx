@@ -149,7 +149,7 @@ export const PeriodSelector: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  router.push('/engagements/new');
+                  router.push(activeCompany ? `/engagements/new?client_id=${encodeURIComponent(activeCompany.id)}` : '/engagements/new');
                 }}
                 className="flex items-center gap-1.5 text-xs font-semibold text-[#1D4E89] hover:underline cursor-pointer"
               >

@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, Zap } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, ArrowRight, Building2, Check, ChevronLeft } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { Client, CompanyType } from '@/lib/types/models';
 import { packForClient } from '@/lib/workpapers/templates';
@@ -96,8 +96,18 @@ const FREQUENCIES: [Frequency, string, string][] = [
 ];
 const END_LABEL: Record<Frequency, string> = { year_end: 'Year end', quarterly: 'Quarter end', monthly: 'Month end' };
 
-export default function NewEngagementWizard() {
+// The ?client_id= link is read on the client, so it sits inside Suspense (see Next's useSearchParams docs)
+export default function NewEngagementPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewEngagementWizard />
+    </Suspense>
+  );
+}
+
+function NewEngagementWizard() {
   const router = useRouter();
+  const search = useSearchParams();
   const { setActiveCompanyId, refreshCompanyData } = useCompany();
   const [step, setStep] = useState(0);
   const [furthest, setFurthest] = useState(0);
@@ -105,7 +115,8 @@ export default function NewEngagementWizard() {
   const [error, setError] = useState('');
 
   const activeClients = db.clients.filter((c) => !c.archived_at);
-  const [clientId, setClientId] = useState(activeClients[0]?.id ?? NEW_CLIENT);
+  // A new client unless opened from a client (a new year for them)
+  const [clientId, setClientId] = useState(activeClients.find((c) => c.id === search.get('client_id'))?.id ?? NEW_CLIENT);
   const existing = activeClients.find((c) => c.id === clientId);
   const [name, setName] = useState('');
   const [type, setType] = useState<CompanyType>(existing?.company_type ?? 'Small company (FRS 102 1A)');
@@ -149,21 +160,15 @@ export default function NewEngagementWizard() {
     if (end) setPeriodStart(startOf(end, FREQUENCY_MONTHS[f]));
   };
 
-  const changes: string[][] = [
-    [
-      isNew ? `${clientName || 'A new client'} is added to your clients.` : `The engagement is added to ${clientName}, and its details are updated.`,
-      `${papers.length} working papers are created under ${framework}.`,
-      vat ? 'VAT control and returns (T-20) is included.' : 'No VAT paper (T-20): the client isn’t VAT registered.',
-      payroll ? 'Payroll and PAYE/NIC (P-20) is included.' : 'No payroll paper (P-20): the client runs no payroll.',
-    ],
-    [
-      periodStart && yearEnd ? `A ${FREQUENCIES.find((f) => f[0] === frequency)?.[1].toLowerCase()} file covering ${ukDate(periodStart)} to ${ukDate(yearEnd)}.` : '',
-      yearEnd && periodStart && periodStart !== startOf(yearEnd, FREQUENCY_MONTHS[frequency]) ? 'This is a short or long period: the start date was changed by hand.' : '',
-      prior ? 'Last year’s locked file is linked, so closing balances roll forward.' : 'First year for this client: no prior file to roll forward.',
-    ].filter(Boolean),
-    [assigned ? `${assigned} ${assigned === 1 ? 'person is' : 'people are'} assigned to ${clientName || 'this client'}.` : 'No one assigned yet. Partners and admins see every client.'],
-    [source === 'csv' ? 'You’ll upload the trial balance after creating.' : `You’ll sign in to ${sourceName} after creating, and choose the client’s organisation.`],
-  ];
+  // One short line per step saying what the answers lead to
+  const hint = [
+    `${papers.length} working papers will be created under ${framework}.`,
+    periodStart && yearEnd
+      ? `${ukDate(periodStart)} to ${ukDate(yearEnd)}. ${prior ? 'Last year’s closing balances roll forward.' : 'First year for this client.'}`
+      : '',
+    assigned ? `${assigned} ${assigned === 1 ? 'person' : 'people'} assigned. Partners and admins see every client.` : 'No one assigned yet. Partners and admins see every client.',
+    source === 'csv' ? 'You’ll upload the trial balance after creating.' : `You’ll sign in to ${sourceName} after creating.`,
+  ][step];
 
   const go = (i: number) => {
     setError('');
@@ -220,15 +225,6 @@ export default function NewEngagementWizard() {
     }
   };
 
-  // The running summary on the right: every answer so far, filled in as the steps are reached
-  const summary: [string, string, number][] = [
-    ['Client', clientName || 'New client', 0],
-    ['Entity', type, 0],
-    ['Working papers', `${papers.length} papers · ${framework}`, 0],
-    ['Period', periodStart && yearEnd ? `${ukDate(periodStart)} to ${ukDate(yearEnd)}` : 'Not set', 1],
-    ['Team', assigned ? `${assigned} assigned` : 'No one yet', 2],
-    ['Data source', sourceName ?? '', 3],
-  ];
   const section = 'mt-5 pt-4 border-t border-[#EEF2F9]';
 
   return (
@@ -269,24 +265,29 @@ export default function NewEngagementWizard() {
           </ol>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div>
           {/* Step body */}
-          <main className="px-5 py-5 min-w-0">
+          <main className="px-5 py-5 min-w-0 max-w-4xl">
             {step === 0 && (
               <>
                 <h2 className="text-lg font-bold text-[#122654]">Client details</h2>
                 <p className="text-xs text-[#4A5878]">Who the client is. These answers decide the working papers.</p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-                  <div>
-                    <Q htmlFor="client">Client</Q>
-                    <select id="client" className={inputCls} value={clientId} onChange={(e) => pickClient(e.target.value)}>
-                      {activeClients.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                      <option value={NEW_CLIENT}>+ Add a new client</option>
-                    </select>
+                {!isNew && (
+                  <div className="mt-4 flex items-center gap-3 p-3 rounded-lg bg-[#F5F8FD] border border-[#E3E7EF]">
+                    <span className="w-8 h-8 rounded-lg bg-[#122654] flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-[#FF7A66]" aria-hidden="true" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[10px] text-[#7E8DA6]">New period for</span>
+                      <span className="block text-sm font-bold text-[#122654] truncate">{clientName}</span>
+                    </span>
+                    <button type="button" onClick={() => pickClient(NEW_CLIENT)} className="text-[11px] font-semibold text-[#1D4E89] hover:underline cursor-pointer shrink-0">
+                      New client instead
+                    </button>
                   </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
                   {isNew && (
                     <div>
                       <Q htmlFor="name">{structure === 'sole' ? 'Full name' : sf.legalLabel}</Q>
@@ -401,6 +402,8 @@ export default function NewEngagementWizard() {
               </>
             )}
 
+            {hint && <p className="mt-5 text-[11px] text-[#4A5878]">{hint}</p>}
+
             {error && (
               <div role="alert" className="mt-5 p-2.5 rounded-lg bg-[#FFF4DB] border border-[#6B4700]/20 text-[#6B4700] text-xs font-medium">
                 {error}
@@ -426,33 +429,6 @@ export default function NewEngagementWizard() {
               </button>
             </div>
           </main>
-
-          {/* Running summary and what this step changes */}
-          <aside className="border-t lg:border-t-0 lg:border-l border-[#EEF2F9] bg-[#F9FAFC] px-4 py-5 lg:rounded-br-xl space-y-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8DA6] mb-2">Your engagement</p>
-              <dl className="space-y-2">
-                {summary.map(([label, value, from]) => (
-                  <div key={label} className={from > furthest ? 'opacity-40' : ''}>
-                    <dt className="text-[10px] text-[#7E8DA6]">{label}</dt>
-                    <dd className="text-xs font-semibold text-[#122654] truncate" title={value}>{from > furthest ? '…' : value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-            {changes[step].length > 0 && (
-              <div className="p-3 rounded-lg bg-[#EEF2F9] border border-[#1D4E89]/15">
-                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#1D4E89] mb-1.5">
-                  <Zap className="w-3 h-3" /> What this changes
-                </p>
-                <ul className="space-y-1">
-                  {changes[step].map((l) => (
-                    <li key={l} className="text-[11px] text-[#122654] leading-snug">{l}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </aside>
         </div>
       </div>
     </div>
