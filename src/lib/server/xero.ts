@@ -376,15 +376,23 @@ const docDate = (d: XeroDoc) =>
  * Sales invoices, credit notes, prepayments and overpayments open at the period end, as Xero's Aged
  * Receivables shows them: what is owed now, plus whatever was set against it after the period end.
  * Each invoice keeps its own payments, so nothing is matched oldest-first. Credits come out negative.
+ * The purchases side reads bills, supplier credit notes and money paid on account the same way, for Aged Payables.
  */
-export function openDebtorItems(pe: string, shortCode: string | null, docs: { invoices: XeroDoc[]; creditNotes: XeroDoc[]; prepayments: XeroDoc[]; overpayments: XeroDoc[] }): DebtorOpenItem[] {
+export function openDebtorItems(
+  pe: string,
+  shortCode: string | null,
+  docs: { invoices: XeroDoc[]; creditNotes: XeroDoc[]; prepayments: XeroDoc[]; overpayments: XeroDoc[] },
+  side: 'sales' | 'purchases' = 'sales'
+): DebtorOpenItem[] {
+  const sales = side === 'sales';
+  const area = sales ? '/AccountsReceivable' : '/AccountsPayable';
   const out: DebtorOpenItem[] = [];
   const live = (d: XeroDoc) => ['AUTHORISED', 'PAID'].includes(d.Status ?? '') && docDate(d) <= pe;
   const later = (list: XeroAllocation[] | undefined, field: 'Amount' | 'AppliedAmount') =>
     (list ?? []).filter((a) => docDate(a as XeroDoc) > pe).reduce((s, a) => s + pence(a[field]), 0n);
   const dueOf = (d: XeroDoc) => (d.DueDateString || d.DueDate ? docDate({ DateString: d.DueDateString, Date: d.DueDate }) : docDate(d));
   for (const inv of docs.invoices) {
-    if (inv.Type !== 'ACCREC' || !live(inv) || !inv.InvoiceID) continue;
+    if (inv.Type !== (sales ? 'ACCREC' : 'ACCPAY') || !live(inv) || !inv.InvoiceID) continue;
     const paidAfter = later(inv.Payments, 'Amount');
     const open = pence(inv.AmountDue) + paidAfter + later(inv.CreditNotes, 'AppliedAmount') + later(inv.Prepayments, 'AppliedAmount') + later(inv.Overpayments, 'AppliedAmount');
     if (open <= 0n) continue;
@@ -400,21 +408,21 @@ export function openDebtorItems(pe: string, shortCode: string | null, docs: { in
     out.push({
       contact: inv.Contact?.Name ?? '',
       kind: 'invoice',
-      ref: inv.InvoiceNumber || inv.Reference || 'Invoice',
+      ref: inv.InvoiceNumber || inv.Reference || (sales ? 'Invoice' : 'Bill'),
       date: docDate(inv),
       due: dueOf(inv),
       amount_p: open.toString(),
       received_after_p: paidAfter.toString(),
       ...(lastPaid ? { received_after_on: lastPaid } : {}),
-      url: xeroDeepLink(shortCode, `/AccountsReceivable/View.aspx?InvoiceID=${inv.InvoiceID}`),
+      url: xeroDeepLink(shortCode, `${area}/View.aspx?InvoiceID=${inv.InvoiceID}`),
       ...(inv.Total != null ? { total_p: pence(inv.Total).toString() } : {}),
       ...(payments.length ? { payments } : {}),
     });
   }
   const credits: [DebtorOpenItem['kind'], XeroDoc[], (d: XeroDoc) => boolean, (d: XeroDoc) => string | undefined][] = [
-    ['credit note', docs.creditNotes, (d) => d.Type === 'ACCRECCREDIT', (d) => d.CreditNoteID && `/AccountsReceivable/ViewCreditNote.aspx?creditNoteID=${d.CreditNoteID}`],
-    ['prepayment', docs.prepayments, (d) => d.Type === 'RECEIVE-PREPAYMENT', () => undefined],
-    ['overpayment', docs.overpayments, (d) => d.Type === 'RECEIVE-OVERPAYMENT', () => undefined],
+    ['credit note', docs.creditNotes, (d) => d.Type === (sales ? 'ACCRECCREDIT' : 'ACCPAYCREDIT'), (d) => d.CreditNoteID && `${area}/ViewCreditNote.aspx?creditNoteID=${d.CreditNoteID}`],
+    ['prepayment', docs.prepayments, (d) => d.Type === (sales ? 'RECEIVE-PREPAYMENT' : 'SPEND-PREPAYMENT'), () => undefined],
+    ['overpayment', docs.overpayments, (d) => d.Type === (sales ? 'RECEIVE-OVERPAYMENT' : 'SPEND-OVERPAYMENT'), () => undefined],
   ];
   for (const [kind, list, mine, path] of credits) {
     for (const c of list) {
@@ -550,21 +558,23 @@ const xeroDt = (d: string) => `DateTime(${d.replace(/-02-29$/, '-02-28').replace
  * the last three years are read and the rest dropped by date. shortcut: credits settled more than three
  * years before the pull are not read, which only matters if one was still open at a period end that old.
  */
-async function openDebtorsAt(token: string, tenantId: string, shortCode: string | null, pe: string, deadline: number): Promise<DebtorOpenItem[]> {
+// Both sides in one read: the type is left out of the filters and each side is picked out after
+async function openItemsAt(token: string, tenantId: string, shortCode: string | null, pe: string, deadline: number) {
   const asOf = xeroDt(pe);
   const since = xeroDt(`${Number(pe.slice(0, 4)) - 3}${pe.slice(4)}`);
   const settled = `(Status=="AUTHORISED" || (Status=="PAID" && Date >= ${since}))`;
   const get = (endpoint: string, where: string) => allPagesWhere(endpoint, endpoint, token, tenantId, where, deadline);
-  const invoices = await get('Invoices', `Type=="ACCREC" && Date <= ${asOf} && (Status=="AUTHORISED" || (Status=="PAID" && FullyPaidOnDate > ${asOf}))`).catch((err) => {
+  const invoices = await get('Invoices', `Date <= ${asOf} && (Status=="AUTHORISED" || (Status=="PAID" && FullyPaidOnDate > ${asOf}))`).catch((err) => {
     if (!(err instanceof ServiceError) || err.code !== 'XERO_ERROR') throw err;
-    return get('Invoices', `Type=="ACCREC" && Date <= ${asOf} && ${settled}`);
+    return get('Invoices', `Date <= ${asOf} && ${settled}`);
   });
   const [creditNotes, prepayments, overpayments] = await Promise.all([
-    get('CreditNotes', `Type=="ACCRECCREDIT" && Date <= ${asOf} && ${settled}`),
-    get('Prepayments', `Type=="RECEIVE-PREPAYMENT" && Date <= ${asOf} && ${settled}`),
-    get('Overpayments', `Type=="RECEIVE-OVERPAYMENT" && Date <= ${asOf} && ${settled}`),
+    get('CreditNotes', `Date <= ${asOf} && ${settled}`),
+    get('Prepayments', `Date <= ${asOf} && ${settled}`),
+    get('Overpayments', `Date <= ${asOf} && ${settled}`),
   ]);
-  return openDebtorItems(pe, shortCode, { invoices, creditNotes, prepayments, overpayments });
+  const docs = { invoices, creditNotes, prepayments, overpayments };
+  return { debtors: openDebtorItems(pe, shortCode, docs, 'sales'), creditors: openDebtorItems(pe, shortCode, docs, 'purchases') };
 }
 
 async function allPagesWhere(endpoint: string, key: string, token: string, tenantId: string, filter: string, deadline = 0): Promise<XeroDoc[]> {
@@ -777,14 +787,17 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
   // Replace this engagement's Xero transactions so a re-pull never doubles them up
   db.transactions = [...db.transactions.filter((t) => !(t.engagement_id === engagementId && t.source === 'Xero')), ...tx];
   out.body.transactionCount = tx.length;
-  // Trade debtors are aged from what was open at the period end, however old, not from one year's movements
+  // Trade debtors and creditors come from what was open at the period end, however old, not from one year's movements
   try {
-    const items = await openDebtorsAt(token, conn.tenant_id, conn.short_code, eng.period_end, deadline);
-    eng.debtor_open_items = { as_at: eng.period_end, fetched_at: new Date().toISOString(), source: 'Xero', items };
-    out.body.openDebtorItems = items.length;
+    const { debtors, creditors } = await openItemsAt(token, conn.tenant_id, conn.short_code, eng.period_end, deadline);
+    const at = new Date().toISOString();
+    eng.debtor_open_items = { as_at: eng.period_end, fetched_at: at, source: 'Xero', items: debtors };
+    eng.creditor_open_items = { as_at: eng.period_end, fetched_at: at, source: 'Xero', items: creditors };
+    out.body.openDebtorItems = debtors.length;
+    out.body.openCreditorItems = creditors.length;
   } catch (err) {
     if (err instanceof XeroReconnectError) throw err;
-    notGathered.push('open debtors at the period end');
+    notGathered.push('open debtors and creditors at the period end');
   }
   if (notGathered.length) out.body.notGathered = notGathered;
   return out;

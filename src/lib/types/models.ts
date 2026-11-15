@@ -255,6 +255,8 @@ export interface Engagement {
   quarterly?: QuarterlyPack; // QTR-01
   /** Sales invoices, credit notes and money on account still open at the period end, read from the ledger; C-10 ages from these */
   debtor_open_items?: DebtorOpenItems;
+  /** The same for bills, supplier credit notes and money paid on account; K-10 reads these */
+  creditor_open_items?: DebtorOpenItems;
 }
 
 export interface DebtorOpenItem {

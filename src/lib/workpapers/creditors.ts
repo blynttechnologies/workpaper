@@ -1,5 +1,7 @@
 import { asPence, formatPence } from '../money';
+import { db } from '../server/db';
 import type { BankPayment } from '../server/xero';
+import type { DebtorOpenItem, DebtorPayment } from '../types/models';
 import { addDays, afterDateKnown, byContact, chartCodeOf, journalCheck, ledgerFor, openItems, pair, slug, usualExpenseCode, type JLine, type PaperContext } from './common';
 
 /**
@@ -17,8 +19,9 @@ export interface Supplier {
   statement_p: string; // '' until entered
   paid_after_p: string;
   oldest_days?: number;
-  invoices?: { ref: string; date: string; days: number; amount_p: string; url?: string }[];
+  invoices?: { ref: string; date: string; due?: string; days: number; amount_p: string; url?: string; total_p?: string; payments?: DebtorPayment[] }[];
   payments_after?: { date: string; desc: string; amount_p: string; url?: string }[];
+  overdue?: boolean; // oldest_days counts days past the due date, not the bill's age
   expense_code?: string;
   vat_p?: string; // VAT inside a missing invoice
   decision?: SupplierDecision;
@@ -75,8 +78,13 @@ export function supplierView(s: Supplier) {
   return { s, ledger, statement, entered, diff, paid, debit, suggestion, decided, needsDispute, status };
 }
 
-/** Suppliers from the creditors control account at the period end; decisions already made are kept. */
+/**
+ * Suppliers at the period end; decisions already made are kept. From the bills Xero had open at the period
+ * end when the last pull read them, as its Aged Payables does; otherwise from the creditors control account.
+ */
 export function suppliersFromLedger(engagementId: string, periodEnd: string, windowDays: number, existing: Supplier[] = []): Supplier[] | null {
+  const open = db.engagements.find((e) => e.id === engagementId)?.creditor_open_items;
+  if (open?.as_at === periodEnd && open.items.length) return suppliersFromOpenItems(open.items, engagementId, periodEnd, windowDays, existing);
   const tx = ledgerFor(engagementId, ['7500']);
   if (!tx.length) return null;
   const until = addDays(periodEnd, windowDays);
@@ -96,6 +104,49 @@ export function suppliersFromLedger(engagementId: string, periodEnd: string, win
       oldest_days: open[0]?.days ?? 0,
       invoices: open.map((o) => ({ ref: o.tx.description, date: o.tx.date, days: o.days, amount_p: o.amount.toString(), ...(o.tx.external_url ? { url: o.tx.external_url } : {}) })),
       payments_after: payments.map((t) => ({ date: t.date, desc: t.description, amount_p: t.amount_p, ...(t.external_url ? { url: t.external_url } : {}) })),
+      expense_code: prev?.expense_code ?? usualExpenseCode(engagementId, name) ?? undefined,
+      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, bank_check: prev.bank_check } : {}),
+    });
+  }
+  return out;
+}
+
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000);
+
+/**
+ * One row per supplier from the open bills and credits. Days overdue count the due date as the first, so a
+ * bill due on the period end is 1 day overdue. Paid after the period end is the money paid against these
+ * bills within the window; credits applied after it are not money paid.
+ */
+export function suppliersFromOpenItems(items: DebtorOpenItem[], engagementId: string, periodEnd: string, windowDays: number, existing: Supplier[] = []): Supplier[] {
+  const until = addDays(periodEnd, windowDays);
+  const overdue = (it: DebtorOpenItem) => Math.max(0, daysBetween(it.due, periodEnd) + 1);
+  const groups = new Map<string, DebtorOpenItem[]>();
+  for (const it of items) groups.set(it.contact || 'No name', [...(groups.get(it.contact || 'No name') ?? []), it]);
+  const out: Supplier[] = [];
+  for (const [name, its] of Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+    const balance = its.reduce((acc, it) => acc + asPence(it.amount_p), 0n);
+    if (balance === 0n) continue;
+    const payments = its.flatMap((it) =>
+      (it.payments ?? []).filter((p) => p.how === 'payment' && p.date > periodEnd && p.date <= until).map((p) => ({ date: p.date, desc: `Paid against ${it.ref}`, amount_p: p.amount_p, ...(it.url ? { url: it.url } : {}) }))
+    ).sort((a, b) => a.date.localeCompare(b.date));
+    const paid = payments.reduce((acc, p) => acc + asPence(p.amount_p), 0n);
+    const owed = its.filter((it) => asPence(it.amount_p) > 0n);
+    const prev = existing.find((x) => x.name === name);
+    out.push({
+      id: prev?.id ?? `sup_${out.length + 1}_${slug(name)}`,
+      name,
+      ledger_p: balance.toString(),
+      statement_p: prev?.statement_p ?? '',
+      paid_after_p: (balance > 0n ? (paid < balance ? paid : balance) : 0n).toString(),
+      oldest_days: owed.length ? Math.max(...owed.map(overdue)) : 0,
+      overdue: true,
+      invoices: its.map((it) => ({
+        ref: `${it.kind === 'invoice' ? '' : `${it.kind[0].toUpperCase()}${it.kind.slice(1)} `}${it.ref}`,
+        date: it.date, due: it.due, days: overdue(it), amount_p: it.amount_p,
+        ...(it.url ? { url: it.url } : {}), ...(it.total_p ? { total_p: it.total_p } : {}), ...(it.payments?.length ? { payments: it.payments } : {}),
+      })),
+      payments_after: payments,
       expense_code: prev?.expense_code ?? usualExpenseCode(engagementId, name) ?? undefined,
       ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, bank_check: prev.bank_check } : {}),
     });
