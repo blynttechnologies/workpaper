@@ -1,4 +1,4 @@
-import { OWNER_ACCOUNTS, STANDARD_CHART, V2_TO_V3 } from '@/lib/standard-chart';
+import { ADD_ON_ACCOUNTS, OWNER_ACCOUNTS, STANDARD_CHART, V2_TO_V3 } from '@/lib/standard-chart';
 import type { Structure } from '@/lib/practice-structure';
 
 export interface MappingSuggestion {
@@ -605,7 +605,7 @@ export function getStatutoryDetails(
 
   // The standard chart carries each account's statutory line, schedule and cash flow category.
   // REC-01 is the schedule framework, not a schedule, so income and expense lines leave it blank.
-  const acct = [...STANDARD_CHART, ...OWNER_ACCOUNTS].find((a) => a.code === code);
+  const acct = [...STANDARD_CHART, ...ADD_ON_ACCOUNTS].find((a) => a.code === code);
   if (acct?.statutory_line && acct.cash_flow_category) {
     return {
       statutory_line: acct.statutory_line,

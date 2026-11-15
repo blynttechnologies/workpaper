@@ -329,3 +329,52 @@ export const OWNER_ACCOUNTS: BlyntAccount[] = [
   owner('8555', "Members' current accounts", 'llp'),
   owner('8560', "Members' drawings", 'llp', 'Debit'),
 ];
+
+/**
+ * Movement accounts for every fixed asset category: disposals at cost, and the accumulated
+ * depreciation or amortisation charged in the year and released on disposal. Each rolls up into
+ * its category's cost or accumulated account (parent_code), so the papers' totals include it.
+ * Tangible codes follow the practice's layout (…2 cost disposals, …6 charge, …7 disposals);
+ * intangible categories are five codes apart, so theirs sit at +2, +3 and +4.
+ */
+const movement = (code: string, name: string, parent: string, normal_balance: 'Debit' | 'Credit'): BlyntAccount => {
+  const { used_by_count: _u, ...base } = STANDARD_CHART.find((a) => a.code === parent)!;
+  return { ...base, code, name, normal_balance, is_control: false, parent_code: parent };
+};
+const plus = (code: string, n: number) => String(Number(code) + n);
+const FIXED_ASSET_CATEGORIES: [cost: string, acc: string | null, name: string, charge: 'depreciation' | 'amortisation'][] = [
+  ['6500', '6510', 'Property', 'depreciation'],
+  ['6520', '6530', 'Long leasehold property', 'depreciation'],
+  ['6540', '6550', 'Leasehold improvements', 'depreciation'],
+  ['6560', null, 'Land', 'depreciation'],
+  ['6570', null, 'Assets under construction', 'depreciation'],
+  ['6580', '6590', 'Right-of-use assets', 'depreciation'],
+  ['6600', '6610', 'Plant and equipment', 'depreciation'],
+  ['6620', '6630', 'Tools and equipment', 'depreciation'],
+  ['6640', '6650', 'Office equipment', 'depreciation'],
+  ['6700', '6710', 'Motor vehicles', 'depreciation'],
+  ['6720', '6730', 'Cars', 'depreciation'],
+  ['6800', '6810', 'Computer equipment', 'depreciation'],
+  ['6900', '6910', 'Fixtures and fittings', 'depreciation'],
+  ['6970', '6971', 'Goodwill', 'amortisation'],
+  ['6975', '6976', 'Software (intangible)', 'amortisation'],
+  ['6980', '6981', 'Development costs', 'amortisation'],
+  ['6985', '6986', 'Trademarks, patents and licences', 'amortisation'],
+  ['6990', '6991', 'Website development', 'amortisation'],
+  ['6995', '6996', 'Other intangible assets', 'amortisation'],
+];
+export const FIXED_ASSET_MOVEMENTS: BlyntAccount[] = FIXED_ASSET_CATEGORIES.flatMap(([cost, acc, name, charge]) => {
+  const intangible = charge === 'amortisation';
+  return [
+    movement(plus(cost, 2), `${name} cost - disposals`, cost, 'Credit'),
+    ...(acc
+      ? [
+          movement(intangible ? plus(cost, 3) : plus(acc, 6), `${name} accumulated ${charge} - charge for the year`, acc, 'Credit'),
+          movement(intangible ? plus(cost, 4) : plus(acc, 7), `${name} accumulated ${charge} - disposals`, acc, 'Debit'),
+        ]
+      : []),
+  ];
+});
+
+/** Every account added on top of the 302 published ones. A practice's own account already using one of these codes keeps it. */
+export const ADD_ON_ACCOUNTS: BlyntAccount[] = [...OWNER_ACCOUNTS, ...FIXED_ASSET_MOVEMENTS];
