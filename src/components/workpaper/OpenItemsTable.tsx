@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
 import type { DebtorPayment } from '@/lib/types/models';
@@ -14,73 +15,91 @@ export interface OpenItemRow {
   payments?: DebtorPayment[];
 }
 
-const money = (p: string) => formatPence(asPence(p), { symbol: '' });
+const money = (p: string | bigint) => formatPence(asPence(p), { symbol: '' });
 
 /**
- * Invoices or bills open at the period end: date and due date, full amount, every payment (folded
- * when there is more than one), what was open at the period end and how overdue or old it was.
+ * Invoices or bills open at the period end, laid out like a working spreadsheet: number, date (and due
+ * date), amount, paid date and paid amount (several payments fold into one row that opens), what was open
+ * at the period end and how overdue or old it was.
  */
-export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter }: { items: OpenItemRow[]; peLabel: string; title: string; byDue: boolean; warnAfter: number }) {
-  const payRow = (p: DebtorPayment, k: number) => (
-    <span key={k} className="flex justify-between gap-2">
-      <span>{ukDate(p.date)}{p.how !== 'payment' ? ` (${p.how})` : ''}</span>
-      <span className="font-mono">{money(p.amount_p)}</span>
-    </span>
-  );
+export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLabel = 'Inv #' }: { items: OpenItemRow[]; peLabel: string; title: string; byDue: boolean; warnAfter: number; refLabel?: string }) {
+  const [opened, setOpened] = useState<Set<number>>(new Set());
+  const toggle = (i: number) => setOpened((s) => (s.has(i) ? new Set([...s].filter((x) => x !== i)) : new Set(s).add(i)));
+  const cell = 'py-1 pr-3';
+  const how = (p: DebtorPayment) => (p.how !== 'payment' ? ` (${p.how})` : '');
   return (
-    <table className="w-full text-[11px]">
-      <caption className="text-left font-semibold text-[#4A5878] pb-1">{title}</caption>
-      <thead>
-        <tr className="text-[10px] text-[#4A5878] text-left">
-          <th scope="col" className="py-1 font-semibold">Ref</th>
-          <th scope="col" className="py-1 font-semibold">Date</th>
-          <th scope="col" className="py-1 font-semibold text-right">Amount</th>
-          <th scope="col" className="py-1 pl-3 font-semibold">Paid</th>
-          <th scope="col" className="py-1 font-semibold text-right">Open at {peLabel}</th>
-          <th scope="col" className="py-1 pl-3 font-semibold">{byDue ? 'Overdue' : 'Age'}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((inv, i) => {
-          const pays = inv.payments ?? [];
-          return (
-            <tr key={i} className="border-t border-[#EEF1F6] align-top">
-              <td className="py-1">
-                {inv.url ? (
-                  <a href={inv.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
-                    {inv.ref || 'Invoice'}
-                  </a>
-                ) : (
-                  inv.ref || 'Invoice'
-                )}
-              </td>
-              <td className="py-1">
-                {ukDate(inv.date)}
-                {inv.due && <span className="block text-[10px] text-[#4A5878]">due {ukDate(inv.due)}</span>}
-              </td>
-              <td className="py-1 text-right font-mono">{inv.total_p ? money(inv.total_p) : '–'}</td>
-              <td className="py-1 pl-3 min-w-[150px]">
-                {pays.length === 0 ? (
-                  '–'
-                ) : pays.length === 1 ? (
-                  payRow(pays[0], 0)
-                ) : (
-                  <details>
-                    <summary className="cursor-pointer text-[#1D4E89]">
-                      {pays.length} payments · <span className="font-mono">{money(pays.reduce((s, p) => s + asPence(p.amount_p), 0n).toString())}</span>
-                    </summary>
-                    {pays.map(payRow)}
-                  </details>
-                )}
-              </td>
-              <td className="py-1 text-right font-mono">{money(inv.amount_p)}</td>
-              <td className={`py-1 pl-3 ${inv.days > warnAfter ? 'text-[#B42318]' : ''}`}>
-                {byDue ? (inv.days ? `${inv.days} day${inv.days === 1 ? '' : 's'}` : 'Not due') : `${inv.days} days old`}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="flex flex-col gap-1">
+      <table className="w-full text-[11px]">
+        <caption className="text-left font-semibold text-[#4A5878] pb-1">{title}</caption>
+        <thead>
+          <tr className="text-[10px] text-[#4A5878] text-left">
+            <th scope="col" className={`${cell} font-semibold`}>{refLabel}</th>
+            <th scope="col" className={`${cell} font-semibold`}>Date</th>
+            <th scope="col" className={`${cell} font-semibold text-right`}>Amount</th>
+            <th scope="col" className={`${cell} font-semibold`}>Paid date</th>
+            <th scope="col" className={`${cell} font-semibold text-right`}>Paid amount</th>
+            <th scope="col" className={`${cell} font-semibold text-right`}>Open at {peLabel}</th>
+            <th scope="col" className="py-1 font-semibold">{byDue ? 'Overdue' : 'Age'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((inv, i) => {
+            const pays = inv.payments ?? [];
+            const many = pays.length > 1;
+            const open = opened.has(i);
+            return (
+              <React.Fragment key={i}>
+                <tr className="border-t border-[#EEF1F6] align-top">
+                  <td className={cell}>
+                    {inv.url ? (
+                      <a href={inv.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
+                        {inv.ref || 'Invoice'}
+                      </a>
+                    ) : (
+                      inv.ref || 'Invoice'
+                    )}
+                  </td>
+                  <td className={cell}>
+                    {ukDate(inv.date)}
+                    {inv.due && <span className="block text-[10px] text-[#4A5878]">due {ukDate(inv.due)}</span>}
+                  </td>
+                  <td className={`${cell} text-right font-mono`}>{inv.total_p ? money(inv.total_p) : '–'}</td>
+                  <td className={cell}>
+                    {many ? (
+                      <button type="button" onClick={() => toggle(i)} aria-expanded={open} className="inline-flex items-center gap-0.5 text-[#1D4E89] hover:underline">
+                        <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
+                        {pays.length} payments
+                      </button>
+                    ) : pays.length ? (
+                      `${ukDate(pays[0].date)}${how(pays[0])}`
+                    ) : (
+                      '–'
+                    )}
+                  </td>
+                  <td className={`${cell} text-right font-mono`}>{pays.length ? money(pays.reduce((s, p) => s + asPence(p.amount_p), 0n)) : '–'}</td>
+                  <td className={`${cell} text-right font-mono`}>{money(inv.amount_p)}</td>
+                  <td className={`py-1 ${inv.days > warnAfter ? 'text-[#B42318]' : ''}`}>
+                    {byDue ? (inv.days ? `${inv.days} day${inv.days === 1 ? '' : 's'}` : 'Not due') : `${inv.days} days old`}
+                  </td>
+                </tr>
+                {many &&
+                  open &&
+                  pays.map((p, k) => (
+                    <tr key={k} className="text-[#4A5878]">
+                      <td colSpan={3} />
+                      <td className={`${cell} pl-4`}>{ukDate(p.date)}{how(p)}</td>
+                      <td className={`${cell} text-right font-mono`}>{money(p.amount_p)}</td>
+                      <td colSpan={2} />
+                    </tr>
+                  ))}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+      {!items.some((i) => i.total_p) && items.some((i) => asPence(i.amount_p) > 0n) && (
+        <p className="text-[10px] text-[#6B4700]">Amounts and payments come with the next pull from Xero. Pull again, then refresh, to see them here.</p>
+      )}
+    </div>
   );
 }
