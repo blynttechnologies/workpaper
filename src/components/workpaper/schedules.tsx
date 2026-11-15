@@ -930,62 +930,43 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                             <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#B8432F]" /> {v.suggestion.why}
                           </div>
                         )}
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                          <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2">
-                            <div className="font-bold">Balance at {peLabel}</div>
-                            <label className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold text-[#4A5878]">Customer</span>
-                              <TextInput label="Customer name" value={l.desc} disabled={locked} placeholder="Customer name" onCommit={(d) => setLine(l.id, { desc: d })} />
-                            </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                              {(
-                                [
-                                  ['current_p', BUCKETS[0]],
-                                  ['d30_p', BUCKETS[1]],
-                                  ['d60_p', BUCKETS[2]],
-                                  ['d90_p', BUCKETS[3]],
-                                  ['after_date_p', 'Received after'],
-                                ] as const
-                              ).map(([key, label]) => (
-                                <label key={key} className="flex flex-col gap-1">
-                                  <span className="text-[10px] font-semibold text-[#4A5878]">{label}</span>
-                                  <MoneyInput label={`${name} ${label}`} value={l[key]} disabled={locked} allowNegative={key !== 'after_date_p'} onCommit={(p) => setLine(l.id, { [key]: p })} />
-                                </label>
-                              ))}
-                            </div>
-                            {l.decision === 'provide' && (
-                              <label className="flex items-center gap-2 max-w-xs">
-                                <span className="text-[10px] font-semibold text-[#4A5878] shrink-0">Provision</span>
-                                <MoneyInput label={`Provision for ${name}`} value={l.provision_p} disabled={locked} allowNegative={false} onCommit={(p) => setLine(l.id, { provision_p: p })} />
+                        <div className="flex flex-col gap-3">
+                          {!l.invoices?.length && (
+                            <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2">
+                              <div className="font-bold">Balance at {peLabel}</div>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold text-[#4A5878]">Customer</span>
+                                <TextInput label="Customer name" value={l.desc} disabled={locked} placeholder="Customer name" onCommit={(d) => setLine(l.id, { desc: d })} />
                               </label>
-                            )}
-                            {!!l.invoices?.length && (
-                              <OpenItemsTable items={l.invoices} peLabel={peLabel} title={`Open invoices at ${peLabel}`} byDue={byDue} warnAfter={byDue ? 60 : 90} />
-                            )}
-                          </div>
-                          <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2">
-                            <div className="font-bold">Receipts after {peLabel}</div>
-                            {l.receipts?.length ? (
-                              <table className="w-full text-[11px]">
-                                <tbody>
-                                  {l.receipts.map((r, i) => (
-                                    <tr key={i} className="border-t border-[#EEF1F6]">
-                                      <td className="py-1 w-[80px]">{ukDate(r.date)}</td>
-                                      <td className="py-1">{r.desc}</td>
-                                      <td className="py-1 text-right font-mono">{formatPence(asPence(r.amount_p), { symbol: '' })}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <div className="text-[11px] text-[#7E8DA6]">{data.receipts_from_ledger ? 'Nothing received in the ledger after the period end.' : 'Enter what was received after the period end above, or refresh from the ledger.'}</div>
-                            )}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {tickFor(l.id, name)}
-                              <RowFiles files={filesFor(l.id)} onPreview={preview} onAttach={() => attachTo(l.id)} disabled={locked} label={`correspondence or remittance for ${name}`} />
-                              {!locked && <span className="text-[10px] text-[#7E8DA6]">Attach correspondence or remittance, or drop it on the row</span>}
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                                {(
+                                  [
+                                    ['current_p', BUCKETS[0]],
+                                    ['d30_p', BUCKETS[1]],
+                                    ['d60_p', BUCKETS[2]],
+                                    ['d90_p', BUCKETS[3]],
+                                    ['after_date_p', 'Received after'],
+                                  ] as const
+                                ).map(([key, label]) => (
+                                  <label key={key} className="flex flex-col gap-1">
+                                    <span className="text-[10px] font-semibold text-[#4A5878]">{label}</span>
+                                    <MoneyInput label={`${name} ${label}`} value={l[key]} disabled={locked} allowNegative={key !== 'after_date_p'} onCommit={(p) => setLine(l.id, { [key]: p })} />
+                                  </label>
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          )}
+                          {l.decision === 'provide' && (
+                            <label className="flex items-center gap-2 max-w-xs">
+                              <span className="text-[10px] font-semibold text-[#4A5878] shrink-0">Provision</span>
+                              <MoneyInput label={`Provision for ${name}`} value={l.provision_p} disabled={locked} allowNegative={false} onCommit={(p) => setLine(l.id, { provision_p: p })} />
+                            </label>
+                          )}
+                          {!!l.invoices?.length && (
+                            <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
+                              <OpenItemsTable items={l.invoices} peLabel={peLabel} title={`Open invoices at ${peLabel}`} byDue={byDue} warnAfter={byDue ? 60 : 90} />
+                            </div>
+                          )}
                         </div>
                         {!locked && (
                           <div className="mt-2 text-right">

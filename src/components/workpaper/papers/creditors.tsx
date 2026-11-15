@@ -10,6 +10,13 @@ import { getActor } from '@/lib/session';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { OpenItemsTable } from '../OpenItemsTable';
+
+const AGED = [
+  ['current_p', 'Not due'],
+  ['d30_p', '1–30 overdue'],
+  ['d60_p', '31–60 overdue'],
+  ['d90_p', 'Over 60 overdue'],
+] as const;
 import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, SuggestionRow, th, Tiles, useOpen } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
 import { bankMatches, creditorsJournal, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
@@ -98,6 +105,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     });
 
   const attention = (v: ReturnType<typeof supplierView>) => v.status !== 'done';
+  // Suppliers read from Xero's open bills carry an ageing by due date; the ledger fallback only has the oldest bill's age
+  const agedCols = views.some((v) => v.s.aged);
   const shown = views.filter((v) => (filter === 'attention' ? attention(v) : filter === 'done' ? !attention(v) : true));
   const withStatement = views.filter((v) => v.ledger > 0n && v.entered && filesFor(v.s.id).length);
   const owedCount = views.filter((v) => v.ledger > 0n).length;
@@ -158,7 +167,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <th className={`${th} text-right w-[130px]`}>Statement</th>
               <th className={`${th} text-right`}>Difference</th>
               <th className={`${th} text-right`}>Paid after</th>
-              <th className={`${th} text-right`}>Oldest</th>
+              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} text-right`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
               <th className={`${th} text-left`}>Status</th>
               <th className={`${th} text-left`}>Statement on file</th>
             </tr>
@@ -166,7 +175,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           <tbody className="divide-y divide-[#E3E7EF]">
             {views.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-3 text-[11px] text-[#7E8DA6]">
+                <td colSpan={agedCols ? 12 : 9} className="p-3 text-[11px] text-[#7E8DA6]">
                   No suppliers yet. Refresh from the ledger, or add suppliers by hand.
                 </td>
               </tr>
@@ -215,9 +224,20 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                           <div className="text-[10px] text-[#B42318]">Not in Xero bank to {ukDate(s.bank_check.to)}</div>
                         ))}
                     </td>
-                    <td className="p-2 align-top text-right">
-                      {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
-                    </td>
+                    {agedCols ? (
+                      AGED.map(([key]) => {
+                        const p = asPence(s.aged?.[key] ?? '0');
+                        return (
+                          <td key={key} className={`p-2 align-top text-right font-mono ${key === 'd90_p' && p > 0n ? 'text-[#B8432F] font-bold' : ''}`}>
+                            {p === 0n ? '–' : money(p)}
+                          </td>
+                        );
+                      })
+                    ) : (
+                      <td className="p-2 align-top text-right">
+                        {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
+                      </td>
+                    )}
                     <td className="p-2 align-top">
                       <Pill tone={tone}>{label}</Pill>
                     </td>
@@ -231,7 +251,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                   {(isOpen(s.id) || (v.suggestion && !s.decision) || (v.needsDispute && !s.dispute)) && (
                     <tr className="bg-[#FAFBFD]">
                       <td />
-                      <td colSpan={8} className="p-3 flex flex-col gap-2">
+                      <td colSpan={agedCols ? 11 : 8} className="p-3 flex flex-col gap-2">
                         {v.suggestion && !s.decision && (
                           <SuggestionRow
                             actions={
@@ -404,7 +424,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.statement ?? 0n), 0n))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.diff ?? 0n), 0n))}</td>
                 <td className="p-2 text-right font-mono">{money(tot('paid_after'))}</td>
-                <td colSpan={3} />
+                {agedCols && AGED.map(([key]) => <td key={key} className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + asPence(v.s.aged?.[key] ?? '0'), 0n))}</td>)}
+                <td colSpan={agedCols ? 2 : 3} />
               </tr>
             </tfoot>
           )}
