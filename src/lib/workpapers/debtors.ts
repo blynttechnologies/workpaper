@@ -28,7 +28,7 @@ export interface DebtorLine {
   receipts?: { date: string; desc: string; amount_p: string; url?: string }[];
 }
 
-export type DebtorStatus = 'suggest' | 'credit' | 'provided' | 'moved' | 'no_provision' | 'collected' | 'recoverable';
+export type DebtorStatus = 'suggest' | 'credit' | 'provided' | 'moved' | 'no_provision' | 'collected' | 'recoverable' | 'nil';
 
 export function debtorView(l: DebtorLine) {
   const cur = asPence(l.current_p);
@@ -64,9 +64,11 @@ export function debtorView(l: DebtorLine) {
             ? 'credit'
             : suggestion
               ? 'suggest'
-              : total > 0n && after < total
-                ? 'recoverable'
-                : 'collected';
+              : total === 0n
+                ? 'nil'
+                : after < total
+                  ? 'recoverable'
+                  : 'collected';
   const needsDecision = (!!suggestion && !l.decision) || (l.decision === 'no_provision' && !l.reason?.trim());
   return { line: l, cur, d30, d60, d90, total, after, suggestion, provision, moved, status, needsDecision, stillDue: total > after ? total - after : 0n };
 }

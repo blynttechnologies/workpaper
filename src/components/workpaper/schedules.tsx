@@ -712,6 +712,8 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         );
       case 'collected':
         return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F4EF] text-[#0B6B52]">✓ Collected after date</span>;
+      case 'nil':
+        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#4A5878]">No balance entered</span>;
       default:
         return (
           <div className="flex flex-col items-end gap-0.5">

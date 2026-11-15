@@ -44,6 +44,13 @@ async function loadLedger(engagementId: string) {
   ledgerLoaded.add(engagementId);
 }
 
+// The open year's ledger, and the year before's for the comparisons the papers make
+async function loadLedgers(engagementId: string) {
+  await loadLedger(engagementId);
+  const prior = db.engagements.find((e) => e.id === engagementId)?.prior_engagement_id;
+  if (prior) await loadLedger(prior).catch(() => undefined); // the year still opens without its comparatives
+}
+
 const AUTH_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password', '/invite'];
 
 class SignedOut extends Error {}
@@ -103,8 +110,13 @@ function installFetchHook() {
     if (method === 'GET') return nativeFetch(input, init);
     const res = await nativeFetch(input, init);
     await serial(load).catch(() => undefined);
-    // A write on the server (a Xero pull, say) may have changed the open engagement's ledger
-    if (openEngagement) await serial(() => loadLedger(openEngagement!)).catch(() => undefined);
+    // A write on the server (a Xero pull, say, even from the client page) may have changed any engagement's
+    // ledger: the open one is fetched again now, the rest when they are next opened
+    ledgerLoaded.clear();
+    if (openEngagement) {
+      ledgerLoaded.add(openEngagement); // keeps the page on screen while it reloads
+      await serial(() => loadLedgers(openEngagement!)).catch(() => undefined);
+    }
     return res;
   };
 }
@@ -121,7 +133,7 @@ export function WorkspaceSync({ children }: { children: React.ReactNode }) {
   // The open engagement's ledger is loaded before its pages render, as they read it straight from db
   useEffect(() => {
     if (status !== 'ready' || !ledgerFor || ledgerLoaded.has(ledgerFor)) return;
-    serial(() => loadLedger(ledgerFor))
+    serial(() => loadLedgers(ledgerFor))
       .catch(() => ledgerLoaded.add(ledgerFor)) // the pages still open, without the drill-down
       .finally(() => setLedgerReady((n) => n + 1));
   }, [status, ledgerFor]);

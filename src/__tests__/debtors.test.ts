@@ -22,6 +22,9 @@ describe('trade debtors (REC-07)', () => {
     // A "no provision" decision needs a reason before it counts as decided
     expect(debtorView(line({ d90_p: '64000', decision: 'no_provision' })).needsDecision).toBe(true);
     expect(debtorView(line({ d90_p: '64000', decision: 'no_provision', reason: 'Paid in May' })).needsDecision).toBe(false);
+    // A customer with no balance yet is not "collected"
+    expect(debtorView(line({})).status).toBe('nil');
+    expect(debtorView(line({ current_p: '5000', after_date_p: '5000' })).status).toBe('collected');
   });
 
   it('ages customers from the ledger, clearing the oldest invoices first, and lists receipts after the period end', () => {
