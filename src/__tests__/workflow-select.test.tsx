@@ -56,3 +56,25 @@ describe('ticking papers on a workflow', () => {
     expect(screen.getByRole('button', { name: 'Mark all prepared (2)' })).toBeTruthy();
   });
 });
+
+describe('the workflow page layout', () => {
+  it('shows each paper with its sign-off steps, groups that fold, and the next paper to reconcile', () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.client_id === 'cli_harlow' && e.period_end === '2026-09-30')!;
+    eng.status = 'fieldwork';
+    params = { id: eng.id, wfId: 'default' };
+    render(<WorkflowDetailPage />);
+    expect(screen.getByRole('complementary', { name: 'Summary' })).toBeTruthy();
+    expect(screen.getByText('Next best action')).toBeTruthy();
+    expect(screen.getByText('Review queue')).toBeTruthy();
+    const step = screen.getAllByRole('list', { name: /sign-off$/ })[0];
+    expect(step.textContent).toContain('Prepared');
+    // A group folds away and opens again
+    const fold = screen.getAllByRole('button', { name: /^Hide / })[0];
+    const rowsBefore = screen.getAllByRole('list', { name: /sign-off$/ }).length;
+    fireEvent.click(fold);
+    expect(screen.getAllByRole('list', { name: /sign-off$/ }).length).toBeLessThan(rowsBefore);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Show / })[0]);
+    expect(screen.getAllByRole('list', { name: /sign-off$/ }).length).toBe(rowsBefore);
+  });
+});
