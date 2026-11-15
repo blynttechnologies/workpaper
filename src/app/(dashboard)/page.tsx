@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, ArrowUpRight, Building2, CalendarClock, Mess
 import { db } from '@/lib/server/db';
 import { useCompany } from '@/context/CompanyContext';
 import { useLocale } from '@/context/LocaleContext';
+import { DashboardBanner } from '@/components/dashboard/DashboardBanner';
 import { Workpaper } from '@/lib/types/models';
 
 // Where a paper stands, in order. One blue ramp (validated ordinal) plus orange for papers that need attention.
@@ -124,7 +125,6 @@ export default function PracticeHomePage() {
     .slice(0, 5)
     .map((log) => ({ id: log.id, actor: log.actor_name, action: `${log.action.toLowerCase().replace(/_/g, ' ')} (${log.entity.replace(/_/g, ' ')})`, time: timeAgo(log.at) }));
 
-  const hour = new Date().getHours();
   const metrics = [
     { value: openEngagements.length, label: 'In progress', sub: 'Open engagements', colour: 'text-[#122654]' },
     { value: openReviewNotes.length, label: 'Review notes', sub: 'Open notes', colour: 'text-[#C2410C]' },
@@ -136,24 +136,11 @@ export default function PracticeHomePage() {
 
   return (
     <div className="flex flex-col gap-5 pb-14 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-        <div>
-          <h1 className="text-2xl font-extrabold text-[#122654] tracking-tight">
-            {hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}
-          </h1>
-          <p className="text-xs text-[#4A5878] mt-1">
-            {activeClients.length} client{activeClients.length === 1 ? '' : 's'} · {allPapers.length} working papers · {practiceCounts.attention} need attention
-          </p>
-        </div>
-        <Link
-          href="/engagements/new"
-          className="min-h-[40px] px-4 flex items-center gap-1.5 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl shadow-sm transition-colors self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          New engagement
-        </Link>
-      </div>
+      <h1 className="sr-only">Dashboard</h1>
+      {/* Banner: live working-paper news, then what Blynt can do */}
+      <DashboardBanner
+        summary={`${activeClients.length} client${activeClients.length === 1 ? '' : 's'} · ${allPapers.length} working papers · ${practiceCounts.attention} need attention`}
+      />
 
       {/* Fresh workspace welcome banner if no company added yet */}
       {clients.length === 0 && (
