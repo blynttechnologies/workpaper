@@ -25,7 +25,8 @@ export class GuardError extends Error {
 
 // Server-managed: a browser save never changes these
 // Ledger transactions are server-managed too: a year of a busy client's ledger is too big to send with every save
-const SERVER_MANAGED = ['firms', 'users', 'memberships', 'credentials', 'invites', 'uploads', 'xero_connections', 'qbo_connections', 'templates', 'adjustments', 'transactions'];
+// Trial balance imports are written only by the import pipeline, and the browser holds just the latest one's lines (see publicSlice)
+const SERVER_MANAGED = ['firms', 'users', 'memberships', 'credentials', 'invites', 'uploads', 'xero_connections', 'qbo_connections', 'templates', 'adjustments', 'transactions', 'tb_snapshots', 'tb_lines'];
 
 const REVIEWER_UP: UserRole[] = ['reviewer', 'manager', 'partner', 'admin'];
 const PARTNER_UP: UserRole[] = ['partner', 'admin'];
@@ -297,9 +298,19 @@ export function mergeFirmState(full: State, proposed: State, actor: Actor): Stat
   return out;
 }
 
-/** What the browser is allowed to see. */
-/** What the browser loads. Ledger transactions are left out (they outgrow one response); it fetches an engagement's from /api/v1/engagements/[id]/transactions. */
+/**
+ * What the browser loads, kept under the 6 MB a response may be. Ledger transactions are left out; it fetches an
+ * engagement's from /api/v1/engagements/[id]/transactions. Every pull keeps a full copy of the trial balance for the
+ * audit trail, so only each engagement's latest copy has its lines sent, and no copy its raw import.
+ */
 export const publicSlice = (full: State, firmId: string, userId?: string) => {
-  const { transactions: _ledger, ...rest } = firmSlice(full, firmId, userId);
-  return rest;
+  const { transactions: _ledger, tb_snapshots, tb_lines, ...rest } = firmSlice(full, firmId, userId);
+  const latest = new Map<string, Row>();
+  for (const s of tb_snapshots) if (!latest.has(s.engagement_id) || s.created_at > latest.get(s.engagement_id)!.created_at) latest.set(s.engagement_id, s);
+  const current = new Set([...latest.values()].map((s) => s.id));
+  return {
+    ...rest,
+    tb_snapshots: tb_snapshots.map(({ raw_json: _raw, ...s }) => s),
+    tb_lines: tb_lines.filter((l) => current.has(l.snapshot_id)),
+  };
 };
