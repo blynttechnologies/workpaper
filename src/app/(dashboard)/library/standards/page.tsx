@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Check, CheckCircle2, ChevronDown, GraduationCap, HelpCircle, ListChecks, Search, ShieldCheck, Sparkles, Target } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, Bot, Check, CheckCircle2, ChevronDown, FileCheck2, GraduationCap, HelpCircle, Landmark, ListChecks, Receipt, Search, ShieldCheck, Sparkles, Target, Trophy } from 'lucide-react';
 import { STANDARDS, requiredSchedules } from '@/lib/standards';
 import { TEMPLATES, templateFor, type TemplateDef } from '@/lib/workpapers/templates';
 
@@ -10,6 +10,15 @@ import { TEMPLATES, templateFor, type TemplateDef } from '@/lib/workpapers/templ
 const READ_KEY = 'blynt.learning.read';
 // Lessons teach the shape of a paper, not the whole of it
 const KEY_STEPS = 3;
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A66] focus-visible:ring-offset-2';
+
+// The Blynt family, in the brand kit's own words (only claims Blynt can prove; no prices)
+const PRODUCTS: { name: string; line: string; icon: typeof Bot; chip: string; tint: string; action?: 'bot'; href: string; cta: string }[] = [
+  { name: 'Blynt Bot', line: 'Sorts the routine work and suggests. You decide.', icon: Bot, chip: 'bg-[#FFE3DE] text-[#A23A27]', tint: 'bg-[#FFE3DE]/60', action: 'bot', href: '', cta: 'Ask Blynt Bot' },
+  { name: 'Blynt Workpapers', line: 'Templates, trial balance mapping, review and sign-off.', icon: FileCheck2, chip: 'bg-[#EEF2F9] text-[#122654]', tint: 'bg-[#EEF2F9]', href: '/clients', cta: 'Open your clients' },
+  { name: 'Blynt Accounting', line: 'Bank feeds, matching and VAT returns.', icon: Landmark, chip: 'bg-[#E6F4EF] text-[#0B6B52]', tint: 'bg-[#E6F4EF]/70', href: 'https://blynt.co.uk', cta: 'Visit Blynt Accounting' },
+  { name: 'Blynt Invoicing', line: 'Create, send and chase invoices.', icon: Receipt, chip: 'bg-[#FFF4DB] text-[#6B4700]', tint: 'bg-[#FFF4DB]/70', href: 'https://blynt.co.uk', cta: 'Visit Blynt Invoicing' },
+];
 const loadRead = (): string[] => {
   try {
     return JSON.parse(localStorage.getItem(READ_KEY) ?? '[]');
@@ -50,6 +59,11 @@ export default function LearningLibraryPage() {
   const areas = [...new Map(shown.map((t) => [t.area, t.areaName])).entries()].sort(([a], [b]) => a.localeCompare(b));
   const done = lessons.filter((t) => read.includes(t.ref)).length;
   const pct = lessons.length ? Math.round((done / lessons.length) * 100) : 0;
+  // Across every standard in force: each paper counted once
+  const allRefs = [...new Set(standards.flatMap((s) => requiredSchedules(s)))];
+  const allDone = allRefs.filter((r) => read.includes(r)).length;
+  const allPct = allRefs.length ? Math.round((allDone / allRefs.length) * 100) : 0;
+  const nextLesson = lessons.find((t) => !read.includes(t.ref));
 
   const openLesson = (ref: string) => {
     setSearch('');
@@ -59,28 +73,91 @@ export default function LearningLibraryPage() {
 
   return (
     <div className="flex flex-col gap-5 max-w-6xl">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <span className="w-10 h-10 rounded-xl bg-[#122654] flex items-center justify-center shrink-0">
-            <GraduationCap className="w-5 h-5 text-[#FF7A66]" aria-hidden="true" />
-          </span>
-          <div>
-            <h1 className="text-xl font-bold text-[#122654]">Learning library</h1>
-            <p className="text-xs text-[#4A5878] mt-0.5 max-w-2xl">
-              The UK standards Blynt works to, and a short lesson on every working paper they need: why it matters, what it proves and how to prepare it.
+      {/* Hero: where you are, and one button to carry on */}
+      <section aria-label="Your learning" className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0B1A3B] via-[#122654] to-[#1D4E89] text-white px-6 py-6 sm:px-8">
+        <span aria-hidden="true" className="absolute -right-20 -top-24 w-80 h-80 rounded-full bg-white/5" />
+        <span aria-hidden="true" className="absolute right-40 -bottom-28 w-64 h-64 rounded-full bg-[#FF7A66]/10" />
+        <div className="relative flex flex-wrap items-center gap-6">
+          <div className="flex-1 min-w-[260px]">
+            <p className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#FFB3A7]">
+              <GraduationCap className="w-4 h-4" aria-hidden="true" /> Blynt Workpapers · Learning
             </p>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Learning library</h1>
+            <p className="mt-1 text-sm text-white/80 max-w-xl">
+              The UK standards Blynt works to, and a short lesson on every working paper: why it matters, what it proves and how to start.
+            </p>
+            <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/70">
+              <span><strong className="text-white">{standards.length}</strong> standards</span>
+              <span><strong className="text-white">{allRefs.length}</strong> lessons</span>
+              <span><strong className="text-white">{TEMPLATES.length}</strong> templates</span>
+            </p>
+            <div className="mt-4">
+              {nextLesson ? (
+                <button type="button" onClick={() => openLesson(nextLesson.ref)} className={`inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-lg bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-sm font-bold cursor-pointer ${focus}`}>
+                  {done ? 'Continue learning' : 'Start learning'}: {nextLesson.ref} {nextLesson.title} <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </button>
+              ) : (
+                <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#A7F3D0]">
+                  <Trophy className="w-4 h-4" aria-hidden="true" /> Every {current.code} lesson learned
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Progress ring across every lesson */}
+          <div className="flex items-center gap-4">
+            <div className="relative w-28 h-28" role="img" aria-label={`${allDone} of ${allRefs.length} lessons learned in all`}>
+              <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90" aria-hidden="true">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="10" />
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#FF7A66" strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(allPct / 100) * 314} 314`} className="transition-all duration-700" />
+              </svg>
+              <span className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-extrabold">{allPct}%</span>
+                <span className="text-[10px] text-white/70">learned</span>
+              </span>
+            </div>
+            <div className="min-w-[160px]">
+              <p className="text-xs text-white/80 mb-1">
+                <strong className="text-white">{done}</strong> of {lessons.length} for {current.code}
+              </p>
+              <div className="h-2 rounded-full bg-white/15 overflow-hidden" role="progressbar" aria-label={`Lessons learned for ${current.name}`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                <div className="h-full bg-[#6EE7B7] transition-all" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
           </div>
         </div>
-        <div className="min-w-[220px]">
-          <p className="text-[11px] text-[#4A5878] mb-1">
-            <strong className="text-[#122654]">{done}</strong> of {lessons.length} lessons learned for {current.code}
-          </p>
-          <div className="h-2 rounded-full bg-[#E3E7EF] overflow-hidden" role="progressbar" aria-label={`Lessons learned for ${current.name}`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-full bg-[#0B6B52] transition-all" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      </div>
+      </section>
+
+      {/* The Blynt family: wording from the brand kit, no prices or unproven claims */}
+      <section aria-label="The Blynt family" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        {PRODUCTS.map((p) => {
+          const Icon = p.icon;
+          const cls = `mt-auto inline-flex items-center gap-1 text-xs font-bold text-[#122654] hover:underline cursor-pointer ${focus}`;
+          return (
+            <div key={p.name} className="group relative flex flex-col gap-2 rounded-xl border border-[#E3E7EF] bg-white p-4 overflow-hidden hover:border-[#122654] hover:shadow-sm transition-all">
+              <span aria-hidden="true" className={`absolute -right-6 -top-6 w-20 h-20 rounded-full ${p.tint} group-hover:scale-110 transition-transform`} />
+              <span className={`relative w-9 h-9 rounded-lg flex items-center justify-center ${p.chip}`} aria-hidden="true">
+                <Icon className="w-5 h-5" />
+              </span>
+              <h2 className="relative text-sm font-bold text-[#122654]">{p.name}</h2>
+              <p className="relative text-xs text-[#4A5878]">{p.line}</p>
+              {p.action === 'bot' ? (
+                <button type="button" onClick={() => window.dispatchEvent(new Event('blynt:open-bot'))} className={cls}>
+                  Ask Blynt Bot <ArrowRight className="w-3 h-3" aria-hidden="true" />
+                </button>
+              ) : p.href.startsWith('http') ? (
+                <a href={p.href} target="_blank" rel="noopener noreferrer" className={cls}>
+                  {p.cta} <ArrowUpRight className="w-3 h-3" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              ) : (
+                <Link href={p.href} className={cls}>
+                  {p.cta} <ArrowRight className="w-3 h-3" aria-hidden="true" />
+                </Link>
+              )}
+            </div>
+          );
+        })}
+      </section>
 
       {/* What's new */}
       <div className="flex items-start gap-3 p-4 rounded-xl bg-[#FFF1EE] border border-[#FF7A66]/40">
@@ -140,7 +217,13 @@ export default function LearningLibraryPage() {
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-[#122654]">{s.name}</span>
-                {on && <CheckCircle2 className="w-4 h-4 text-[#0B6B52] shrink-0" aria-hidden="true" />}
+                {refs.length > 0 && learned === refs.length ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#E6F4EF] text-[#0B6B52] shrink-0">
+                    <Trophy className="w-3 h-3" aria-hidden="true" /> Complete
+                  </span>
+                ) : (
+                  on && <CheckCircle2 className="w-4 h-4 text-[#0B6B52] shrink-0" aria-hidden="true" />
+                )}
               </span>
               <span className="block text-[10px] text-[#7E8DA6] mt-0.5">{s.version} · periods ending from {s.effective_from}</span>
               <span className="mt-3 flex items-center justify-between text-[10px] text-[#4A5878]">
@@ -196,6 +279,20 @@ export default function LearningLibraryPage() {
             ))}
           </ul>
         </div>
+      </section>
+
+      {/* Blynt Bot, between the rules and the lessons */}
+      <section aria-label="Meet Blynt Bot" className="relative overflow-hidden flex flex-wrap items-center gap-5 rounded-2xl border border-[#FF7A66]/30 bg-gradient-to-r from-[#FFF1EE] via-white to-[#EEF2F9] px-5 py-4">
+        <span className="bot-bob w-14 h-14 rounded-2xl bg-[#122654] flex items-center justify-center shrink-0 shadow-sm" aria-hidden="true">
+          <Bot className="w-8 h-8 text-[#FF7A66]" />
+        </span>
+        <div className="flex-1 min-w-[220px]">
+          <h2 className="text-base font-extrabold text-[#122654]">Meet Blynt Bot. It suggests, you decide.</h2>
+          <p className="text-sm text-[#4A5878]">Stuck on a lesson? Ask about any working paper while you learn. Press B anywhere to open it.</p>
+        </div>
+        <button type="button" onClick={() => window.dispatchEvent(new Event('blynt:open-bot'))} className={`inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-lg bg-[#122654] hover:bg-[#0B1A3B] text-white text-sm font-bold cursor-pointer ${focus}`}>
+          <Bot className="w-4 h-4" aria-hidden="true" /> Ask Blynt Bot
+        </button>
       </section>
 
       {/* Lessons */}
