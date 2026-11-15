@@ -42,12 +42,30 @@ describe('new account: working paper', () => {
     expect(papersForCode(acc.parent_code).map((t) => t.ref)).toContain('P-20');
   });
 
-  it('the account it is treated like can be changed, among accounts on the same paper only', () => {
+  it('the account it is treated like is a choice among accounts on the same paper only', () => {
     const { pickCategory } = setup('Payroll liability');
     pickCategory('Current liabilities');
     fireEvent.change(screen.getByRole('combobox', { name: 'Working paper' }), { target: { value: 'P-20' } });
-    fireEvent.click(screen.getByRole('button', { name: 'change' }));
     const like = screen.getByRole('combobox', { name: 'Treated like' }) as HTMLSelectElement;
+    expect(like.options.length).toBeGreaterThan(1);
     expect([...like.options].every((o) => papersForCode(o.value).some((t) => t.ref === 'P-20'))).toBe(true);
+  });
+
+  it('offers the suggestion for the name, and Use this sets category, working paper and treated like', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ suggested_blynt_code: '4800', reason: 'Consultancy is a professional fee', source: 'ai' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { pickCategory } = setup('Consulting');
+      pickCategory('Bank and cash');
+      const status = await screen.findByText(/AI suggests/, {}, { timeout: 2000 });
+      expect(status.parentElement!.textContent).toContain('4800');
+      expect(JSON.parse((fetchMock.mock.calls[0] as any)[1].body)).toMatchObject({ name: 'Consulting', all: true });
+      fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
+      expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe(String(CATEGORIES.findIndex((c) => c.name === 'Administrative expenses')));
+      expect((screen.getByRole('combobox', { name: 'Treated like' }) as HTMLSelectElement).value).toBe('4800');
+      expect(screen.getByText('In use')).toBeTruthy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -1,6 +1,8 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { Sparkles } from 'lucide-react';
+import { STANDARD_CHART } from '@/lib/standard-chart';
 import { db } from '@/lib/server/db';
 import { BlyntAccount } from '@/lib/types/models';
 import { CATEGORIES, CoaCategory, accountsForClient, accountsIn, categoryOf, newAccount, newAccountBase, nextCode, similarAccounts } from '@/lib/coa';
@@ -41,7 +43,7 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
   const [catIdx, setCatIdx] = useState(first.cat);
   const [base, setBase] = useState(first.base);
   const [paper, setPaper] = useState(refsOf(first.base)[0] ?? NO_PAPER);
-  const [changingBase, setChangingBase] = useState(false);
+  const [suggestion, setSuggestion] = useState<'loading' | 'none' | { base: string; reason: string; ai: boolean } | null>(null);
   const [code, setCode] = useState(nextCode(db.blynt_accounts, CATEGORIES[first.cat], first.base) ?? '');
   const [touched, setTouched] = useState(!!given);
   const [error, setError] = useState('');
@@ -67,6 +69,35 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
     const b = onIt.find((a) => a.code === base) ?? onIt.find((a) => a.code === cat.other) ?? onIt[0];
     if (b) choose(catIdx, b.code, ref);
   };
+  // Ask once the name settles. A suggested practice account stands for the standard account it works like.
+  useEffect(() => {
+    const n = name.trim();
+    if (!n) return setSuggestion(null);
+    let stale = false;
+    setSuggestion('loading');
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/v1/ai/suggest-mapping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: n, all: true }) });
+        const body = await res.json();
+        if (stale) return;
+        const code: string | null = body.suggested_blynt_code ?? body.new_account?.parent_code ?? null;
+        const std = code ? (db.blynt_accounts.find((a) => a.code === code)?.parent_code ?? code) : null;
+        setSuggestion(res.ok && std && categoryOf(std) && STANDARD_CHART.some((a) => a.code === std) ? { base: std, reason: String(body.reason ?? ''), ai: body.source === 'ai' } : 'none');
+      } catch {
+        if (!stale) setSuggestion('none');
+      }
+    }, 600);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [name]);
+  const useSuggestion = () => {
+    if (!suggestion || typeof suggestion === 'string') return;
+    setTouched(true);
+    choose(CATEGORIES.indexOf(categoryOf(suggestion.base)!), suggestion.base);
+  };
+
   const onName = (n: string) => {
     setName(n);
     if (!touched) {
@@ -120,32 +151,57 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
             {paperOptions[0]?.label ?? 'None: shows in the accounts only'}
           </div>
         )}
-        {/* The account it is treated like sets debit or credit, the line in the accounts and the tax treatment */}
-        <div className="flex flex-wrap items-baseline gap-x-1.5" title="Sets debit or credit, where it shows in the accounts, and its tax treatment">
-          <span>Treated like</span>
-          <span className="font-semibold text-[#122654]">{base} {baseAccount?.name}</span>
-          {sameKind.length > 1 && !changingBase && (
-            <button type="button" onClick={() => setChangingBase(true)} className="font-semibold text-[#1D4E89] hover:underline">
-              change
-            </button>
+      </div>
+      {/* The account it is treated like sets debit or credit, the line in the accounts and the tax treatment */}
+      <label className="block space-y-1">
+        <span className="font-semibold">Treated like</span>
+        <select
+          aria-label="Treated like"
+          value={base}
+          onChange={(e) => {
+            setTouched(true);
+            choose(catIdx, e.target.value, paper);
+          }}
+          className={field}
+        >
+          {/* The current one stays listed even when it isn't on the paper, so the box never shows a different account */}
+          {[...(sameKind.some((a) => a.code === base) || !baseAccount ? [] : [baseAccount]), ...sameKind].map((a) => (
+            <option key={a.code} value={a.code}>{a.code} {a.name}</option>
+          ))}
+        </select>
+        <span className="block">Sets debit or credit, where it shows in the accounts, and its tax treatment.</span>
+      </label>
+      {/* AI (or, without it, the mapping rules) on where an account with this name belongs; nothing changes until Use */}
+      {name.trim() && (
+        <div role="status" aria-live="polite" className="p-2 rounded-lg bg-[#FFF8F6] border border-[#FF7A66]/30 text-[#122654]">
+          {suggestion === 'loading' ? (
+            <span className="flex items-center gap-1.5 text-[#4A5878]">
+              <Sparkles className="w-3.5 h-3.5 text-[#B8432F] animate-pulse" aria-hidden="true" /> Asking the AI where this account belongs…
+            </span>
+          ) : suggestion && suggestion !== 'none' ? (
+            <div className="flex items-start gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#B8432F]" aria-hidden="true" />
+              <div className="flex-1 min-w-0">
+                <span className="font-semibold">{suggestion.ai ? 'AI suggests' : 'Suggested'}:</span> treat it like{' '}
+                <span className="font-semibold">
+                  {suggestion.base} {db.blynt_accounts.find((a) => a.code === suggestion.base)?.name}
+                </span>
+                {' '}on {papersForCode(suggestion.base)[0] ? `${papersForCode(suggestion.base)[0].ref} ${papersForCode(suggestion.base)[0].title}` : 'no working paper'}.
+                {suggestion.reason && <span className="block text-[#4A5878] mt-0.5">{suggestion.reason}</span>}
+              </div>
+              {suggestion.base === base ? (
+                <span className="shrink-0 font-semibold text-[#0B6B52]">In use</span>
+              ) : (
+                <button type="button" onClick={useSuggestion} className="shrink-0 font-bold text-[#B8432F] hover:underline">
+                  Use this
+                </button>
+              )}
+            </div>
+          ) : (
+            <span className="text-[#4A5878]">No suggestion for this name. Choose the working paper yourself.</span>
           )}
         </div>
-        {changingBase && sameKind.length > 1 && (
-          <select
-            aria-label="Treated like"
-            value={base}
-            onChange={(e) => {
-              setTouched(true);
-              choose(catIdx, e.target.value, paper);
-            }}
-            className={field}
-          >
-            {sameKind.map((a) => (
-              <option key={a.code} value={a.code}>{a.code} {a.name}</option>
-            ))}
-          </select>
-        )}
-      </div>
+      )}
       <label className="block space-y-1">
         <span className="font-semibold">Code (next free, {cat.from}–{cat.to})</span>
         <input type="number" min={cat.from} max={cat.to} value={code} onChange={(e) => { setCode(e.target.value); setError(''); }} className={field} />
