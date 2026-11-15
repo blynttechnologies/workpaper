@@ -65,10 +65,13 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
                   </td>
                   <td className={cell}>
                     {ukDate(inv.date)}
-                    <span className={`block text-[10px] ${inv.days > warnAfter ? 'text-[#B42318]' : 'text-[#4A5878]'}`}>
-                      {inv.due ? `due ${ukDate(inv.due)} · ` : ''}
-                      {age}
-                    </span>
+                    {/* Only an invoice still owed has a due date worth reading; one read before amounts came in counts as owed */}
+                    {(unpaid === null ? asPence(inv.amount_p) > 0n : unpaid > 0n) && (
+                      <span className={`block text-[10px] ${inv.days > warnAfter ? 'text-[#B42318]' : 'text-[#4A5878]'}`}>
+                        {inv.due ? `due ${ukDate(inv.due)} · ` : ''}
+                        {age}
+                      </span>
+                    )}
                   </td>
                   <td className={`${cell} text-right font-mono`}>{inv.total_p ? money(inv.total_p) : '–'}</td>
                   <td className={cell}>

@@ -29,9 +29,10 @@ describe('open invoices, laid out like the working spreadsheet', () => {
     expect(screen.getByText('22 Jul 2025')).toBeTruthy();
     expect(screen.getByText('5,000.00')).toBeTruthy();
     expect(screen.queryByText(/next pull from Xero/)).toBeNull();
-    // Fully paid, so nothing overdue; days overdue sit under the due date
+    // Fully paid: nothing overdue, and no due date shown
     expect(within(many).getAllByText('–').length).toBeGreaterThan(0);
-    expect(within(one).getByText(/due 31 Dec 2025 · 1 day overdue/)).toBeTruthy();
+    expect(within(one).queryByText(/due 31 Dec 2025/)).toBeNull();
+    expect(within(many).queryByText(/due /)).toBeNull();
   });
 
   it('overdue is the invoice total less everything paid against it', () => {
@@ -44,6 +45,8 @@ describe('open invoices, laid out like the working spreadsheet', () => {
     expect(within(screen.getByText('12705').closest('tr')!).getAllByText('11,039.10')).toHaveLength(3); // amount, open, overdue
     expect(within(screen.getByText('12705').closest('tr')!).getByText(/not due/)).toBeTruthy();
     expect(within(screen.getByText('12800').closest('tr')!).getAllByText('500.00')).toHaveLength(2); // open at the period end, and still overdue
+    // Still owed, so the due date and days overdue show
+    expect(within(screen.getByText('12800').closest('tr')!).getByText(/due 1 Dec 2025 · 31 days overdue/)).toBeTruthy();
   });
 
   it('asks for a fresh pull when the invoices were read before amounts and payments were', () => {
