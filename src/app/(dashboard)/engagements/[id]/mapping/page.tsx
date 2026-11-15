@@ -255,7 +255,7 @@ export default function AccountMappingPage() {
       .map(([code, rows]) => ({ code, name: db.blynt_accounts.find((a) => a.code === code)?.name ?? '', rows, total: rows.reduce((a, r) => a + asPence(r.balance_p), 0n) }))
       .sort((a, b) => b.rows.length - a.rows.length || a.code.localeCompare(b.code));
   }, [mappings]);
-  const columns = 7;
+  const columns = 6;
   const canApprove = ['manager', 'partner', 'admin'].includes(getActor().role);
   const patternsHint = alsoApply.length ? `these ${alsoApply.length + 1} accounts` : 'this account';
   // Lines that look like the one being corrected, offered in the rule pop-up
@@ -893,7 +893,6 @@ export default function AccountMappingPage() {
                 <th scope="col" className="p-3">Codes</th>
                 <th scope="col" className="p-3">Ledger Name</th>
                 <th scope="col" className="p-3 text-right">Balance</th>
-                <th scope="col" className="p-3">Confidence &amp; Gate</th>
                 <th scope="col" className="p-3">Blynt Account (Mapping)</th>
                 <th scope="col" className="p-3 pr-4 text-right">Action</th>
               </tr>
@@ -1022,49 +1021,6 @@ export default function AccountMappingPage() {
                         )}
                         <span>{formatPence(row.balance_p, { accountingFormat: true })}</span>
                       </div>
-                    </td>
-
-                    {/* Confidence & Gate: the badge, the AI mark, and a bar for how sure */}
-                    <td className="p-3 min-w-[130px]">
-                      <div className="flex flex-wrap items-center gap-1">
-                      {row.status === 'confirmed' ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1 w-max">
-                          <Check className="w-3 h-3 stroke-[2.5]" />
-                          <span>Confirmed</span>
-                        </span>
-                      ) : gateName === 'ready' ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1 w-max">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span>Ready {row.confidence}%</span>
-                        </span>
-                      ) : gateName === 'check' ? (
-                        <span title={why(row).reasons.join(' ')} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1 w-max">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          <span>Check {row.confidence}%</span>
-                        </span>
-                      ) : (
-                        <span title={[why(row).blocker, ...why(row).reasons].filter(Boolean).join(' ')} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 flex items-center gap-1 w-max">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>Exception {row.confidence}%</span>
-                        </span>
-                      )}
-                      {row.method === 'ai' && (
-                        <span
-                          title={row.ai_reason || 'Mapped by the AI'}
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold text-[#B8432F] bg-[#FFF1EE] border border-[#FF7A66]/40 rounded-full"
-                        >
-                          <Sparkles className="w-3 h-3" /> AI
-                        </span>
-                      )}
-                      </div>
-                      {row.status !== 'confirmed' && (
-                        <div className="mt-1.5 h-1 w-full max-w-[120px] rounded-full bg-[#E3E7EF]" role="img" aria-label={`${row.confidence}% sure`}>
-                          <div
-                            className={`h-1 rounded-full ${gateName === 'ready' ? 'bg-emerald-500' : gateName === 'check' ? 'bg-amber-500' : 'bg-red-500'}`}
-                            style={{ width: `${Math.max(4, Math.min(100, row.confidence))}%` }}
-                          />
-                        </div>
-                      )}
                     </td>
 
                     {/* Blynt Account Dropdown */}
