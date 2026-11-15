@@ -34,7 +34,7 @@ const PROVIDERS = {
   xero: {
     name: 'Xero', api: 'xero', badge: 'xero', colour: 'bg-[#13B5EA]', org: 'Organisation', reconnectCode: 'XERO_RECONNECT',
     env: ['XERO_CLIENT_ID', 'XERO_CLIENT_SECRET', 'XERO_REDIRECT_URI'],
-    signIn: 'You’ll sign in to Xero and choose this client’s organisation. Blynt only asks for read-only access.',
+    signIn: 'You’ll sign in to Xero and choose this client’s organisation. Blynt reads the books, and adds only the journals you send it from the Journals page.',
   },
   quickbooks: {
     name: 'QuickBooks', api: 'quickbooks', badge: 'qb', colour: 'bg-[#2CA01C]', org: 'Company', reconnectCode: 'QBO_RECONNECT',
