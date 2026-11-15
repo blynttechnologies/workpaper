@@ -1,5 +1,6 @@
 import { ADD_ON_ACCOUNTS, OWNER_ACCOUNTS, STANDARD_CHART, V2_TO_V3 } from '@/lib/standard-chart';
 import type { Structure } from '@/lib/practice-structure';
+import type { BlyntAccount } from '@/lib/types/models';
 
 export interface MappingSuggestion {
   blynt_code: string;
@@ -109,6 +110,27 @@ function family(sourceType: string): 'asset' | 'liability' | 'equity' | 'income'
   return null;
 }
 const CHART_FAMILY: Record<string, ReturnType<typeof family>> = { Asset: 'asset', Liability: 'liability', Equity: 'equity', Revenue: 'income', 'Cost of Sales': 'cost', Overhead: 'cost' };
+/**
+ * Up to `n` other chart accounts worth offering for a line: the AI's own alternatives first, then the
+ * accounts of the same kind (income, cost...) sharing the most words with its name. Never the current one.
+ */
+export function topSuggestions(
+  line: { source_name: string; source_type: string; blynt_code: string | null; ai_alternatives?: { blynt_code: string }[] },
+  chart: BlyntAccount[],
+  n = 3
+): BlyntAccount[] {
+  const fam = family(line.source_type);
+  const src = words(line.source_name);
+  const usable = chart.filter((a) => a.type !== 'System' && a.code !== line.blynt_code && (!fam || CHART_FAMILY[a.type] === fam));
+  const fromAi = (line.ai_alternatives ?? []).map((alt) => usable.find((a) => a.code === alt.blynt_code)).filter((a): a is BlyntAccount => !!a);
+  const byWords = usable
+    .map((a) => ({ a, shared: [...words(a.name)].filter((w) => src.has(w)).length }))
+    .filter((x) => x.shared > 0)
+    .sort((x, y) => y.shared - x.shared || Number(x.a.code) - Number(y.a.code))
+    .map((x) => x.a);
+  return [...new Map([...fromAi, ...byWords].map((a) => [a.code, a])).values()].slice(0, n);
+}
+
 /** Accounts that collect whatever didn't fit elsewhere, so landing there proves little. */
 const CATCH_ALL = new Set(['4990', '7490', '7700', '2900', '3900', '1400']);
 
