@@ -1,13 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { db } from '@/lib/server/db';
 import { BlyntAccount } from '@/lib/types/models';
-import { CATEGORIES, accountsForClient, accountsIn, categoryOf, newAccount, newAccountBase, nextCode, similarAccounts } from '@/lib/coa';
+import { CATEGORIES, CoaCategory, accountsForClient, accountsIn, categoryOf, newAccount, newAccountBase, nextCode, similarAccounts } from '@/lib/coa';
 import { papersForCode } from '@/lib/workpapers/common';
 import { matchBlyntAccount } from '@/lib/mapping/auto-mapper';
 
 const field = 'w-full py-1.5 px-2 border border-[#D3DCEE] rounded-lg bg-white text-xs text-[#122654]';
+
+// The working papers a category's accounts are worked on, in chart order, and the accounts on each
+const NO_PAPER = '';
+const refsOf = (code: string) => papersForCode(code).map((t) => t.ref);
+function papersIn(cat: CoaCategory) {
+  const found = new Map<string, string>();
+  let none = false;
+  for (const a of accountsIn(cat)) {
+    const papers = papersForCode(a.code);
+    if (!papers.length) none = true;
+    for (const t of papers) if (!found.has(t.ref)) found.set(t.ref, `${t.ref} ${t.title}`);
+  }
+  return [...[...found].map(([ref, label]) => ({ ref, label })), ...(none ? [{ ref: NO_PAPER, label: 'None: shows in the accounts only' }] : [])];
+}
+const accountsOnPaper = (cat: CoaCategory, ref: string) => accountsIn(cat).filter((a) => (ref === NO_PAPER ? !refsOf(a.code).length : refsOf(a.code).includes(ref)));
 
 /**
  * Creates a practice account: the name recommends a category, the code is the next free number
@@ -25,18 +40,32 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
   const [name, setName] = useState(initialName);
   const [catIdx, setCatIdx] = useState(first.cat);
   const [base, setBase] = useState(first.base);
+  const [paper, setPaper] = useState(refsOf(first.base)[0] ?? NO_PAPER);
+  const [changingBase, setChangingBase] = useState(false);
   const [code, setCode] = useState(nextCode(db.blynt_accounts, CATEGORIES[first.cat], first.base) ?? '');
   const [touched, setTouched] = useState(!!given);
   const [error, setError] = useState('');
   const cat = CATEGORIES[catIdx];
-  const papers = papersForCode(base);
+  const paperOptions = papersIn(cat);
+  const sameKind = accountsOnPaper(cat, paper);
+  const baseAccount = db.blynt_accounts.find((a) => a.code === base);
+  const paperId = useId();
   const similar = similarAccounts(accountsForClient(db.blynt_accounts, db.clients.find((c) => c.id === clientId)), name);
 
-  const choose = (idx: number, b: string) => {
+  // The working paper follows the account it is treated like, unless a paper was chosen that the account is also on
+  const choose = (idx: number, b: string, ref?: string) => {
     setCatIdx(idx);
     setBase(b);
+    setPaper(ref ?? refsOf(b)[0] ?? NO_PAPER);
     setCode(nextCode(db.blynt_accounts, CATEGORIES[idx], b) ?? '');
     setError('');
+  };
+  // Picking a paper treats the account like the category's general account when that is on it, else the paper's first
+  const choosePaper = (ref: string) => {
+    setTouched(true);
+    const onIt = accountsOnPaper(cat, ref);
+    const b = onIt.find((a) => a.code === base) ?? onIt.find((a) => a.code === cat.other) ?? onIt[0];
+    if (b) choose(catIdx, b.code, ref);
   };
   const onName = (n: string) => {
     setName(n);
@@ -78,17 +107,45 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
           ))}
         </select>
       </label>
-      <label className="block space-y-1">
-        <span className="font-semibold">Works like</span>
-        <select value={base} onChange={(e) => { setTouched(true); choose(catIdx, e.target.value); }} className={field}>
-          {accountsIn(cat).map((a) => (
-            <option key={a.code} value={a.code}>{a.code} {a.name}</option>
-          ))}
-        </select>
-        <span className="block">
-          Shows on {papers.length ? papers.map((t) => `${t.ref} ${t.title}`).join(', ') : 'the P&L analysis (Z-30) only'}
-        </span>
-      </label>
+      <div className="space-y-1">
+        <label htmlFor={paperId} className="block font-semibold">Working paper</label>
+        {paperOptions.length > 1 ? (
+          <select id={paperId} value={paper} onChange={(e) => choosePaper(e.target.value)} className={field}>
+            {paperOptions.map((p) => (
+              <option key={p.ref || 'none'} value={p.ref}>{p.label}</option>
+            ))}
+          </select>
+        ) : (
+          <div id={paperId} className={`${field} bg-[#EEF1F6]`}>
+            {paperOptions[0]?.label ?? 'None: shows in the accounts only'}
+          </div>
+        )}
+        {/* The account it is treated like sets debit or credit, the line in the accounts and the tax treatment */}
+        <div className="flex flex-wrap items-baseline gap-x-1.5" title="Sets debit or credit, where it shows in the accounts, and its tax treatment">
+          <span>Treated like</span>
+          <span className="font-semibold text-[#122654]">{base} {baseAccount?.name}</span>
+          {sameKind.length > 1 && !changingBase && (
+            <button type="button" onClick={() => setChangingBase(true)} className="font-semibold text-[#1D4E89] hover:underline">
+              change
+            </button>
+          )}
+        </div>
+        {changingBase && sameKind.length > 1 && (
+          <select
+            aria-label="Treated like"
+            value={base}
+            onChange={(e) => {
+              setTouched(true);
+              choose(catIdx, e.target.value, paper);
+            }}
+            className={field}
+          >
+            {sameKind.map((a) => (
+              <option key={a.code} value={a.code}>{a.code} {a.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
       <label className="block space-y-1">
         <span className="font-semibold">Code (next free, {cat.from}–{cat.to})</span>
         <input type="number" min={cat.from} max={cat.to} value={code} onChange={(e) => { setCode(e.target.value); setError(''); }} className={field} />
