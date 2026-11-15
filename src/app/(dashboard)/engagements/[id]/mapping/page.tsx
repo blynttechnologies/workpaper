@@ -50,12 +50,11 @@ export default function AccountMappingPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'ready' | 'check' | 'exception' | 'confirmed'>('all');
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<'amount' | 'code'>('amount');
+  // Largest balance first within each type
+  const sortBy = 'amount';
   const [activeDetailId, setActiveDetailId] = useState<string | null>(null);
   const [typeFilter] = useState('all');
   const [statutoryFilter] = useState('all');
-  const [showStatutory, setShowStatutory] = useState(false);
-  const [showReason, setShowReason] = useState(false);
   const [batchTargetCode, setBatchTargetCode] = useState('');
   const [correctionToast, setCorrectionToast] = useState<{ message: string; undoAction?: () => void } | null>(null);
   // Confirmed lines fold into "Saved accounts"; a chart account picked in "Confirm by account" narrows the list to its lines
@@ -254,7 +253,7 @@ export default function AccountMappingPage() {
       .map(([code, rows]) => ({ code, name: db.blynt_accounts.find((a) => a.code === code)?.name ?? '', rows, total: rows.reduce((a, r) => a + asPence(r.balance_p), 0n) }))
       .sort((a, b) => b.rows.length - a.rows.length || a.code.localeCompare(b.code));
   }, [mappings]);
-  const columns = 6 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
+  const columns = 6;
   const canApprove = ['manager', 'partner', 'admin'].includes(getActor().role);
   const patternsHint = alsoApply.length ? `these ${alsoApply.length + 1} accounts` : 'this account';
   // Lines that look like the one being corrected, offered in the rule pop-up
@@ -909,32 +908,6 @@ export default function AccountMappingPage() {
               {aiBusy ? 'AI is reading the lines…' : 'Map with AI'}
             </button>
 
-            <select
-              aria-label="Order within each type"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'amount' | 'code')}
-              className="min-h-[38px] px-2 text-xs font-semibold text-[#122654] bg-white border border-[#D3DCEE] rounded-xl"
-            >
-              <option value="amount">Largest balance first</option>
-              <option value="code">Code order</option>
-            </select>
-
-            {/* Optional columns */}
-            {([
-              ['statutory line', showStatutory, setShowStatutory],
-              ['AI reason', showReason, setShowReason],
-            ] as const).map(([name, shown, setShown]) => (
-              <button
-                key={name}
-                type="button"
-                aria-pressed={shown}
-                onClick={() => setShown(!shown)}
-                className="min-h-[38px] px-3 text-xs font-semibold text-[#122654] bg-white hover:bg-[#EAF5FC] border border-[#D3DCEE] rounded-xl"
-              >
-                {shown ? 'Hide' : 'Show'} {name}
-              </button>
-            ))}
-
             {/* Batch Remap Toolbar (DAT-04 step 4) */}
             {selectedIds.length > 0 && (
               <div className="flex items-center gap-2 bg-[#EAF5FC] border border-[#B3D7F5] px-3 py-1.5 rounded-xl">
@@ -1043,9 +1016,7 @@ export default function AccountMappingPage() {
                 <th scope="col" className="p-3">Codes</th>
                 <th scope="col" className="p-3">Ledger Name</th>
                 <th scope="col" className="p-3 text-right">Balance</th>
-                {showStatutory && <th scope="col" className="p-3">Statutory Line &amp; Schedule</th>}
                 <th scope="col" className="p-3">Confidence &amp; Gate</th>
-                {showReason && <th scope="col" className="p-3">AI Reason &amp; Evidence</th>}
                 <th scope="col" className="p-3 pr-4">Blynt Account (Mapping)</th>
               </tr>
             </thead>
@@ -1168,23 +1139,6 @@ export default function AccountMappingPage() {
                       </div>
                     </td>
 
-                    {/* Statutory Line & Schedule */}
-                    {showStatutory && (
-                      <td className="p-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-[10px] bg-[#EAF5FC] text-[#1D4E89] px-1.5 py-0.5 rounded">
-                            {row.schedule_ref || stat.schedule_ref}
-                          </span>
-                          <span className="text-[11px] font-medium text-[#122654] truncate max-w-[200px]" title={row.statutory_line || stat.statutory_line}>
-                            {row.statutory_line || stat.statutory_line}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-[#7E8DA6] mt-0.5">
-                          {row.cash_flow_category || stat.cash_flow_category}
-                        </div>
-                      </td>
-                    )}
-
                     {/* Confidence & Gate Badge */}
                     <td className="p-3">
                       {row.status === 'confirmed' ? (
@@ -1230,23 +1184,6 @@ export default function AccountMappingPage() {
                         </button>
                       )}
                     </td>
-
-                    {/* AI Reason & Evidence (hoverable) */}
-                    {showReason && (
-                      <td className="p-3">
-                        <div
-                          className="text-[11px] text-[#4A5878] line-clamp-1 group relative cursor-help"
-                          title={`Evidence chain: ${row.evidence_used || 'Client rules > Practice rules > Prior-year mapping > Pattern'}`}
-                        >
-                          <span className="font-medium text-[#122654]">
-                            {row.ai_reason || `Matched nominal name pattern "${row.source_name.split(' ')[0]}"`}
-                          </span>
-                          <div className="text-[10px] text-[#7E8DA6]">
-                            {row.evidence_used || 'Rule > Name pattern > Code range'}
-                          </div>
-                        </div>
-                      </td>
-                    )}
 
                     {/* Blynt Account Dropdown */}
                     <td className="p-3 pr-4" onClick={(e) => e.stopPropagation()}>
