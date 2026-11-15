@@ -61,6 +61,8 @@ export default function AccountMappingPage() {
   const [showSaved, setShowSaved] = useState(false);
   const [targetFilter, setTargetFilter] = useState<string | null>(null);
   const [showAllTargets, setShowAllTargets] = useState(false);
+  // The row the keyboard is on (↑ ↓ move, Enter confirm, E change account, C create, / search)
+  const [cursorId, setCursorId] = useState<string | null>(null);
 
   // Rule creation modal (DAT-09)
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
@@ -253,7 +255,7 @@ export default function AccountMappingPage() {
       .map(([code, rows]) => ({ code, name: db.blynt_accounts.find((a) => a.code === code)?.name ?? '', rows, total: rows.reduce((a, r) => a + asPence(r.balance_p), 0n) }))
       .sort((a, b) => b.rows.length - a.rows.length || a.code.localeCompare(b.code));
   }, [mappings]);
-  const columns = 6;
+  const columns = 7;
   const canApprove = ['manager', 'partner', 'admin'].includes(getActor().role);
   const patternsHint = alsoApply.length ? `these ${alsoApply.length + 1} accounts` : 'this account';
   // Lines that look like the one being corrected, offered in the rule pop-up
@@ -464,6 +466,49 @@ export default function AccountMappingPage() {
     setSelectedIds((prev) => prev.filter((id) => !validIds.includes(id)));
   };
 
+  // Keyboard ledger: works anywhere on the page except while typing, or with a pop-up or menu open
+  const rowEl = (id: string) => Array.from(document.querySelectorAll('tr[data-row]')).find((r) => r.getAttribute('data-row') === id);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (ruleModalOpen || e.ctrlKey || e.metaKey || e.altKey) return;
+      if ((e.target as HTMLElement)?.closest?.('input, textarea, select, button, [contenteditable="true"], [role="dialog"], [role="listbox"]')) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        document.getElementById('mapping-search')?.focus();
+        return;
+      }
+      if (!visibleRows.length) return;
+      const i = visibleRows.findIndex((r) => r.id === cursorId);
+      const go = (id: string | undefined) => {
+        if (!id) return;
+        setCursorId(id);
+        rowEl(id)?.scrollIntoView?.({ block: 'nearest' });
+      };
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        go(visibleRows[i < 0 ? 0 : Math.max(0, Math.min(visibleRows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))].id);
+        return;
+      }
+      if (i < 0) return;
+      const row = visibleRows[i];
+      const el = rowEl(row.id);
+      if (e.key === 'Enter' && row.status !== 'confirmed' && row.blynt_code) {
+        e.preventDefault();
+        confirmMappings([row.id]);
+        // The confirmed line folds into Saved accounts, so move on to the next one still open
+        go((visibleRows.slice(i + 1).find((r) => r.status !== 'confirmed') ?? visibleRows.slice(0, i).reverse().find((r) => r.status !== 'confirmed'))?.id);
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        (el?.querySelector('input[role="combobox"]') as HTMLInputElement | null)?.focus();
+      } else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        (el?.querySelector('button[aria-label="Create a new account"]') as HTMLButtonElement | null)?.click();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // Initiate mapping correction (opens DAT-09 rule pop-over modal)
   const handleInitiateChangeMapping = (mappingId: string, newBlyntCode: string) => {
     const item = db.account_mappings.find((m) => m.id === mappingId);
@@ -669,13 +714,8 @@ export default function AccountMappingPage() {
             <span>Step 4 Account mapping</span>
           </div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#122654] tracking-tight">
-              Account mapping &amp; Confidence Gate
-            </h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#122654] tracking-tight">Account mapping</h1>
           </div>
-          <p className="text-xs text-[#4A5878] mt-1 max-w-3xl leading-relaxed">
-            Every nominal account is mapped to a statutory line, schedule, and cash flow category. Rules engine runs first (client &gt; practice &gt; prior-year), followed by the AI confidence gate.
-          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -691,136 +731,6 @@ export default function AccountMappingPage() {
             <span>Go to working paper</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
-        </div>
-      </div>
-
-      {/* Confidence Gate Summary Strip (DAT-03, DAT-08) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        {/* READY GATE */}
-        <div className="bg-white border-2 border-emerald-500/30 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                Ready (≥90%)
-              </span>
-              <span className="text-[10px] bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full font-mono">
-                Gate: Ready
-              </span>
-            </div>
-            <div className="text-2xl font-extrabold text-emerald-800 font-mono-numbers mt-2">
-              {readyCount}
-            </div>
-            <div className="text-[11px] text-[#4A5878] mt-0.5">High confidence suggestions</div>
-          </div>
-          {readyCount > 0 && (
-            <button
-              type="button"
-              onClick={handleConfirmAllReady}
-              className="mt-3 w-full py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 shadow-2xs transition-transform active:scale-[0.98]"
-            >
-              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Confirm all Ready ({readyCount})</span>
-            </button>
-          )}
-        </div>
-
-        {/* CHECK GATE */}
-        <div className="bg-white border-2 border-amber-500/30 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold text-amber-800">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                Check (70–89%)
-              </span>
-              <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-mono">
-                Gate: Check
-              </span>
-            </div>
-            <div className="text-2xl font-extrabold text-amber-800 font-mono-numbers mt-2">
-              {checkCount}
-            </div>
-            <div className="text-[11px] text-[#4A5878] mt-0.5">Review in small groups</div>
-          </div>
-          <div className="text-[10px] text-amber-700 font-medium bg-amber-50 p-1.5 rounded-lg border border-amber-200 mt-2">
-            Requires preparer review before sign-off
-          </div>
-        </div>
-
-        {/* EXCEPTION GATE */}
-        <div className="bg-white border-2 border-red-500/30 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold text-red-800">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                Exception (&lt;70%)
-              </span>
-              <span className="text-[10px] bg-red-100 text-red-900 px-2 py-0.5 rounded-full font-mono">
-                Gate: Exception
-              </span>
-            </div>
-            <div className="text-2xl font-extrabold text-red-800 font-mono-numbers mt-2">
-              {exceptionCount}
-            </div>
-            <div className="text-[11px] text-[#4A5878] mt-0.5">Map one at a time by hand</div>
-          </div>
-          <div className="text-[10px] text-red-700 font-medium bg-red-50 p-1.5 rounded-lg border border-red-200 mt-2">
-            Cannot be bulk confirmed
-          </div>
-        </div>
-
-        {/* CONFIRMED */}
-        <div className="bg-white border border-[#E3E7EF] rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold text-[#122654]">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#0B6B52]" />
-                Confirmed
-              </span>
-              <span className="text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-mono">
-                {totalImported > 0 ? Math.round((confirmedCount / totalImported) * 100) : 0}%
-              </span>
-            </div>
-            <div className="text-2xl font-extrabold text-[#122654] font-mono-numbers mt-2">
-              {confirmedCount} / {totalImported}
-            </div>
-            <div className="text-[11px] text-[#4A5878] mt-0.5">Agreed by accountant</div>
-          </div>
-          <div className="text-[10px] text-[#4A5878] mt-2 font-mono">
-            {confirmedCount === totalImported ? 'All accounts verified' : `${totalImported - confirmedCount} unconfirmed`}
-          </div>
-        </div>
-
-        {/* UNMAPPED BALANCE (GROUND RULE 2) */}
-        <div
-          className={`rounded-xl p-4 border-2 shadow-xs flex flex-col justify-between ${
-            isFullyMapped
-              ? 'border-emerald-500/50 bg-[#E6F4EF]/60'
-              : 'border-red-500/60 bg-[#FDECEA]/60'
-          }`}
-        >
-          <div>
-            <div
-              className={`text-xs font-bold uppercase tracking-wider ${
-                isFullyMapped ? 'text-[#0B6B52]' : 'text-red-700'
-              }`}
-            >
-              Unmapped Balance
-            </div>
-            <div
-              className={`text-xl font-extrabold font-mono-numbers mt-1.5 ${
-                isFullyMapped ? 'text-[#0B6B52]' : 'text-red-700'
-              }`}
-            >
-              {formatPence(unmappedBalancePence)}
-            </div>
-            <div className="text-[10px] mt-1 font-semibold text-[#122654]">
-              {isFullyMapped ? '✓ Working papers unlocked' : 'Must be £0.00 to balance'}
-            </div>
-          </div>
-          <div className="text-[9px] text-[#4A5878] mt-2">
-            Auto-accept: <strong>OFF</strong>
-          </div>
         </div>
       </div>
 
@@ -851,9 +761,10 @@ export default function AccountMappingPage() {
       {/* Main Table Card */}
       <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs overflow-hidden">
         {/* Table Toolbar */}
-        <div className="p-4 border-b border-[#E3E7EF] flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Gate Filters (DAT-04 UI step 1 & 2) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+        <div className="p-4 border-b border-[#E3E7EF] flex flex-col gap-3">
+          {/* Gate Filters (DAT-04 UI step 1 & 2): one pill group, the counts in each */}
+          <div role="tablist" aria-label="Filter lines" className="flex items-center gap-1 p-1 w-max max-w-full overflow-x-auto bg-white border border-[#E3E7EF] rounded-2xl">
+
             {[
               { id: 'all', label: 'All', count: totalImported },
               { id: 'ready', label: 'Ready', count: readyCount, color: 'text-emerald-700' },
@@ -864,8 +775,10 @@ export default function AccountMappingPage() {
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`min-h-[38px] px-3.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                className={`min-h-[34px] px-3.5 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                   activeTab === tab.id
                     ? 'bg-[#122654] text-white shadow-xs'
                     : 'text-[#4A5878] hover:bg-[#F5F8FD] hover:text-[#122654]'
@@ -908,42 +821,6 @@ export default function AccountMappingPage() {
               {aiBusy ? 'AI is reading the lines…' : 'Map with AI'}
             </button>
 
-            {/* Batch Remap Toolbar (DAT-04 step 4) */}
-            {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2 bg-[#EAF5FC] border border-[#B3D7F5] px-3 py-1.5 rounded-xl">
-                <span className="text-xs font-bold text-[#122654]">
-                  Map selected ({selectedIds.length}) to:
-                </span>
-                <select
-                  aria-label="Map selected accounts"
-                  value={batchTargetCode}
-                  onChange={(e) => setBatchTargetCode(e.target.value)}
-                  className="text-xs font-semibold py-1 px-2 border border-[#D3DCEE] rounded-lg bg-white text-[#122654] max-w-[200px]"
-                >
-                  <option value="">Select target COA…</option>
-                  <ChartOptions engagementId={engagementId} />
-                </select>
-                <button
-                  type="button"
-                  disabled={!batchTargetCode}
-                  onClick={handleApplyBatchRemap}
-                  className="px-2.5 py-1 bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold rounded-lg disabled:opacity-40"
-                >
-                  Apply
-                </button>
-              </div>
-            )}
-
-            {/* Confirm Selected Button */}
-            <button
-              type="button"
-              disabled={selectedIds.length === 0}
-              onClick={handleConfirmSelected}
-              className="min-h-[38px] px-4 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-40 cursor-pointer shadow-xs transition-transform active:scale-[0.98]"
-            >
-              <Check className="w-4 h-4 stroke-[2.5]" />
-              <span>Confirm selected ({selectedIds.length})</span>
-            </button>
           </div>
         </div>
 
@@ -1017,7 +894,8 @@ export default function AccountMappingPage() {
                 <th scope="col" className="p-3">Ledger Name</th>
                 <th scope="col" className="p-3 text-right">Balance</th>
                 <th scope="col" className="p-3">Confidence &amp; Gate</th>
-                <th scope="col" className="p-3 pr-4">Blynt Account (Mapping)</th>
+                <th scope="col" className="p-3">Blynt Account (Mapping)</th>
+                <th scope="col" className="p-3 pr-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E3E7EF]">
@@ -1083,14 +961,21 @@ export default function AccountMappingPage() {
                 return (
                   <tr
                     key={row.id}
+                    data-row={row.id}
+                    aria-current={cursorId === row.id ? 'true' : undefined}
                     className={`hover:bg-[#F5F8FD] transition-colors cursor-pointer ${
-                      activeDetailId === row.id ? 'bg-[#EAF5FC]/50' : ''
+                      cursorId === row.id ? 'bg-[#EAF5FC] outline outline-2 -outline-offset-2 outline-[#1D4E89]/40' : activeDetailId === row.id ? 'bg-[#EAF5FC]/50' : gateName === 'exception' ? 'bg-[#FFF8F6]' : ''
                     } ${isSignMismatch ? 'bg-amber-50/20' : ''}`}
-                    onClick={() => setActiveDetailId(row.id)}
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && setActiveDetailId(row.id)}
+                    onClick={() => {
+                      setCursorId(row.id);
+                      setActiveDetailId(row.id);
+                    }}
                   >
-                    <td className="p-3 pl-4" onClick={(e) => e.stopPropagation()}>
+                    {/* The left edge carries the gate colour, so the list reads at a glance */}
+                    <td
+                      className={`p-3 pl-4 border-l-4 ${gateName === 'confirmed' ? 'border-l-emerald-500' : gateName === 'ready' ? 'border-l-emerald-400' : gateName === 'check' ? 'border-l-amber-400' : 'border-l-red-500'}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -1139,8 +1024,9 @@ export default function AccountMappingPage() {
                       </div>
                     </td>
 
-                    {/* Confidence & Gate Badge */}
-                    <td className="p-3">
+                    {/* Confidence & Gate: the badge, the AI mark, and a bar for how sure */}
+                    <td className="p-3 min-w-[130px]">
+                      <div className="flex flex-wrap items-center gap-1">
                       {row.status === 'confirmed' ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1 w-max">
                           <Check className="w-3 h-3 stroke-[2.5]" />
@@ -1165,23 +1051,19 @@ export default function AccountMappingPage() {
                       {row.method === 'ai' && (
                         <span
                           title={row.ai_reason || 'Mapped by the AI'}
-                          className="mt-1 inline-flex items-center gap-0.5 mr-1 px-1.5 py-0.5 text-[10px] font-bold text-[#B8432F] bg-[#FFF1EE] border border-[#FF7A66]/40 rounded-full"
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold text-[#B8432F] bg-[#FFF1EE] border border-[#FF7A66]/40 rounded-full"
                         >
                           <Sparkles className="w-3 h-3" /> AI
                         </span>
                       )}
-                      {row.status !== 'confirmed' && row.blynt_code && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmMappings([row.id]);
-                          }}
-                          aria-label={`Confirm ${row.source_code} ${row.source_name} as ${row.blynt_code}`}
-                          className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-white bg-[#122654] hover:bg-[#0B1A3B] rounded-full"
-                        >
-                          <Check className="w-3 h-3 stroke-[2.5]" /> Confirm
-                        </button>
+                      </div>
+                      {row.status !== 'confirmed' && (
+                        <div className="mt-1.5 h-1 w-full max-w-[120px] rounded-full bg-[#E3E7EF]" role="img" aria-label={`${row.confidence}% sure`}>
+                          <div
+                            className={`h-1 rounded-full ${gateName === 'ready' ? 'bg-emerald-500' : gateName === 'check' ? 'bg-amber-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.max(4, Math.min(100, row.confidence))}%` }}
+                          />
+                        </div>
                       )}
                     </td>
 
@@ -1257,6 +1139,24 @@ export default function AccountMappingPage() {
                         )
                       )}
                     </td>
+
+                    {/* Action */}
+                    <td className="p-3 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      {row.status !== 'confirmed' && row.blynt_code ? (
+                        <button
+                          type="button"
+                          onClick={() => confirmMappings([row.id])}
+                          aria-label={`Confirm ${row.source_code} ${row.source_name} as ${row.blynt_code}`}
+                          className="inline-flex items-center gap-1.5 min-h-[34px] px-4 text-xs font-bold text-white bg-[#122654] hover:bg-[#0B1A3B] rounded-lg"
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Confirm
+                        </button>
+                      ) : row.status === 'confirmed' ? (
+                        <span className="text-[11px] font-semibold text-[#0B6B52]">Saved</span>
+                      ) : (
+                        <span className="text-[11px] text-[#7E8DA6]">Pick an account</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -1268,30 +1168,53 @@ export default function AccountMappingPage() {
           </table>
         </div>
         {/* Room for the action bar, so it never covers the last row */}
-        {(selectedIds.length > 0 || confirmedCount < totalImported) && <div className="h-20" aria-hidden="true" />}
+        <div className="h-20" aria-hidden="true" />
       </div>
 
-      {/* The confirm actions follow the page down, so confirming never means scrolling back up */}
-      {selectedIds.length === 0 && confirmedCount < totalImported && !ruleModalOpen && (
-        <div role="region" aria-label="Confirm lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">
-            <span className="text-xs mr-auto">
-              <span className="font-bold">{totalImported - confirmedCount} to confirm</span>
-              <span className="text-white/70"> · tick lines to confirm or remap several, or use Confirm on a row</span>
-            </span>
-            <button
-              type="button"
-              disabled={readyCount === 0}
-              onClick={handleConfirmAllReady}
-              className="min-h-[36px] px-4 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-lg flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Check className="w-4 h-4 stroke-[2.5]" /> Confirm all Ready ({readyCount})
-            </button>
+      {/* The ledger bar follows the page down: the keys on the left, what is left to do on the right */}
+      {selectedIds.length === 0 && !ruleModalOpen && (
+        <div role="region" aria-label="Confirm lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-5xl">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg text-xs">
+            <div className="hidden md:flex items-center gap-3 mr-auto text-white/80">
+              {[
+                ['↑ ↓', 'move'],
+                ['Enter', 'confirm'],
+                ['E', 'change account'],
+                ['C', 'create'],
+                ['/', 'search'],
+              ].map(([key, what]) => (
+                <span key={key} className="flex items-center gap-1.5">
+                  <kbd className="px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#122654] bg-white rounded">{key}</kbd>
+                  {what}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-1.5 ml-auto">
+              <span className="font-bold">{confirmedCount < totalImported ? `${totalImported - confirmedCount} to confirm` : 'All confirmed'}</span>
+              <span className="text-white/60">·</span>
+              <span>
+                Unmapped <span className={`font-mono font-bold ${isFullyMapped ? 'text-emerald-300' : 'text-[#FFB4A8]'}`}>{formatPence(unmappedBalancePence)}</span>
+              </span>
+              {!isFullyMapped && <span className="text-white/70">· must be £0.00</span>}
+              <span className="text-white/60">·</span>
+              <span className="text-white/70">
+                Auto-accept: <strong className="text-white">OFF</strong>
+              </span>
+            </div>
+            {readyCount > 0 && (
+              <button
+                type="button"
+                onClick={handleConfirmAllReady}
+                className="min-h-[34px] px-4 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-lg flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4 stroke-[2.5]" /> Confirm all Ready ({readyCount})
+              </button>
+            )}
           </div>
         </div>
       )}
       {selectedIds.length > 0 && !ruleModalOpen && (
-        <div role="region" aria-label="Selected lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-3xl">
+        <div role="region" aria-label="Selected lines" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-32px)] max-w-5xl">
           <div className="flex flex-wrap items-center gap-2 px-4 py-3 bg-[#122654] text-white rounded-2xl shadow-lg">
             <span className="text-xs font-bold mr-auto">
               {selectedIds.length} line{selectedIds.length === 1 ? '' : 's'} selected
