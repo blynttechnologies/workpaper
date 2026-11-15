@@ -405,16 +405,17 @@ describe('Pulling the trial balance from Xero', () => {
     const res = await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
     expect(res.status).toBe(201);
     // Open debtors need credit notes too, so they are not gathered either; the rest of the pull stands
-    expect((await res.json()).notGathered).toEqual(['credit notes', 'payments', 'bank transfers', 'open debtors at the period end']);
+    expect((await res.json()).notGathered).toEqual(['credit notes', 'payments', 'bank transfers', 'open debtors and creditors at the period end']);
     expect(db.transactions.some((x) => x.external_id === 'inv-1')).toBe(true);
   });
 
-  it('keeps the sales documents open at the period end, for ageing the debtors', async () => {
+  it('keeps the sales and purchase documents open at the period end, for the debtors and creditors', async () => {
     await connected();
     const { calls } = fakeXero();
     await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
     const eng = db.engagements.find((e) => e.id === ENG)!;
     expect(eng.debtor_open_items?.as_at).toBe(eng.period_end);
+    expect(eng.creditor_open_items?.as_at).toBe(eng.period_end);
     // Open items are read however old, filtered to what was open at the period end, not by the year's dates
     const invoiceCall = calls.find((c) => c.url.includes('/Invoices') && decodeURIComponent(c.url).includes('FullyPaidOnDate'));
     expect(invoiceCall).toBeTruthy();

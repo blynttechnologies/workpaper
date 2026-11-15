@@ -9,6 +9,7 @@ import { services } from '@/lib/server/services';
 import { getActor } from '@/lib/session';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
+import { OpenItemsTable } from '../OpenItemsTable';
 import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, SuggestionRow, th, Tiles, useOpen } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
 import { bankMatches, creditorsJournal, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
@@ -53,7 +54,13 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     const s = suppliersFromLedger(result.engagementId, pe, windowDays, live().suppliers ?? []);
     if (!s) return setNote({ ok: false, text: 'The creditors control account has no ledger transactions yet. Import them from the accounting system, or add suppliers by hand.' });
     save({ suppliers: s, refreshed_at: new Date().toISOString() });
-    setNote({ ok: true, text: `${s.length} supplier${s.length === 1 ? '' : 's'} from the ledger at ${peLabel}.` });
+    const fromXero = s.some((x) => x.overdue);
+    setNote({
+      ok: true,
+      text: fromXero
+        ? `${s.length} supplier${s.length === 1 ? '' : 's'} from Xero's bills, credits and payments on account open at ${peLabel}, with days past the due date.`
+        : `${s.length} supplier${s.length === 1 ? '' : 's'} from the ledger at ${peLabel}.${db.engagements.find((e) => e.id === result.engagementId)?.creditor_open_items || !db.transactions.some((t) => t.engagement_id === result.engagementId && t.source === 'Xero') ? '' : ' Pull from Xero again to read its open bills instead, so last year’s unpaid bills are included.'}`,
+    });
   };
   const [checking, setChecking] = useState(false);
   const checkBank = async () => {
@@ -208,7 +215,9 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                           <div className="text-[10px] text-[#B42318]">Not in Xero bank to {ukDate(s.bank_check.to)}</div>
                         ))}
                     </td>
-                    <td className="p-2 align-top text-right">{s.oldest_days ? <Pill tone={s.oldest_days > 90 ? 'warn' : 'plain'}>{s.oldest_days} days</Pill> : '–'}</td>
+                    <td className="p-2 align-top text-right">
+                      {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
+                    </td>
                     <td className="p-2 align-top">
                       <Pill tone={tone}>{label}</Pill>
                     </td>
@@ -276,7 +285,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                               )
                             }
                           >
-                            Nothing paid since the period end and the oldest invoice is {s.oldest_days} days old. It may be disputed or not owed.
+                            Nothing paid since the period end and the oldest {s.overdue ? `bill is ${s.oldest_days} days overdue` : `invoice is ${s.oldest_days} days old`}. It may be disputed or not owed.
                           </SuggestionRow>
                         )}
                         {s.decision && (
@@ -335,15 +344,13 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                         {isOpen(s.id) && (
                           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                             <div className={card}>
-                              <div className="font-bold mb-1">Open invoices at {peLabel}</div>
-                              {!s.invoices?.length && <div className="text-[11px] text-[#7E8DA6]">None from the ledger.</div>}
-                              {s.invoices?.map((i, k) => (
-                                <div key={k} className="flex justify-between gap-2 text-[11px] border-t border-[#EEF1F6] py-1">
-                                  <span>{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{i.ref || 'Invoice'}</a> : i.ref || 'Invoice'}</span>
-                                  <span>{ukDate(i.date)}</span>
-                                  <span className="font-mono">{formatPence(asPence(i.amount_p), { symbol: '' })}</span>
-                                </div>
-                              ))}
+                              {!s.invoices?.length && (
+                                <>
+                                  <div className="font-bold mb-1">Open invoices at {peLabel}</div>
+                                  <div className="text-[11px] text-[#7E8DA6]">None from the ledger.</div>
+                                </>
+                              )}
+                              {!!s.invoices?.length && <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} />}
                               {!s.invoices && (
                                 <label className="flex flex-col gap-1 mt-1">
                                   <span className="text-[10px] font-semibold text-[#4A5878]">Supplier name and ledger balance</span>
