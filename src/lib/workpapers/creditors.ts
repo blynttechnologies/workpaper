@@ -22,6 +22,7 @@ export interface Supplier {
   invoices?: { ref: string; date: string; due?: string; days: number; amount_p: string; url?: string; total_p?: string; payments?: DebtorPayment[] }[];
   payments_after?: { date: string; desc: string; amount_p: string; url?: string }[];
   overdue?: boolean; // oldest_days counts days past the due date, not the bill's age
+  aged?: { current_p: string; d30_p: string; d60_p: string; d90_p: string }; // not due, 1-30, 31-60 and over 60 days overdue
   expense_code?: string;
   vat_p?: string; // VAT inside a missing invoice
   decision?: SupplierDecision;
@@ -132,6 +133,11 @@ export function suppliersFromOpenItems(items: DebtorOpenItem[], engagementId: st
     ).sort((a, b) => a.date.localeCompare(b.date));
     const paid = payments.reduce((acc, p) => acc + asPence(p.amount_p), 0n);
     const owed = its.filter((it) => asPence(it.amount_p) > 0n);
+    const aged = { current_p: 0n, d30_p: 0n, d60_p: 0n, d90_p: 0n };
+    for (const it of its) {
+      const d = overdue(it);
+      aged[d === 0 ? 'current_p' : d <= 30 ? 'd30_p' : d <= 60 ? 'd60_p' : 'd90_p'] += asPence(it.amount_p);
+    }
     const prev = existing.find((x) => x.name === name);
     out.push({
       id: prev?.id ?? `sup_${out.length + 1}_${slug(name)}`,
@@ -141,6 +147,7 @@ export function suppliersFromOpenItems(items: DebtorOpenItem[], engagementId: st
       paid_after_p: (balance > 0n ? (paid < balance ? paid : balance) : 0n).toString(),
       oldest_days: owed.length ? Math.max(...owed.map(overdue)) : 0,
       overdue: true,
+      aged: { current_p: aged.current_p.toString(), d30_p: aged.d30_p.toString(), d60_p: aged.d60_p.toString(), d90_p: aged.d90_p.toString() },
       invoices: its.map((it) => ({
         ref: `${it.kind === 'invoice' ? '' : `${it.kind[0].toUpperCase()}${it.kind.slice(1)} `}${it.ref}`,
         date: it.date, due: it.due, days: overdue(it), amount_p: it.amount_p,

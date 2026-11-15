@@ -45,6 +45,8 @@ describe("creditors open at the period end, as Xero's Aged Payables shows them",
     // B-100 was due 31 Oct 2024: 427 days overdue counting the due date; B-200, due on the period end, is 1 day
     expect(fuel.oldest_days).toBe(427);
     expect(fuel.invoices?.find((i) => i.ref === 'B-200')).toMatchObject({ days: 1, due: '2025-12-31' });
+    // Due on the period end is 1-30 overdue; B-300 due in January is not due; the credit is aged by its own date
+    expect(fuel.aged).toEqual({ current_p: '25000', d30_p: String(60000 - 5000), d60_p: '0', d90_p: '40000' });
     expect(fuel.payments_after).toEqual([expect.objectContaining({ date: '2026-01-20', amount_p: '60000', desc: 'Paid against B-200' })]);
     // Money paid on account is a debit balance, for other debtors
     expect(supplierView(rows.find((r) => r.name === 'Insurer Ltd')!).debit).toBe(true);
