@@ -21,6 +21,15 @@ describe('fixed asset movement codes', () => {
     expect(name('6617')).toBe('Plant and equipment accumulated depreciation - disposals');
     expect(name('6973')).toBe('Goodwill accumulated amortisation - charge for the year');
     expect(name('6562')).toBe('Land cost - disposals');
+    expect(name('6601')).toBe('Plant and equipment cost - additions');
+    expect(name('6603')).toBe('Plant and equipment revaluation');
+    expect(name('6618')).toBe('Plant and equipment impairment');
+    expect(name('6568')).toBe('Land impairment');
+    expect(name('6880')).toBe('Goodwill cost - additions');
+    expect(name('6882')).toBe('Goodwill impairment');
+    expect(name('6897')).toBe('Other intangible assets impairment');
+    // every category has all eight (land and assets under construction, with no depreciation, have five)
+    expect(FIXED_ASSET_MOVEMENTS).toHaveLength(17 * 6 + 2 * 4);
     expect(codes.every((c) => Number(c) >= 6500 && Number(c) <= 6999)).toBe(true);
   });
 
@@ -28,6 +37,8 @@ describe('fixed asset movement codes', () => {
     expect(inLead('6602', '6600')).toBe(true);
     expect(inLead('6616', '6610')).toBe(true);
     expect(inLead('6974', '6971')).toBe(true);
+    expect(inLead('6880', '6970')).toBe(true);
+    expect(inLead('6882', '6971')).toBe(true);
     expect(papersForCode('6716').map((t) => t.ref)).toEqual(papersForCode('6710').map((t) => t.ref));
     expect(db.blynt_accounts.some((a) => a.code === '6617')).toBe(true);
   });

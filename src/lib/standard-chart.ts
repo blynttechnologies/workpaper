@@ -363,16 +363,25 @@ const FIXED_ASSET_CATEGORIES: [cost: string, acc: string | null, name: string, c
   ['6990', '6991', 'Website development', 'amortisation'],
   ['6995', '6996', 'Other intangible assets', 'amortisation'],
 ];
-export const FIXED_ASSET_MOVEMENTS: BlyntAccount[] = FIXED_ASSET_CATEGORIES.flatMap(([cost, acc, name, charge]) => {
+// Intangible categories have no room beside them for additions, revaluation and impairment, so theirs
+// sit together in the free block 6880-6897, three per category in the order listed above
+const INTANGIBLE_EXTRAS_FROM = 6880;
+
+export const FIXED_ASSET_MOVEMENTS: BlyntAccount[] = FIXED_ASSET_CATEGORIES.flatMap(([cost, acc, name, charge], i) => {
   const intangible = charge === 'amortisation';
+  const extra = (n: number) => String(INTANGIBLE_EXTRAS_FROM + 3 * (i - FIXED_ASSET_CATEGORIES.findIndex((c) => c[3] === 'amortisation')) + n);
   return [
+    movement(intangible ? extra(0) : plus(cost, 1), `${name} cost - additions`, cost, 'Debit'),
     movement(plus(cost, 2), `${name} cost - disposals`, cost, 'Credit'),
+    movement(intangible ? extra(1) : plus(cost, 3), `${name} revaluation`, cost, 'Debit'),
     ...(acc
       ? [
           movement(intangible ? plus(cost, 3) : plus(acc, 6), `${name} accumulated ${charge} - charge for the year`, acc, 'Credit'),
           movement(intangible ? plus(cost, 4) : plus(acc, 7), `${name} accumulated ${charge} - disposals`, acc, 'Debit'),
         ]
       : []),
+    // Impairment reduces the carrying amount, so it sits with the accumulated account where there is one
+    movement(intangible ? extra(2) : acc ? plus(acc, 8) : plus(cost, 8), `${name} impairment`, acc ?? cost, 'Credit'),
   ];
 });
 
