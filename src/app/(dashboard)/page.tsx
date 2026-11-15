@@ -125,6 +125,7 @@ export default function PracticeHomePage() {
     .slice(0, 5)
     .map((log) => ({ id: log.id, actor: log.actor_name, action: `${log.action.toLowerCase().replace(/_/g, ' ')} (${log.entity.replace(/_/g, ' ')})`, time: timeAgo(log.at) }));
 
+  const hour = new Date().getHours();
   const metrics = [
     { value: openEngagements.length, label: 'In progress', sub: 'Open engagements', colour: 'text-[#122654]' },
     { value: openReviewNotes.length, label: 'Review notes', sub: 'Open notes', colour: 'text-[#C2410C]' },
@@ -136,11 +137,24 @@ export default function PracticeHomePage() {
 
   return (
     <div className="flex flex-col gap-5 pb-14 max-w-7xl mx-auto">
-      <h1 className="sr-only">Dashboard</h1>
-      {/* Banner: live working-paper news, then what Blynt can do */}
-      <DashboardBanner
-        summary={`${activeClients.length} client${activeClients.length === 1 ? '' : 's'} · ${allPapers.length} working papers · ${practiceCounts.attention} need attention`}
-      />
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
+        <div>
+          <h1 className="text-2xl font-extrabold text-[#122654] tracking-tight">
+            {hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}
+          </h1>
+          <p className="text-xs text-[#4A5878] mt-1">
+            {activeClients.length} client{activeClients.length === 1 ? '' : 's'} · {allPapers.length} working papers · {practiceCounts.attention} need attention
+          </p>
+        </div>
+        <Link
+          href="/engagements/new"
+          className="min-h-[40px] px-4 flex items-center gap-1.5 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl shadow-sm transition-colors self-start sm:self-auto"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5]" />
+          New engagement
+        </Link>
+      </div>
 
       {/* Fresh workspace welcome banner if no company added yet */}
       {clients.length === 0 && (
@@ -172,8 +186,9 @@ export default function PracticeHomePage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-8 flex flex-col gap-5">
             {/* Client list with each client's progress */}
-            <section aria-labelledby="clients-heading" className={`${card} lg:col-span-8 p-4`}>
+            <section aria-labelledby="clients-heading" className={`${card} p-4`}>
               <div className="flex items-center justify-between mb-2">
                 <h2 id="clients-heading" className="text-sm font-bold text-[#122654]">Clients</h2>
                 <Link href="/clients" className="text-xs font-semibold text-[#122654] hover:underline flex items-center gap-1">
@@ -210,6 +225,10 @@ export default function PracticeHomePage() {
                 ))}
               </ul>
             </section>
+
+            {/* Banner under the client list: working-paper news, then what Blynt can do */}
+            <DashboardBanner />
+            </div>
 
             {/* Charts */}
             <div className="lg:col-span-4 flex flex-col gap-5">

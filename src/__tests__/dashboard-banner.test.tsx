@@ -30,7 +30,7 @@ describe('dashboard banner', () => {
   it('steps through the slides with the arrows and the dots', () => {
     db.seed(true);
     const slides = bannerMessages();
-    render(<DashboardBanner summary="4 clients" />);
+    render(<DashboardBanner />);
     expect(screen.getByRole('heading', { name: slides[0].title })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Next update' }));
     expect(screen.getByRole('heading', { name: slides[1].title })).toBeTruthy();
@@ -39,6 +39,5 @@ describe('dashboard banner', () => {
     expect(screen.getByRole('heading', { name: slides.at(-1)!.title })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Slide 1 of ${slides.length}`) }));
     expect(screen.getByRole('heading', { name: slides[0].title })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /New engagement/ }).getAttribute('href')).toBe('/engagements/new');
   });
 });
