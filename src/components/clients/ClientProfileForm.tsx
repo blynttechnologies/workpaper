@@ -6,6 +6,7 @@ import { db } from '@/lib/server/db';
 import { useCompany } from '@/context/CompanyContext';
 import { packForClient } from '@/lib/workpapers/templates';
 import { Client, CompanyType } from '@/lib/types/models';
+import { FLAT_RATE_CATEGORIES } from '@/lib/tax';
 
 const COMPANY_TYPES: CompanyType[] = [
   'Sole trader',
@@ -63,6 +64,8 @@ export function ClientProfileForm({ client }: { client: Client }) {
     year_end: client.year_end ?? '',
     vat_registered: client.vat_registered ?? true,
     vat_scheme: client.vat_scheme ?? 'standard',
+    vat_flat_rate_category: client.vat_flat_rate_category ?? '',
+    vat_registered_on: client.vat_registered_on ?? '',
     payroll: client.payroll ?? true,
     services: client.services ?? ['year_end'],
     signoff_levels: client.signoff_levels ? String(client.signoff_levels) : '',
@@ -144,6 +147,25 @@ export function ClientProfileForm({ client }: { client: Client }) {
             </select>
           )}
         </div>
+        {f.vat_registered && (
+          <div className="flex flex-wrap gap-2 items-end">
+            {f.vat_scheme === 'flat_rate' && (
+              <label className="text-[11px] font-semibold text-[#4A5878]">
+                Flat rate business type
+                <select aria-label="Flat rate business type" className={`${inputCls} mt-1 w-auto max-w-[420px] block`} value={f.vat_flat_rate_category} onChange={(e) => setF({ ...f, vat_flat_rate_category: e.target.value })}>
+                  <option value="">Choose the business type…</option>
+                  {FLAT_RATE_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>{c.label}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="text-[11px] font-semibold text-[#4A5878]">
+              VAT registered on
+              <input type="date" aria-label="VAT registered on" className={`${inputCls} mt-1 w-auto block`} value={f.vat_registered_on} onChange={(e) => setF({ ...f, vat_registered_on: e.target.value })} />
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

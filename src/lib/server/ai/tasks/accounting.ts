@@ -96,6 +96,8 @@ export interface PaperInput {
   title: string;
   framework: string;
   period_end: string;
+  /** The client's VAT position from the tax library at the period end */
+  vat?: unknown;
   data: unknown;
   checks: unknown;
   procedures: { text: string; done: boolean; not_applicable_reason: string | null }[];
@@ -111,6 +113,8 @@ export const reviewWorkpaperTask: TaskDef<PaperInput, ReviewOutput> = {
   system: BASE,
   build: (p) => [
     json('working_paper', { ref: p.ref, title: p.title, framework: p.framework, period_end: p.period_end, data: p.data }),
+    // Rates and limits from the tax library at the period end: use these, not remembered figures
+    ...(p.vat ? [json('client_vat_position', p.vat)] : []),
     json('engine_checks', p.checks),
     json('procedures', p.procedures),
     {
@@ -153,6 +157,8 @@ export const draftConclusionTask: TaskDef<PaperInput, string> = {
   system: BASE,
   build: (p) => [
     json('working_paper', { ref: p.ref, title: p.title, framework: p.framework, period_end: p.period_end, data: p.data }),
+    // Rates and limits from the tax library at the period end: use these, not remembered figures
+    ...(p.vat ? [json('client_vat_position', p.vat)] : []),
     json('engine_checks', p.checks),
     json('procedures', p.procedures),
     {

@@ -6,6 +6,7 @@ import { PACKS, packForClient } from '../workpapers/templates';
 import { companyNumberError, structureForCompanyType, structureFields, UK_POSTCODE, UK_VAT } from '../practice-structure';
 import { Client, CompanyType, PracticeDefaults } from '../types/models';
 import { syncTeamAccess } from './staff';
+import { FLAT_RATE_CATEGORIES } from '../tax';
 
 /**
  * Client profile (Build Order step 2) and the practice defaults. A client's answers decide which
@@ -75,6 +76,11 @@ export function updateClientProfile(actor: Actor & { clientIds?: string[] | null
   const vatNumber = vat ? text('vat_number', 20)?.toUpperCase().replace(/\s/g, '') : undefined;
   if (vatNumber && !UK_VAT.test(vatNumber)) throw new ServiceError('Enter a valid UK VAT number.');
   if (vat && d.vat_scheme !== undefined && !VAT_SCHEMES.includes(d.vat_scheme)) throw new ServiceError('Choose a VAT scheme.');
+  const scheme = vat ? d.vat_scheme ?? client.vat_scheme ?? 'standard' : undefined;
+  const category = scheme === 'flat_rate' ? ('vat_flat_rate_category' in d ? d.vat_flat_rate_category || undefined : client.vat_flat_rate_category) : undefined;
+  if (category && !FLAT_RATE_CATEGORIES.some((c) => c.key === category)) throw new ServiceError('Choose the flat rate business type from the list.');
+  const registeredOn = vat ? ('vat_registered_on' in d ? d.vat_registered_on || undefined : client.vat_registered_on) : undefined;
+  if (registeredOn && !/^\d{4}-\d{2}-\d{2}$/.test(registeredOn)) throw new ServiceError('Enter the VAT registration date as a date.');
   if (d.signoff_levels !== undefined && d.signoff_levels !== null && ![1, 2, 3].includes(d.signoff_levels)) throw new ServiceError('Choose the sign-off levels.');
   const firmUsers = new Set(db.memberships.filter((m) => m.firm_id === actor.firmId).map((m) => m.user_id));
 
@@ -88,7 +94,9 @@ export function updateClientProfile(actor: Actor & { clientIds?: string[] | null
     jurisdiction,
     year_end: typeof d.year_end === 'string' && d.year_end ? d.year_end : client.year_end,
     vat_registered: vat,
-    vat_scheme: vat ? d.vat_scheme ?? client.vat_scheme ?? 'standard' : undefined,
+    vat_scheme: scheme,
+    vat_flat_rate_category: category,
+    vat_registered_on: registeredOn,
     vat_number: vatNumber,
     payroll: typeof d.payroll === 'boolean' ? d.payroll : client.payroll !== false,
     services: Array.isArray(d.services) ? SERVICES.filter((s) => d.services.includes(s)) : client.services,
