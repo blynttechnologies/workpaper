@@ -74,7 +74,7 @@ export default function ClientRecordPage() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/engagements/new"
+            href={`/engagements/new?client_id=${encodeURIComponent(client.id)}`}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-[#FF7A66] hover:bg-[#ff9485] text-[#0B1A3B] text-xs font-bold rounded-xl shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
