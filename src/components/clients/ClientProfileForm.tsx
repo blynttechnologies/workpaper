@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, Save } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Loader2, Save } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { useCompany } from '@/context/CompanyContext';
 import { packForClient } from '@/lib/workpapers/templates';
@@ -40,9 +40,16 @@ const SIGNOFF: [string, string][] = [
   ['3', 'Plus partner approval'],
 ];
 
-const inputCls = 'w-full min-h-[38px] px-3 text-xs bg-white border border-[#D3DCEE] rounded-[10px] text-[#122654] outline-none focus:border-[#1D4E89]';
+const labelCls = 'text-[11px] font-semibold text-[#4A5878]';
+const inputCls = 'min-h-[34px] px-2.5 text-xs bg-white border border-[#D3DCEE] rounded-lg text-[#122654] outline-none focus:border-[#1D4E89]';
 const pill = (on: boolean) =>
-  `text-xs font-semibold px-3 py-1.5 rounded-full border cursor-pointer ${on ? 'bg-[#122654] border-[#122654] text-white' : 'bg-white border-[#D3DCEE] text-[#122654]'}`;
+  `inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer transition-colors ${
+    on ? 'bg-[#122654] border-[#122654] text-white' : 'bg-white border-[#D3DCEE] text-[#4A5878] hover:border-[#122654] hover:text-[#122654]'
+  }`;
+// Two-option toggle: one bordered strip with the chosen side filled
+const segment = 'inline-flex p-0.5 rounded-lg border border-[#D3DCEE] bg-[#F5F8FD]';
+const segBtn = (on: boolean) =>
+  `min-h-[30px] px-3 text-[11px] font-semibold rounded-md cursor-pointer transition-colors ${on ? 'bg-[#122654] text-white' : 'text-[#4A5878] hover:text-[#122654]'}`;
 
 interface PaperChanges {
   engagement_id: string;
@@ -107,80 +114,86 @@ export function ClientProfileForm({ client }: { client: Client }) {
   const changed = result?.filter((p) => p.added.length || p.removed.length || p.kept.length) ?? [];
 
   return (
-    <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3 border-b border-[#E3E7EF] pb-3">
+    <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-xs p-4 space-y-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-[#122654]">Client profile</h2>
-          <p className="text-[11px] text-[#4A5878]">These answers decide the working papers for this client: {paperCount} papers.</p>
+          <p className="text-[11px] text-[#4A5878]">Your answers decide which working papers this client gets.</p>
         </div>
+        <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAF0FB] text-[#1D4E89]">{paperCount} papers</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <label className="text-[11px] font-semibold text-[#4A5878] sm:col-span-1">
+        <label className={labelCls}>
           Entity type and standard
-          <select className={`${inputCls} mt-1`} value={f.company_type} onChange={(e) => setF({ ...f, company_type: e.target.value as CompanyType })}>
+          <select className={`${inputCls} w-full mt-1`} value={f.company_type} onChange={(e) => setF({ ...f, company_type: e.target.value as CompanyType })}>
             {COMPANY_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </label>
-        <label className="text-[11px] font-semibold text-[#4A5878]">
+        <label className={labelCls}>
           Company number
-          <input className={`${inputCls} mt-1`} value={f.company_no} onChange={(e) => setF({ ...f, company_no: e.target.value })} placeholder="01234567" />
+          <input className={`${inputCls} w-full mt-1`} value={f.company_no} onChange={(e) => setF({ ...f, company_no: e.target.value })} placeholder="e.g. 01234567" />
         </label>
-        <label className="text-[11px] font-semibold text-[#4A5878]">
+        <label className={labelCls}>
           Year end
-          <input className={`${inputCls} mt-1`} value={f.year_end} onChange={(e) => setF({ ...f, year_end: e.target.value })} placeholder="2026-03-31" />
+          {/* A date picker for a plain date; an older free-text value stays editable as text */}
+          <input
+            type={!f.year_end || /^\d{4}-\d{2}-\d{2}$/.test(f.year_end) ? 'date' : 'text'}
+            className={`${inputCls} w-full mt-1`}
+            value={f.year_end}
+            onChange={(e) => setF({ ...f, year_end: e.target.value })}
+          />
         </label>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-[#4A5878]">VAT</p>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="VAT registered">
-          <button type="button" role="radio" aria-checked={f.vat_registered} className={pill(f.vat_registered)} onClick={() => setF({ ...f, vat_registered: true })}>VAT registered</button>
-          <button type="button" role="radio" aria-checked={!f.vat_registered} className={pill(!f.vat_registered)} onClick={() => setF({ ...f, vat_registered: false })}>Not registered</button>
-          {f.vat_registered && (
-            <select aria-label="VAT scheme" className={`${inputCls} w-auto`} value={f.vat_scheme} onChange={(e) => setF({ ...f, vat_scheme: e.target.value as Client['vat_scheme'] & string })}>
-              {VAT_SCHEMES.map(([k, l]) => (
-                <option key={k} value={k}>{l}</option>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="sm:col-span-2 space-y-1.5">
+          <p className={labelCls}>VAT</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className={segment} role="radiogroup" aria-label="VAT registered">
+              <button type="button" role="radio" aria-checked={f.vat_registered} className={segBtn(f.vat_registered)} onClick={() => setF({ ...f, vat_registered: true })}>Registered</button>
+              <button type="button" role="radio" aria-checked={!f.vat_registered} className={segBtn(!f.vat_registered)} onClick={() => setF({ ...f, vat_registered: false })}>Not registered</button>
+            </div>
+            {f.vat_registered && (
+              <>
+                <select aria-label="VAT scheme" className={inputCls} value={f.vat_scheme} onChange={(e) => setF({ ...f, vat_scheme: e.target.value as Client['vat_scheme'] & string })}>
+                  {VAT_SCHEMES.map(([k, l]) => (
+                    <option key={k} value={k}>{l}</option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-1.5 text-[11px] text-[#4A5878]">
+                  since
+                  <input type="date" aria-label="VAT registered on" className={inputCls} value={f.vat_registered_on} onChange={(e) => setF({ ...f, vat_registered_on: e.target.value })} />
+                </label>
+              </>
+            )}
+          </div>
+          {f.vat_registered && f.vat_scheme === 'flat_rate' && (
+            <select aria-label="Flat rate business type" className={`${inputCls} w-full max-w-[420px]`} value={f.vat_flat_rate_category} onChange={(e) => setF({ ...f, vat_flat_rate_category: e.target.value })}>
+              <option value="">Flat rate business type…</option>
+              {FLAT_RATE_CATEGORIES.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
               ))}
             </select>
           )}
         </div>
-        {f.vat_registered && (
-          <div className="flex flex-wrap gap-2 items-end">
-            {f.vat_scheme === 'flat_rate' && (
-              <label className="text-[11px] font-semibold text-[#4A5878]">
-                Flat rate business type
-                <select aria-label="Flat rate business type" className={`${inputCls} mt-1 w-auto max-w-[420px] block`} value={f.vat_flat_rate_category} onChange={(e) => setF({ ...f, vat_flat_rate_category: e.target.value })}>
-                  <option value="">Choose the business type…</option>
-                  {FLAT_RATE_CATEGORIES.map((c) => (
-                    <option key={c.key} value={c.key}>{c.label}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="text-[11px] font-semibold text-[#4A5878]">
-              VAT registered on
-              <input type="date" aria-label="VAT registered on" className={`${inputCls} mt-1 w-auto block`} value={f.vat_registered_on} onChange={(e) => setF({ ...f, vat_registered_on: e.target.value })} />
-            </label>
+        <div className="space-y-1.5">
+          <p className={labelCls}>Payroll</p>
+          <div className={segment} role="radiogroup" aria-label="Runs payroll">
+            <button type="button" role="radio" aria-checked={f.payroll} className={segBtn(f.payroll)} onClick={() => setF({ ...f, payroll: true })}>Runs payroll</button>
+            <button type="button" role="radio" aria-checked={!f.payroll} className={segBtn(!f.payroll)} onClick={() => setF({ ...f, payroll: false })}>No payroll</button>
           </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-[#4A5878]">Payroll</p>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Runs payroll">
-          <button type="button" role="radio" aria-checked={f.payroll} className={pill(f.payroll)} onClick={() => setF({ ...f, payroll: true })}>Runs payroll</button>
-          <button type="button" role="radio" aria-checked={!f.payroll} className={pill(!f.payroll)} onClick={() => setF({ ...f, payroll: false })}>No payroll</button>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-[11px] font-semibold text-[#4A5878]">Services you provide</p>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Services">
+      <div className="space-y-1.5">
+        <p className={labelCls}>Services you provide</p>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Services">
           {SERVICES.map(([k, l]) => (
             <button key={k} type="button" role="checkbox" aria-checked={f.services.includes(k)} className={pill(f.services.includes(k))} onClick={() => setF({ ...f, services: toggle(f.services, k) })}>
+              {f.services.includes(k) && <Check className="w-3 h-3" aria-hidden="true" />}
               {l}
             </button>
           ))}
@@ -188,37 +201,38 @@ export function ClientProfileForm({ client }: { client: Client }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <label className="text-[11px] font-semibold text-[#4A5878]">
+        <label className={labelCls}>
           Sign-off
-          <select className={`${inputCls} mt-1`} value={f.signoff_levels} onChange={(e) => setF({ ...f, signoff_levels: e.target.value })}>
+          <select className={`${inputCls} w-full mt-1`} value={f.signoff_levels} onChange={(e) => setF({ ...f, signoff_levels: e.target.value })}>
             {SIGNOFF.map(([k, l]) => (
               <option key={k} value={k}>{l}</option>
             ))}
           </select>
         </label>
         <div className="sm:col-span-2">
-          <p className="text-[11px] font-semibold text-[#4A5878] mb-1">Team</p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Team">
+          <p className={`${labelCls} mb-1`}>Team</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Team">
             {team.map((u) => (
               <button key={u.id} type="button" role="checkbox" aria-checked={f.team_user_ids.includes(u.id)} className={pill(f.team_user_ids.includes(u.id))} onClick={() => setF({ ...f, team_user_ids: toggle(f.team_user_ids, u.id) })}>
-                {u.name} <span className="opacity-70">({roleOf(u.id)})</span>
+                {f.team_user_ids.includes(u.id) && <Check className="w-3 h-3" aria-hidden="true" />}
+                {u.name} <span className="opacity-70 capitalize">· {roleOf(u.id)}</span>
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 pt-1">
+      <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[#E3E7EF]">
         <button
           type="button"
           onClick={save}
           disabled={busy || Boolean(client.archived_at)}
-          className="inline-flex items-center gap-1.5 min-h-[38px] px-4 bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold rounded-[10px] cursor-pointer disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 min-h-[34px] px-3.5 bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold rounded-lg cursor-pointer disabled:opacity-60"
         >
           {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
           Save profile
         </button>
-        <span className="text-[11px] text-[#7E8DA6]">Open engagements update to match. Papers already started are kept.</span>
+        <span className="text-[10px] text-[#7E8DA6]">Open engagements update to match. Papers already started are kept.</span>
       </div>
 
       {error && (
