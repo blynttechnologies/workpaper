@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken, readCookie } from '../lib/server/auth';
-import { firmSlice, mergeFirmState, GuardError, State, Actor } from '../lib/server/state-guard';
+import { firmSlice, mergeFirmState, publicSlice, GuardError, State, Actor } from '../lib/server/state-guard';
 
 describe('passwords and sessions', () => {
   it('verifies only the right password', () => {
@@ -78,6 +78,28 @@ describe('firm isolation', () => {
     expect(out.memberships.find((m) => m.user_id === 'prep')?.role).toBe('preparer');
     expect(out.templates).toHaveLength(1);
     expect(out.credentials).toHaveLength(1);
+  });
+
+  it('sends each engagement only its latest trial balance lines, and a browser save keeps every copy on the server', () => {
+    const s: State = {
+      ...base(),
+      tb_snapshots: [
+        { id: 's_old', engagement_id: 'e1', created_at: '2026-11-15T09:00:00Z', raw_json: '[big]' },
+        { id: 's_new', engagement_id: 'e1', created_at: '2026-11-15T15:00:00Z', raw_json: '[big]' },
+      ],
+      tb_lines: [
+        { id: 'l_old', snapshot_id: 's_old' },
+        { id: 'l_new', snapshot_id: 's_new' },
+      ],
+    };
+    const v = publicSlice(s, 'f1', 'prep');
+    expect(v.tb_snapshots.map((x) => x.id)).toEqual(['s_old', 's_new']);
+    expect(v.tb_snapshots.some((x) => 'raw_json' in x)).toBe(false);
+    expect(v.tb_lines.map((l) => l.id)).toEqual(['l_new']);
+    // What the browser sends back lacks the old lines and the raw imports: the server's copies stand
+    const out = mergeFirmState(s, JSON.parse(JSON.stringify(v)), actor('prep', 'preparer'));
+    expect(out.tb_lines.map((l) => l.id)).toEqual(['l_old', 'l_new']);
+    expect(out.tb_snapshots.every((x) => x.raw_json === '[big]')).toBe(true);
   });
 
   it('cannot claim another firm’s record', () => {

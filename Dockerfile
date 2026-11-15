@@ -12,6 +12,8 @@ WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 AWS_LWA_READINESS_CHECK_PATH=/login
 # Non-HTTP invocations (the end-of-day Xero sync schedule) arrive as a POST here
 ENV AWS_LWA_PASS_THROUGH_PATH=/api/v1/integrations/xero/auto-sync
+# A Lambda response is capped at 6 MB; gzip gives the workspace download about ten times the room
+ENV AWS_LWA_ENABLE_COMPRESSION=true
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
