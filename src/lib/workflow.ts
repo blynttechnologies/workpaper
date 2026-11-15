@@ -66,3 +66,7 @@ export function buildWorkflow(engagementId: string): WorkflowStep[] {
     },
   ];
 }
+
+/** The step to do now: one already under way, else the first one ready to start. An optional step left at
+ * "to do" (journals, when none are needed) doesn't hide the step people are actually working on. */
+export const nextStep = (steps: WorkflowStep[]) => steps.find((s) => s.state === 'doing') ?? steps.find((s) => s.state === 'todo');
