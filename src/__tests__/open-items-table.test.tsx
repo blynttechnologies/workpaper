@@ -29,6 +29,21 @@ describe('open invoices, laid out like the working spreadsheet', () => {
     expect(screen.getByText('22 Jul 2025')).toBeTruthy();
     expect(screen.getByText('5,000.00')).toBeTruthy();
     expect(screen.queryByText(/next pull from Xero/)).toBeNull();
+    // Fully paid, so nothing overdue; days overdue sit under the due date
+    expect(within(many).getAllByText('–').length).toBeGreaterThan(0);
+    expect(within(one).getByText(/due 31 Dec 2025 · 1 day overdue/)).toBeTruthy();
+  });
+
+  it('overdue is the invoice total less everything paid against it', () => {
+    render(
+      <OpenItemsTable
+        items={[{ ref: '12705', date: '2025-12-31', due: '2026-01-30', days: 0, amount_p: '1103910', total_p: '1103910' }, { ref: '12800', date: '2025-11-01', due: '2025-12-01', days: 31, amount_p: '50000', total_p: '80000', payments: [{ date: '2025-11-20', amount_p: '30000', how: 'payment' }] }]}
+        peLabel="31 Dec 2025" title="Open invoices" byDue warnAfter={60}
+      />
+    );
+    expect(within(screen.getByText('12705').closest('tr')!).getAllByText('11,039.10')).toHaveLength(3); // amount, open, overdue
+    expect(within(screen.getByText('12705').closest('tr')!).getByText(/not due/)).toBeTruthy();
+    expect(within(screen.getByText('12800').closest('tr')!).getAllByText('500.00')).toHaveLength(2); // open at the period end, and still overdue
   });
 
   it('asks for a fresh pull when the invoices were read before amounts and payments were', () => {
