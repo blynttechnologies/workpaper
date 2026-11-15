@@ -14,29 +14,33 @@ import {
   Lock,
   FileSpreadsheet,
   BookOpen,
+  GraduationCap,
   Percent,
   ArrowUpRight,
   Sliders,
   Globe,
   ListChecks,
+  LineChart,
 } from 'lucide-react';
 import { BlyntLogo } from '@/components/ui/BlyntLogo';
 import { db } from '@/lib/server/db';
 import { workflowsOf } from '@/lib/workflows';
 import { useCompany } from '@/context/CompanyContext';
 import { useLocale } from '@/context/LocaleContext';
+import { ukDate } from '@/lib/dates';
+
+// Brand kit: deep navy for dark sections, navy for the active item, coral only as a shape (bar, badge, icon)
+const focus = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A66] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B1A3B]';
 
 /** Locale indicator badge shown in the sidebar footer */
 const LocaleFooterBadge: React.FC = () => {
   const { jurisdiction } = useLocale();
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#122654]/60 border border-white/10 mb-1">
-      <Globe className="w-3 h-3 text-[#FF7A66] shrink-0" />
+    <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-white/5">
+      <Globe className="w-3.5 h-3.5 text-[#FF7A66] shrink-0" aria-hidden="true" />
       <div className="flex flex-col min-w-0">
-        <span className="text-[10px] text-[#A6B4D0] leading-tight truncate">
-          {jurisdiction.label}
-        </span>
-        <span className="text-[9px] text-[#7E8DA6] font-mono truncate">
+        <span className="text-[11px] text-[#C5CFE3] leading-tight truncate">{jurisdiction.label}</span>
+        <span className="text-[10px] text-[#8C9BBA] truncate">
           {jurisdiction.currency} · {jurisdiction.frameworkLabel}
         </span>
       </div>
@@ -44,15 +48,46 @@ const LocaleFooterBadge: React.FC = () => {
   );
 };
 
+type Item = { href: string; label: string; icon: React.ElementType; exact?: boolean; badge?: number; badgeLabel?: string };
+
+const itemCls = (on: boolean) =>
+  `relative flex items-center gap-3 mx-3 px-3 h-9 rounded-lg text-[13px] transition-colors ${focus} ${on ? 'bg-[#122654] text-white font-semibold' : 'text-[#C5CFE3] font-medium hover:bg-white/5 hover:text-white'}`;
+// The coral bar beside the page you are on
+const ActiveBar = () => <span aria-hidden="true" className="absolute -left-3 top-1.5 bottom-1.5 w-1 rounded-r-full bg-[#FF7A66]" />;
+
+function NavLink({ item, on, onClick }: { item: Item; on: boolean; onClick?: () => void }) {
+  const Icon = item.icon;
+  return (
+    <Link href={item.href} onClick={onClick} aria-current={on ? 'page' : undefined} className={itemCls(on)}>
+      {on && <ActiveBar />}
+      <Icon className={`w-4 h-4 shrink-0 ${on ? 'text-[#FF7A66]' : 'text-[#8C9BBA]'}`} aria-hidden="true" />
+      <span className="flex-1 truncate">{item.label}</span>
+      {item.badge ? (
+        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#FF7A66] text-[#0B1A3B] text-[11px] font-bold flex items-center justify-center" aria-label={item.badgeLabel}>
+          {item.badge}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-5">
+      <p className="px-6 pb-1.5 text-[11px] font-semibold text-[#8C9BBA]">{label}</p>
+      <nav aria-label={label} className="flex flex-col gap-0.5">
+        {children}
+      </nav>
+    </div>
+  );
+}
+
 interface AppSidebarProps {
   currentEngagementId?: string;
   onMobileClose?: () => void;
 }
 
-export const AppSidebar: React.FC<AppSidebarProps> = ({
-  currentEngagementId: currentEngagementIdProp,
-  onMobileClose,
-}) => {
+export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: currentEngagementIdProp, onMobileClose }) => {
   const { activeCompany, activeEngagement: contextEngagement } = useCompany();
   const pathname = usePathname();
   const router = useRouter();
@@ -67,7 +102,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       : contextEngagement;
 
   const routeClient = activeEngagement ? db.clients.find((c) => c.id === activeEngagement.client_id) : null;
-  const activeClient = activeCompany || routeClient;
+  const activeClient = routeClient || activeCompany;
 
   const currentEngagementId = activeEngagement?.id ?? currentEngagementIdProp ?? routeEngagementId ?? null;
   const engagementBase = currentEngagementId ? `/engagements/${currentEngagementId}` : '';
@@ -76,24 +111,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const showEngagementOptions = Boolean(routeEngagementId || currentEngagementIdProp);
   const workflows = activeEngagement ? workflowsOf(activeEngagement.id) : [];
 
+  // Live counts for the badges
+  const engagementPaperIds = new Set(db.workpapers.filter((w) => w.engagement_id === currentEngagementId).map((w) => w.id));
+  const openReviewNotesCount = db.comments.filter((c) => c.type === 'review_note' && c.status === 'open' && engagementPaperIds.has(c.workpaper_id)).length;
+  const mappingNeededCount = db.account_mappings.filter((m) => m.engagement_id === currentEngagementId && m.status !== 'confirmed').length;
 
-  // Calculate live counts from data
-
-  const openReviewNotesCount = db.comments.filter(
-    (c) => c.type === 'review_note' && c.status === 'open' && (activeEngagement ? c.workpaper_id?.includes(activeEngagement.id) : true)
-  ).length;
-
-  const mappingNeededCount = db.account_mappings.filter(
-    (m) => m.engagement_id === currentEngagementId && m.status !== 'confirmed'
-  ).length;
-
-  // Keyboard shortcut listener: N for New engagement
+  // Keyboard shortcut: N for New engagement
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        (e.key === 'n' || e.key === 'N') &&
-        !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)
-      ) {
+      if ((e.key === 'n' || e.key === 'N') && !['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) && !(e.target as HTMLElement)?.isContentEditable) {
         e.preventDefault();
         router.push('/engagements/new');
       }
@@ -102,330 +128,104 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [router]);
 
-  const isLinkActive = (href: string, exact = false) => {
-    if (exact) {
-      return pathname === href;
-    }
-    return pathname.startsWith(href);
-  };
+  const isLinkActive = (href: string, exact = false) => (exact ? pathname === href : pathname.startsWith(href));
+
+  const links = (items: Item[]) => items.map((i) => <NavLink key={i.href} item={i} on={isLinkActive(i.href, i.exact)} onClick={onMobileClose} />);
+
+  const practice: Item[] = [
+    { href: '/', label: 'Dashboard', icon: Home, exact: true },
+    { href: '/clients', label: 'Clients', icon: Building2 },
+    { href: '/settings', label: 'Practice settings', icon: Sliders },
+  ];
+  const prepare: Item[] = [
+    { href: `${engagementBase}/workflow`, label: 'Workflow', icon: ListChecks },
+    { href: `${engagementBase}/trial-balance`, label: 'Trial balance', icon: Scale },
+    { href: `${engagementBase}/mapping`, label: 'Mapping', icon: TableProperties, badge: mappingNeededCount, badgeLabel: `${mappingNeededCount} accounts to map` },
+    { href: `${engagementBase}/journals`, label: 'Journals', icon: BookOpen },
+    { href: `${engagementBase}/documents`, label: 'Documents', icon: FileSpreadsheet },
+  ];
+  const report: Item[] = [
+    { href: `${engagementBase}/analysis`, label: 'Analysis', icon: LineChart },
+    { href: `${engagementBase}/disclosures`, label: 'Disclosures and notes', icon: FileCheck2 },
+    { href: `${engagementBase}/reports`, label: 'Reports', icon: FileDown },
+  ];
+  const finish: Item[] = [
+    { href: `${engagementBase}/review`, label: 'Review', icon: MessageSquare, badge: openReviewNotesCount, badgeLabel: `${openReviewNotesCount} open review ${openReviewNotesCount === 1 ? 'note' : 'notes'}` },
+    { href: `${engagementBase}/history`, label: 'History', icon: Lock },
+  ];
+  const library: Item[] = [
+    { href: '/library/standards', label: 'Learning library', icon: GraduationCap },
+    { href: '/library/tax', label: 'Tax library', icon: Percent },
+  ];
 
   return (
-    <aside
-      aria-label="Sidebar navigation"
-      className="w-full h-full min-h-full bg-[#0B1A3B] text-white flex flex-col justify-between shrink-0 select-none pb-4"
-    >
-      <div className="flex flex-col">
-        {/* Blynt Brand Logo */}
-        <div className="p-5 pb-3">
-          <Link
-            href="/"
-            onClick={onMobileClose}
-            className="flex items-center group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7A66] rounded-lg p-1"
-          >
+    <aside aria-label="Sidebar navigation" className="w-full h-full min-h-full bg-[#0B1A3B] text-white flex flex-col justify-between shrink-0 select-none">
+      <div className="flex flex-col pb-4">
+        {/* Logo, in its white rectangle */}
+        <div className="px-5 pt-5 pb-1">
+          <Link href="/" onClick={onMobileClose} aria-label="Blynt Workpapers home" className={`inline-flex rounded-lg p-1 ${focus}`}>
             <BlyntLogo variant="full" theme="dark" size="md" />
           </Link>
         </div>
 
-        {/* Group: PRACTICE */}
-        <div className="mt-3 flex flex-col">
-          <div className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#7E8DA6]">
-            Practice
-          </div>
-          <nav className="flex flex-col">
-            <Link
-              href="/"
-              onClick={onMobileClose}
-              aria-current={isLinkActive('/', true) ? 'page' : undefined}
-              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                isLinkActive('/', true)
-                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-              }`}
-            >
-              <Home className="w-4 h-4 shrink-0 text-[#FF7A66]" />
-              <span>Dashboard</span>
-            </Link>
+        <Group label="Practice">{links(practice)}</Group>
 
-            <Link
-              href="/clients"
-              onClick={onMobileClose}
-              aria-current={isLinkActive('/clients') ? 'page' : undefined}
-              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                isLinkActive('/clients')
-                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-              }`}
-            >
-              <Building2 className="w-4 h-4 shrink-0" />
-              <span>Clients</span>
-            </Link>
-
-            <Link
-              href="/settings"
-              onClick={onMobileClose}
-              aria-current={isLinkActive('/settings') ? 'page' : undefined}
-              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                isLinkActive('/settings')
-                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-              }`}
-            >
-              <Sliders className="w-4 h-4 shrink-0" />
-              <span>Practice settings</span>
-            </Link>
-          </nav>
-        </div>
-
-        {/* Group: THIS ENGAGEMENT - 11 Sections from Page 5 */}
         {showEngagementOptions && activeEngagement && (
-          <div className="mt-4 flex flex-col animate-in fade-in duration-200">
-            <div className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#7E8DA6] flex items-center justify-between">
-              <span className="truncate" title={activeClient?.name}>Workpapers</span>
+          <>
+            {/* Which client and year these links work on */}
+            <div className="mt-5 mx-3 rounded-xl bg-[#122654] px-3 py-2.5">
+              <p className="text-[10px] font-semibold text-[#8C9BBA]">Working on</p>
+              <Link href={activeClient ? `/clients/${activeClient.id}` : '/clients'} onClick={onMobileClose} className={`block text-sm font-bold text-white truncate hover:underline rounded ${focus}`} title={activeClient?.name}>
+                {activeClient?.name ?? 'Client'}
+              </Link>
+              <p className="text-[11px] text-[#C5CFE3]">Year ended {ukDate(activeEngagement.period_end)}</p>
             </div>
-            <nav className="flex flex-col">
-              <Link
-                href={`${engagementBase}/workflow`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/workflow`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/workflow`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <ListChecks className="w-4 h-4 shrink-0" />
-                <span>Workflow</span>
-              </Link>
 
-              {/* 2. Trial balance */}
-              <Link
-                href={`${engagementBase}/trial-balance`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/trial-balance`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/trial-balance`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <Scale className="w-4 h-4 shrink-0" />
-                <span>Trial balance</span>
-              </Link>
+            <Group label="Prepare">{links(prepare)}</Group>
+            <Group label="Report">{links(report)}</Group>
+            <Group label="Finish">{links(finish)}</Group>
 
-              {/* 3. Mapping */}
-              <Link
-                href={`${engagementBase}/mapping`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/mapping`) ? 'page' : undefined}
-                className={`relative flex items-center justify-between mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/mapping`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <TableProperties className="w-4 h-4 shrink-0" />
-                  <span>Mapping</span>
-                </div>
-                {mappingNeededCount > 0 && (
-                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-[#FFF1EE] text-[#A23A27]">
-                    {mappingNeededCount}
-                  </span>
-                )}
-              </Link>
-
-              {/* 5. Journals */}
-              <Link
-                href={`${engagementBase}/journals`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/journals`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/journals`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <BookOpen className="w-4 h-4 shrink-0" />
-                <span>Journals</span>
-              </Link>
-
-              {/* 6. Documents */}
-              <Link
-                href={`${engagementBase}/documents`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/documents`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/documents`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                <span>Documents</span>
-              </Link>
-
-              {/* 7. Analysis */}
-              <Link
-                href={`${engagementBase}/analysis`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/analysis`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/analysis`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <ArrowUpRight className="w-4 h-4 shrink-0" />
-                <span>Analysis</span>
-              </Link>
-
-              {/* 8. Disclosures and notes */}
-              <Link
-                href={`${engagementBase}/disclosures`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/disclosures`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/disclosures`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <FileCheck2 className="w-4 h-4 shrink-0" />
-                <span>Disclosures & notes</span>
-              </Link>
-
-              {/* 9. Reports */}
-              <Link
-                href={`${engagementBase}/reports`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/reports`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/reports`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <FileDown className="w-4 h-4 shrink-0" />
-                <span>Reports</span>
-              </Link>
-
-              {/* 10. Review */}
-              <Link
-                href={`${engagementBase}/review`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/review`) ? 'page' : undefined}
-                className={`relative flex items-center justify-between mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/review`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <MessageSquare className="w-4 h-4 shrink-0" />
-                  <span>Review</span>
-                </div>
-                {openReviewNotesCount > 0 && (
-                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-[#FF7A66] text-[#0B1A3B]">
-                    {openReviewNotesCount}
-                  </span>
-                )}
-              </Link>
-
-              {/* 11. History */}
-              <Link
-                href={`${engagementBase}/history`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(`${engagementBase}/history`) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(`${engagementBase}/history`)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <Lock className="w-4 h-4 shrink-0" />
-                <span>History</span>
-              </Link>
-            </nav>
-
-            {/* The client year's workflows, as in the workflow cards */}
             {workflows.length > 0 && (
-              <div className="mt-3">
-                <div className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#7E8DA6]">Workflows</div>
-                <nav className="flex flex-col" aria-label="Workflows">
-                  {workflows.map((wf) => {
-                    const href = `${engagementBase}/workflows/${wf.id}`;
-                    const initials = wf.name.split(/[\s-]+/).filter((w) => /^[A-Za-z]/.test(w)).map((w) => w[0].toUpperCase()).slice(0, 3).join('');
-                    return (
-                      <Link
-                        key={wf.id}
-                        href={href}
-                        onClick={onMobileClose}
-                        aria-current={isLinkActive(href) ? 'page' : undefined}
-                        className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                          isLinkActive(href) ? 'text-white bg-[#1E3A73] font-semibold shadow-sm' : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                        }`}
-                      >
-                        <span className="w-6 h-6 shrink-0 rounded-md bg-[#122654] border border-white/10 text-[9px] font-bold flex items-center justify-center" aria-hidden="true">{initials}</span>
-                        <span className="truncate" title={wf.name}>{wf.name}</span>
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
+              <Group label="Workflows">
+                {workflows.map((wf) => {
+                  const href = `${engagementBase}/workflows/${wf.id}`;
+                  const on = isLinkActive(href);
+                  const initials = wf.name
+                    .split(/[\s-]+/)
+                    .filter((w) => /^[A-Za-z]/.test(w))
+                    .map((w) => w[0].toUpperCase())
+                    .slice(0, 3)
+                    .join('');
+                  return (
+                    <Link key={wf.id} href={href} onClick={onMobileClose} aria-current={on ? 'page' : undefined} className={itemCls(on)}>
+                      {on && <ActiveBar />}
+                      <span className="w-6 h-6 shrink-0 rounded-md bg-white/10 text-[9px] font-bold flex items-center justify-center" aria-hidden="true">
+                        {initials}
+                      </span>
+                      <span className="truncate" title={wf.name}>{wf.name}</span>
+                    </Link>
+                  );
+                })}
+              </Group>
             )}
-          </div>
+          </>
         )}
 
-        {/* Group: LIBRARY */}
-        <div className="mt-4 flex flex-col">
-          <div className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#7E8DA6]">
-            Library
-          </div>
-          <nav className="flex flex-col">
-            <Link
-              href="/library/standards"
-              onClick={onMobileClose}
-              aria-current={isLinkActive('/library/standards') ? 'page' : undefined}
-              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                isLinkActive('/library/standards')
-                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-              }`}
-            >
-              <BookOpen className="w-4 h-4 shrink-0" />
-              <span>Learning library</span>
-            </Link>
-
-            <Link
-              href="/library/tax"
-              onClick={onMobileClose}
-              aria-current={isLinkActive('/library/tax') ? 'page' : undefined}
-              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                isLinkActive('/library/tax')
-                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-              }`}
-            >
-              <Percent className="w-4 h-4 shrink-0" />
-              <span>Tax library</span>
-            </Link>
-          </nav>
-        </div>
+        <Group label="Library">{links(library)}</Group>
       </div>
 
-      {/* Bottom links */}
-      <div className="mt-6 pt-4 border-t border-[#122654] px-4 pb-8 flex flex-col gap-1.5">
-        {/* Locale indicator */}
+      {/* Footer */}
+      <div className="mt-4 pt-4 border-t border-white/10 px-4 pb-6 flex flex-col gap-1.5">
         <LocaleFooterBadge />
-
         <a
           href="https://blynt.co.uk"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-between px-2 py-2 text-xs text-[#A6B4D0] hover:text-[#FF7A66] transition-colors rounded-lg hover:bg-[#122654]"
+          className={`flex items-center justify-between px-2.5 py-2 text-xs text-[#C5CFE3] hover:text-white rounded-lg hover:bg-white/5 transition-colors ${focus}`}
         >
           <span>Back to Blynt accounting</span>
-          <ArrowUpRight className="w-3.5 h-3.5" />
+          <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+          <span className="sr-only"> (opens in a new tab)</span>
         </a>
       </div>
     </aside>
