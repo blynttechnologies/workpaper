@@ -383,20 +383,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           </div>
           <nav className="flex flex-col">
             <Link
-              href="/library/templates"
-              onClick={onMobileClose}
-              aria-current={isLinkActive('/library/templates') ? 'page' : undefined}
-              className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                isLinkActive('/library/templates')
-                  ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                  : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-              }`}
-            >
-              <FileSpreadsheet className="w-4 h-4 shrink-0" />
-              <span>Templates</span>
-            </Link>
-
-            <Link
               href="/library/standards"
               onClick={onMobileClose}
               aria-current={isLinkActive('/library/standards') ? 'page' : undefined}

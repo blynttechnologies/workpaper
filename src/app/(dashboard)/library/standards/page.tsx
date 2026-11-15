@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { BookOpen, Check, CheckCircle2, ChevronDown, GraduationCap, HelpCircle, ListChecks, Search, ShieldCheck, Sparkles, Target } from 'lucide-react';
 import { STANDARDS, requiredSchedules } from '@/lib/standards';
 import { TEMPLATES, templateFor, type TemplateDef } from '@/lib/workpapers/templates';
@@ -315,7 +316,10 @@ function TemplateGuide() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="guide-heading" className="text-sm font-bold text-[#122654]">Template guide</h2>
-          <p className="text-[11px] text-[#4A5878]">What each working paper template is for. Open the paper in a client file to work through it in full.</p>
+          <p className="text-[11px] text-[#4A5878]">
+            What each working paper template is for. Open the paper in a client file to work through it in full.{' '}
+            <Link href="/library/templates" className="font-semibold text-[#1D4E89] hover:underline">Manage templates</Link>
+          </p>
         </div>
         <div className="relative">
           <Search className="w-3.5 h-3.5 text-[#7E8DA6] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
