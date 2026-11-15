@@ -314,6 +314,14 @@ export const services = {
         mapping.confirmed_at = new Date().toISOString();
         updated.push(mapping);
         db.logAudit(firmId, actor, 'CONFIRM_MAPPING', 'account_mappings', mapping.id, before, mapping);
+        // A confirmed account is remembered for this client, so the next pull maps it the same way
+        if (mapping.blynt_code && mapping.method !== 'rule' && db.blynt_accounts.some((a) => a.code === mapping.blynt_code)) {
+          learnFromCorrection({ ...actor, firmId }, {
+            type: 'mapping', scope: 'client', client_id: db.engagements.find((e) => e.id === engagementId)?.client_id ?? null,
+            pattern: `code:${mapping.source_code}`, target_value: mapping.blynt_code,
+            explanation: `${mapping.source_code} ${mapping.source_name} confirmed as ${mapping.blynt_code}`,
+          });
+        }
         if (before.method === 'ai' && before.blynt_code) {
           recordDecision({ ...actor, firmId }, {
             engagementId, outputType: 'mapping', itemRef: mapping.source_code, confidence: before.confidence,

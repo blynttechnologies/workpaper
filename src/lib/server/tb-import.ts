@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { db } from './db';
 import { services } from './services';
+import { getStatutoryDetails } from '../mapping/auto-mapper';
 import { toPence } from '../money';
 import { DataSource, TbSnapshot, UserRole } from '../types/models';
 
@@ -128,6 +129,13 @@ export function importTrialBalance(
       prior_snapshot_id: prior?.id ?? null,
     };
 
+    // Confirmed accounts are kept by code and name, so a fresh import doesn't unconfirm them
+    const kept = new Map(
+      db.account_mappings
+        .filter((m) => m.engagement_id === engagementId && m.status === 'confirmed' && m.blynt_code && m.method !== 'rule')
+        .map((m) => [`${m.source_code}\u0000${m.source_name}`, m] as const)
+    );
+
     // Clear prior mappings for this engagement for a fresh import
     db.account_mappings = db.account_mappings.filter((m) => m.engagement_id !== engagementId);
 
@@ -152,7 +160,17 @@ export function importTrialBalance(
       });
       // An account with only last year's balance is shown on the report but has nothing to map
       if (netBalance === 0n && l.comparative != null) return;
-      db.account_mappings.push(services.buildMapping(actor.firmId, engagementId, `map_${snapshot.id}_${idx + 1}`, line, netBalance));
+      const mapping = services.buildMapping(actor.firmId, engagementId, `map_${snapshot.id}_${idx + 1}`, line, netBalance);
+      const old = kept.get(`${line.code}\u0000${line.name}`);
+      if (old && db.blynt_accounts.some((a) => a.code === old.blynt_code)) {
+        const stat = getStatutoryDetails(old.blynt_code!, line.name, line.type);
+        Object.assign(mapping, {
+          blynt_code: old.blynt_code, status: 'confirmed', confidence: 100, method: old.method, gate: 'ready',
+          confirmed_by: old.confirmed_by, confirmed_at: old.confirmed_at, statutory_line: stat.statutory_line,
+          schedule_ref: stat.schedule_ref, cash_flow_category: stat.cash_flow_category,
+        });
+      }
+      db.account_mappings.push(mapping);
     });
 
     // DAT-06: what moved since the last pull (late postings)
