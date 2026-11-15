@@ -132,6 +132,8 @@ function fakeXero(opts: { tb?: () => unknown; tokenError?: string; noExtras?: bo
     if (url.startsWith('https://api.xero.com/api.xro/2.0/Invoices')) return json({ Invoices: page2 ? [] : opts.invoices ?? INVOICES });
     if (!opts.noExtras && url.startsWith('https://api.xero.com/api.xro/2.0/CreditNotes')) return json({ CreditNotes: page2 ? [] : CREDIT_NOTES });
     if (!opts.noExtras && url.startsWith('https://api.xero.com/api.xro/2.0/Payments')) return json({ Payments: page2 ? [] : PAYMENTS });
+    if (!opts.noExtras && url.startsWith('https://api.xero.com/api.xro/2.0/Prepayments')) return json({ Prepayments: [] });
+    if (!opts.noExtras && url.startsWith('https://api.xero.com/api.xro/2.0/Overpayments')) return json({ Overpayments: [] });
     // Transfers ignore the page number, as Xero may
     if (!opts.noExtras && url.startsWith('https://api.xero.com/api.xro/2.0/BankTransfers')) return json({ BankTransfers: opts.transfers ?? TRANSFERS });
     if (url.startsWith('https://api.xero.com/api.xro/2.0/BankTransactions')) return json({ BankTransactions: page2 ? [] : BANK_TXS });
@@ -401,8 +403,21 @@ describe('Pulling the trial balance from Xero', () => {
     fakeXero({ noExtras: true });
     const res = await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
     expect(res.status).toBe(201);
-    expect((await res.json()).notGathered).toEqual(['credit notes', 'payments', 'bank transfers']);
+    // Open debtors need credit notes too, so they are not gathered either; the rest of the pull stands
+    expect((await res.json()).notGathered).toEqual(['credit notes', 'payments', 'bank transfers', 'open debtors at the period end']);
     expect(db.transactions.some((x) => x.external_id === 'inv-1')).toBe(true);
+  });
+
+  it('keeps the sales documents open at the period end, for ageing the debtors', async () => {
+    await connected();
+    const { calls } = fakeXero();
+    await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
+    const eng = db.engagements.find((e) => e.id === ENG)!;
+    expect(eng.debtor_open_items?.as_at).toBe(eng.period_end);
+    // Open items are read however old, filtered to what was open at the period end, not by the year's dates
+    const invoiceCall = calls.find((c) => c.url.includes('/Invoices') && decodeURIComponent(c.url).includes('FullyPaidOnDate'));
+    expect(invoiceCall).toBeTruthy();
+    expect(['Prepayments', 'Overpayments'].every((e) => calls.some((c) => c.url.includes(`/${e}?`)))).toBe(true);
   });
 
   it('an endpoint that ignores the page number does not repeat its rows', async () => {

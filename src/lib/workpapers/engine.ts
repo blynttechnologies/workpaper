@@ -271,8 +271,8 @@ function reviewDebtors(engagementId: string, data: Record<string, any>, leads: L
   const oldDone = old.filter((v) => !v.suggestion || v.line.decision);
   checks.push({
     id: 'over_90',
-    label: `Balances over 90 days reviewed (${oldDone.length}/${old.length})`,
-    detail: old.length === oldDone.length ? 'Every balance over 90 days is collected or has a decision.' : `Decide on ${old.filter((v) => !oldDone.includes(v)).map((v) => v.line.desc).join(', ')}.`,
+    label: `Oldest balances reviewed (${oldDone.length}/${old.length})`,
+    detail: old.length === oldDone.length ? 'Every balance in the oldest ageing column is collected or has a decision.' : `Decide on ${old.filter((v) => !oldDone.includes(v)).map((v) => v.line.desc).join(', ')}.`,
     passed: old.length === oldDone.length,
   });
   const credits = views.filter((v) => v.total < 0n);
