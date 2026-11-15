@@ -26,6 +26,7 @@ function json(label: string, value: unknown): Part {
 export interface MappingInput {
   chart: { code: string; name: string; type: string }[];
   items: { id: string; code: string; name: string; type: string; balance_p: string }[];
+  examples?: { client_account: string; type: string; blynt_code: string; blynt_name: string; same_client: boolean }[];
 }
 export interface MappingOutput {
   suggestions: { id: string; code: string; confidence: number; reason: string; new_name: string; parent_code: string }[];
@@ -34,11 +35,21 @@ export interface MappingOutput {
 export const suggestMappingTask: TaskDef<MappingInput, MappingOutput> = {
   id: 'suggest_mapping',
   module: 'mapping',
-  version: '2026-11-14b',
+  version: '2026-11-15',
   system: BASE,
-  build: ({ chart, items }) => [
+  build: ({ chart, items, examples }) => [
     json('chart_of_accounts', chart),
     json('client_accounts', items),
+    // The firm's own confirmed mappings: how this practice (and this client, where same_client) maps accounts
+    ...(examples?.length
+      ? [
+          json('confirmed_examples', examples),
+          {
+            type: 'text' as const,
+            text: 'confirmed_examples are mappings people at this practice have checked and confirmed. Follow them for the same or a clearly similar account, especially where same_client is true; they outrank your own reading of the name.',
+          },
+        ]
+      : []),
     {
       type: 'text',
       text:

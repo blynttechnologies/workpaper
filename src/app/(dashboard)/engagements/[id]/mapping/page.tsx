@@ -4,6 +4,7 @@ import { Fragment, useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
+  Brain,
   Check,
   Search,
   CheckCircle2,
@@ -91,6 +92,28 @@ export default function AccountMappingPage() {
 
   // The AI system reads every unconfirmed line and suggests an account; each stays a suggestion until someone confirms it
   const [aiBusy, setAiBusy] = useState(false);
+  const [learning, setLearning] = useState(false);
+  // Learn now: the confirmed lines become rules for this client and examples for the AI, as the nightly run does
+  const learnNow = async () => {
+    setLearning(true);
+    try {
+      const res = await fetch(`/api/v1/engagements/${encodeURIComponent(engagementId)}/learn`, { method: 'POST' });
+      const out = await res.json().catch(() => ({}));
+      const learned = (out.rules_added ?? 0) + (out.rules_changed ?? 0);
+      setCorrectionToast({
+        message: !res.ok
+          ? out.error || 'Could not learn from this file. Try again.'
+          : learned
+            ? `Learned ${learned} mapping${learned === 1 ? '' : 's'} from ${out.confirmed} confirmed lines. The next pull and the AI follow them.`
+            : `Nothing new to learn: all ${out.confirmed} confirmed lines are already known.`,
+      });
+    } catch {
+      setCorrectionToast({ message: 'Could not reach the server. Try again.' });
+    } finally {
+      setLearning(false);
+      setTimeout(() => setCorrectionToast(null), 6000);
+    }
+  };
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
   const mapWithAi = async () => {
     const open = db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status !== 'confirmed');
@@ -820,6 +843,18 @@ export default function AccountMappingPage() {
               <Sparkles className={`w-3.5 h-3.5 ${aiBusy ? 'animate-pulse' : ''}`} />
               {aiBusy ? 'AI is reading the lines…' : 'Map with AI'}
             </button>
+            {['reviewer', 'manager', 'partner', 'admin'].includes(getActor().role) && (
+              <button
+                type="button"
+                onClick={learnNow}
+                disabled={learning}
+                title="Blynt also learns every night. This learns from the lines confirmed so far, now: the next pull maps them the same way and the AI follows them."
+                className="min-h-[38px] px-3 text-xs font-bold text-[#122654] bg-white hover:bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl flex items-center gap-1.5 disabled:opacity-60"
+              >
+                <Brain className={`w-3.5 h-3.5 ${learning ? 'animate-pulse' : ''}`} />
+                {learning ? 'Learning…' : 'Learn now'}
+              </button>
+            )}
 
           </div>
         </div>

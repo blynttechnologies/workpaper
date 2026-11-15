@@ -21,6 +21,7 @@ import {
 } from './tasks/accounting';
 import type { UserRole } from '../../types/models';
 import { debtorView, type DebtorLine } from '../../workpapers/debtors';
+import { mappingExamples } from '../learning';
 
 /**
  * Shared AI services: one place each Workpaper module, and the MCP tools, call for AI help.
@@ -71,6 +72,8 @@ export async function suggestMappings(actor: Actor, items: { id: string; name: s
 
   const chart = db.blynt_accounts.filter((a) => a.type !== 'System' && (!a.firm_id || a.firm_id === actor.firmId)).map((a) => ({ code: a.code, name: a.name, type: a.type }));
   const codes = new Set(chart.map((c) => c.code));
+  // What this practice has confirmed before, this client's first: the AI follows the firm's own decisions
+  const examples = mappingExamples(actor.firmId, opts.engagementId ? db.engagements.find((e) => e.id === opts.engagementId)?.client_id : null);
   const batches: (typeof weak)[] = [];
   for (let i = 0; i < weak.length; i += MAPPING_BATCH) batches.push(weak.slice(i, i + MAPPING_BATCH));
   try {
@@ -78,7 +81,7 @@ export async function suggestMappings(actor: Actor, items: { id: string; name: s
       batches.map((batch) =>
         run(
           suggestMappingTask,
-          { chart, items: batch.map((w) => { const i = items.find((x) => x.id === w.id)!; return { id: i.id, code: i.code ?? '', name: i.name, type: i.type ?? '', balance_p: i.balance_p ?? '' }; }) },
+          { chart, examples, items: batch.map((w) => { const i = items.find((x) => x.id === w.id)!; return { id: i.id, code: i.code ?? '', name: i.name, type: i.type ?? '', balance_p: i.balance_p ?? '' }; }) },
           ctxOf(actor, opts.engagementId, channel)
         )
       )
