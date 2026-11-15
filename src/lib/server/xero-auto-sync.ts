@@ -53,6 +53,7 @@ const saveConnections = (updates: Map<string, Partial<XeroConnection>>, reconnec
  * shortcut: 12 runs a night pull at most 12 changed clients, add runs or a queue when there are more.
  */
 export async function autoSyncXero(now = Date.now()) {
+  const started = Date.now(); // the time budget runs from the start of this run, not from `now` (which tests set)
   await syncIn();
   const lastSeen = (c: XeroConnection) => Math.max(Date.parse(c.last_checked_at ?? '') || 0, Date.parse(c.last_synced_at ?? '') || 0);
   const due = db.xero_connections.filter((c) => now - lastSeen(c) >= EVERY_MS - 60_000).sort((a, b) => lastSeen(a) - lastSeen(b));
@@ -62,7 +63,7 @@ export async function autoSyncXero(now = Date.now()) {
   let toPull: { connId: string; engagementId: string; firmId: string } | null = null;
   let checked = 0;
   for (const conn of due) {
-    if (Date.now() - now > CHECK_BUDGET_MS) break;
+    if (Date.now() - started > CHECK_BUDGET_MS) break;
     const eng = target(conn.client_id);
     if (!eng) continue;
     const stamp = new Date().toISOString();

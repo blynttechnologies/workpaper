@@ -423,7 +423,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
-              <span>Standards library</span>
+              <span>Learning library</span>
             </Link>
 
             <Link
