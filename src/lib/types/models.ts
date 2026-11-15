@@ -415,7 +415,8 @@ export interface AdjustmentLine {
   narrative?: string;
 }
 
-// Journals in the adjusted TB (a reversed journal still counts; its reversal cancels it)
+// Journals in the adjusted TB (a reversed journal still counts; its reversal cancels it). A journal
+// 'in_ledger' is posted in the client's ledger and already inside the imported trial balance, so it no longer adds to it.
 export const JOURNAL_IN_TB: Adjustment['status'][] = ['accepted', 'approved', 'posted', 'reversed'];
 
 export interface Adjustment {
@@ -424,7 +425,9 @@ export interface Adjustment {
   ref: string; // e.g. AJE-001
   narrative: string;
   // proposed = Draft (JNL-02); accepted = in the adjusted TB; reversed = cancelled by a reversing journal
-  status: 'proposed' | 'accepted' | 'approved' | 'posted' | 'reversed' | 'rejected';
+  status: 'proposed' | 'accepted' | 'approved' | 'posted' | 'reversed' | 'rejected' | 'in_ledger';
+  /** The journal as sent to the client's ledger: its id there and the status the ledger last reported */
+  ledger?: { provider: 'xero'; id: string; status: string; url?: string; sent_at: string; sent_by: string; in_tb_at?: string };
   type?: 'adjusting' | 'reclassification' | 'client_posted' | 'proposed_by_ai';
   date?: string;
   source_schedule?: string;

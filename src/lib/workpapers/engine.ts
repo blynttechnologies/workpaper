@@ -5,7 +5,7 @@ import { JOURNAL_IN_TB, type Workpaper } from '../types/models';
 import { analyticalReview, analyticalRows } from './analytical';
 import { debtorView, type DebtorLine } from './debtors';
 import { PAPER_REVIEWS } from './reviews';
-import { inLead, type PaperContext } from './common';
+import { inLead, journalInLedger, journalWhere, type PaperContext } from './common';
 
 /**
  * Calculations for every working paper: lead figures from the Blynt chart,
@@ -296,11 +296,21 @@ function reviewDebtors(engagementId: string, data: Record<string, any>, leads: L
   const sent = data.journal;
   const needed = need.provision !== 0n || need.creditors !== 0n;
   const matches = sent && asPence(sent.provision_p) === need.provision && asPence(sent.creditors_p) === need.creditors;
+  // Posted in Xero: the trial balance now holds it, so the figures already include it
+  const inXero = journalInLedger(sent?.id);
   checks.push({
     id: 'journal_sent',
     label: 'Adjustments sent to journals',
-    detail: !needed ? 'The decisions need no journal.' : matches ? `Sent as ${sent.ref}.` : sent ? `The decisions changed after ${sent.ref} was sent. Send the journal again and remove ${sent.ref}.` : 'Send the journal built from the decisions.',
-    passed: !needed || !!matches,
+    detail: inXero
+      ? journalWhere(sent.id, sent.ref)
+      : !needed
+        ? 'The decisions need no journal.'
+        : matches
+          ? journalWhere(sent.id, sent.ref)
+          : sent
+            ? `The decisions changed after ${sent.ref} was sent. Send the journal again and remove ${sent.ref}.`
+            : 'Send the journal built from the decisions.',
+    passed: inXero || !needed || !!matches,
   });
 
   const undecided = views.filter((v) => v.needsDecision).length;

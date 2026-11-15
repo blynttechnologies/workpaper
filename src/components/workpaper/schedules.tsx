@@ -637,7 +637,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'The journal could not be sent.');
       save({ journal: { id: body.id, ref: body.ref, provision_p: need.provision.toString(), creditors_p: need.creditors.toString() } });
-      setNote({ kind: 'ok', text: `Sent to journals as ${body.ref}. It waits there for review.` });
+      setNote({ kind: 'ok', text: `Saved as ${body.ref} in Blynt's journals. Approve it on the Journals page, then send it to Xero from there.` });
     } catch (err: any) {
       setNote({ kind: 'error', text: err?.message || 'The journal could not be sent.' });
     } finally {

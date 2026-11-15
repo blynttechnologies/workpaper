@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { formatPence, formatPenceInput } from '@/lib/money';
-import { chartName, journalSig, type JLine } from '@/lib/workpapers/common';
+import { chartName, journalInLedger, journalSig, journalWhere, type JLine } from '@/lib/workpapers/common';
 import { paperContext, type PaperResult } from '@/lib/workpapers/engine';
 import { db } from '@/lib/server/db';
 
@@ -217,7 +217,7 @@ export function JournalPanel({
   engagementId: string;
   date: string;
   lines: JLine[];
-  sent?: { ref: string; sig: string };
+  sent?: { id?: string; ref: string; sig: string };
   narrative: string;
   source: string;
   autoReverse?: boolean;
@@ -230,7 +230,8 @@ export function JournalPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sig = journalSig(lines);
-  const current = sent && sent.sig === sig;
+  // Once the journal is in Xero's trial balance the paper's figures include it, so it no longer has to match
+  const current = sent && (sent.sig === sig || journalInLedger(sent.id));
   const send = async () => {
     setBusy(true);
     setError(null);
@@ -285,7 +286,7 @@ export function JournalPanel({
       {note && <div className="mt-2 text-[10px] text-[#4A5878]">{note}</div>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {current ? (
-          <span className="text-[11px] text-[#0B6B52] font-semibold">✓ Sent as {sent!.ref}. It waits in the journal register for review.</span>
+          <span className="text-[11px] text-[#0B6B52] font-semibold">✓ {journalWhere(sent!.id, sent!.ref)}</span>
         ) : (
           <>
             {sent && <span className="text-[11px] text-[#B8432F]">Changed since {sent.ref} was sent: remove {sent.ref} on the Journals page, then send again.</span>}
