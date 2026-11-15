@@ -45,40 +45,46 @@ const BLANK = { trading_name: '', company_no: '', address_line: '', postcode: ''
 const detailsOf = (c?: Client) => ({ ...BLANK, ...Object.fromEntries(Object.entries(c ?? {}).filter(([k, v]) => k in BLANK && typeof v === 'string')) }) as typeof BLANK;
 
 const inputCls =
-  'w-full min-h-[42px] px-3 text-sm bg-white border border-[#D3DCEE] rounded-[10px] text-[#122654] outline-none focus:border-[#FF7A66] focus:ring-2 focus:ring-[#FF7A66]/20 placeholder:text-[#9AA6BC]';
+  'w-full min-h-[36px] px-3 text-xs bg-white border border-[#D3DCEE] rounded-lg text-[#122654] outline-none focus:border-[#FF7A66] focus:ring-2 focus:ring-[#FF7A66]/20 placeholder:text-[#9AA6BC]';
 
 function Q({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className="block text-sm font-semibold text-[#122654] mt-6 mb-2">
+    <label htmlFor={htmlFor} className="block text-[11px] font-semibold text-[#4A5878] mt-4 mb-1">
       {children}
     </label>
   );
 }
 
-function Card({ on, title, sub, onClick }: { on: boolean; title: string; sub: string; onClick: () => void }) {
+/** A short title, a one-line hint and an optional tag (the accounting standard) */
+function Card({ on, title, sub, tag, onClick }: { on: boolean; title: string; sub: string; tag?: string; onClick: () => void }) {
   return (
     <button
       type="button"
       role="radio"
       aria-checked={on}
       onClick={onClick}
-      className={`relative text-left px-3.5 py-3 rounded-[10px] border transition-colors cursor-pointer ${
+      className={`relative text-left px-3 py-2.5 rounded-lg border transition-colors cursor-pointer ${
         on ? 'bg-[#EEF2F9] border-[#1D4E89] ring-1 ring-[#1D4E89]' : 'bg-white border-[#D3DCEE] hover:border-[#A6B4D0]'
       }`}
     >
-      {on && <Check className="absolute top-2.5 right-2.5 w-3.5 h-3.5 text-[#1D4E89]" />}
-      <span className="block text-sm font-semibold text-[#122654] pr-4">{title}</span>
-      <span className="block text-[11px] text-[#4A5878] mt-0.5">{sub}</span>
+      {on && (
+        <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#1D4E89] flex items-center justify-center">
+          <Check className="w-2.5 h-2.5 text-white" />
+        </span>
+      )}
+      <span className="block text-xs font-bold text-[#122654] pr-5 leading-snug">{title}</span>
+      <span className="block text-[10px] text-[#4A5878] mt-0.5 leading-snug">{sub}</span>
+      {tag && <span className="inline-block mt-1.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#F5F8FD] border border-[#E3E7EF] text-[#4A5878]">{tag}</span>}
     </button>
   );
 }
 
 function YesNo({ value, yes, no, onChange, label }: { value: boolean; yes: string; no: string; onChange: (v: boolean) => void; label: string }) {
-  const pill = (on: boolean) => `text-xs font-semibold px-3.5 py-2 rounded-full border cursor-pointer ${on ? 'bg-[#122654] border-[#122654] text-white' : 'bg-white border-[#D3DCEE] text-[#122654]'}`;
+  const seg = (on: boolean) => `min-h-[30px] px-3 text-[11px] font-semibold rounded-md cursor-pointer transition-colors ${on ? 'bg-[#122654] text-white' : 'text-[#4A5878] hover:text-[#122654]'}`;
   return (
-    <div className="flex gap-2" role="radiogroup" aria-label={label}>
-      <button type="button" role="radio" aria-checked={value} className={pill(value)} onClick={() => onChange(true)}>{yes}</button>
-      <button type="button" role="radio" aria-checked={!value} className={pill(!value)} onClick={() => onChange(false)}>{no}</button>
+    <div className="inline-flex p-0.5 rounded-lg border border-[#D3DCEE] bg-[#F5F8FD]" role="radiogroup" aria-label={label}>
+      <button type="button" role="radio" aria-checked={value} className={seg(value)} onClick={() => onChange(true)}>{yes}</button>
+      <button type="button" role="radio" aria-checked={!value} className={seg(!value)} onClick={() => onChange(false)}>{no}</button>
     </div>
   );
 }
@@ -214,62 +220,73 @@ export default function NewEngagementWizard() {
     }
   };
 
+  // The running summary on the right: every answer so far, filled in as the steps are reached
+  const summary: [string, string, number][] = [
+    ['Client', clientName || 'New client', 0],
+    ['Entity', type, 0],
+    ['Working papers', `${papers.length} papers · ${framework}`, 0],
+    ['Period', periodStart && yearEnd ? `${ukDate(periodStart)} to ${ukDate(yearEnd)}` : 'Not set', 1],
+    ['Team', assigned ? `${assigned} assigned` : 'No one yet', 2],
+    ['Data source', sourceName ?? '', 3],
+  ];
+  const section = 'mt-5 pt-4 border-t border-[#EEF2F9]';
+
   return (
-    <div className="flex flex-col gap-4 max-w-5xl mx-auto pb-16">
-      <Link href="/clients" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#4A5878] hover:text-[#122654]">
+    <div className="flex flex-col gap-3 max-w-6xl mx-auto pb-16">
+      <Link href="/clients" className="inline-flex items-center gap-1 text-xs font-semibold text-[#4A5878] hover:text-[#122654] self-start">
         <ChevronLeft className="w-4 h-4" /> Back to clients
       </Link>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] rounded-xl overflow-hidden border border-[#E3E7EF] bg-white">
-        {/* Step rail */}
-        <aside className="bg-[#0B1A3B] text-white px-6 py-8">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-[#FF7A66]">New engagement</p>
-          <p className="mt-2 text-xs text-[#A6B4D0] leading-relaxed">Four short steps. Each answer shows what it changes.</p>
-          <ol className="mt-8 flex lg:flex-col gap-1 overflow-x-auto" aria-label="Steps">
+      <div className="bg-white border border-[#E3E7EF] rounded-xl shadow-2xs">
+        {/* Stepper */}
+        <div className="px-5 pt-4 pb-3 border-b border-[#EEF2F9]">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h1 className="text-base font-extrabold text-[#122654]">New engagement</h1>
+            <span className="text-[11px] font-semibold text-[#4A5878]">Step {step + 1} of {STEPS.length}</span>
+          </div>
+          <ol className="grid grid-cols-4 gap-2" aria-label="Steps">
             {STEPS.map((s, i) => {
               const done = i < step;
               const on = i === step;
               return (
-                <li key={s} className="shrink-0">
+                <li key={s}>
                   <button
                     type="button"
                     disabled={i > furthest}
                     onClick={() => go(i)}
                     aria-current={on ? 'step' : undefined}
-                    className="w-full flex items-center gap-3 px-2 py-2 rounded-[8px] text-left cursor-pointer disabled:cursor-default hover:enabled:bg-white/5"
+                    className="w-full text-left cursor-pointer disabled:cursor-default group"
                   >
-                    <span
-                      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold border ${
-                        on ? 'bg-[#FF7A66] border-[#FF7A66] text-[#0B1A3B]' : done ? 'border-emerald-400/60 text-emerald-300' : 'border-white/20 text-[#7E8DA6]'
-                      }`}
-                    >
-                      {done ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                    <span className={`block h-1 rounded-full ${on ? 'bg-[#FF7A66]' : done ? 'bg-[#122654]' : 'bg-[#E3E7EF]'}`} />
+                    <span className={`mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold ${on ? 'text-[#122654]' : done ? 'text-[#122654] group-hover:underline' : 'text-[#9AA6BC]'}`}>
+                      {done ? <Check className="w-3 h-3 text-[#0B6B52]" /> : <span className="font-mono">{i + 1}</span>}
+                      <span className="truncate">{s}</span>
                     </span>
-                    <span className={`hidden sm:block text-sm ${on ? 'font-bold text-white' : done ? 'text-[#D3DCEE]' : 'text-[#7E8DA6]'}`}>{s}</span>
                   </button>
                 </li>
               );
             })}
           </ol>
-        </aside>
+        </div>
 
-        {/* Step body */}
-        <main className="px-4 sm:px-10 py-8 bg-[#F5F8FD]">
-          <div className="max-w-[640px]">
-            <p className="text-xs font-bold text-[#B8432F]">Step {step + 1} of {STEPS.length}</p>
-
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px]">
+          {/* Step body */}
+          <main className="px-5 py-5 min-w-0">
             {step === 0 && (
               <>
-                <h1 className="text-[28px] font-extrabold tracking-tight mt-1 text-[#122654]">Client details</h1>
-                <p className="text-sm text-[#4A5878] mt-1">Who the client is. These answers decide the working papers.</p>
-                <Q htmlFor="client">Client</Q>
-                <select id="client" className={inputCls} value={clientId} onChange={(e) => pickClient(e.target.value)}>
-                  {activeClients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                  <option value={NEW_CLIENT}>+ Add a new client</option>
-                </select>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <h2 className="text-lg font-bold text-[#122654]">Client details</h2>
+                <p className="text-xs text-[#4A5878]">Who the client is. These answers decide the working papers.</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+                  <div>
+                    <Q htmlFor="client">Client</Q>
+                    <select id="client" className={inputCls} value={clientId} onChange={(e) => pickClient(e.target.value)}>
+                      {activeClients.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                      <option value={NEW_CLIENT}>+ Add a new client</option>
+                    </select>
+                  </div>
                   {isNew && (
                     <div>
                       <Q htmlFor="name">{structure === 'sole' ? 'Full name' : sf.legalLabel}</Q>
@@ -281,50 +298,62 @@ export default function NewEngagementWizard() {
                     <input id="trading" className={inputCls} value={details.trading_name} onChange={setD('trading_name')} placeholder="Optional" />
                   </div>
                 </div>
-                <Q>What kind of entity is it?</Q>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5" role="radiogroup" aria-label="Entity type">
-                  {COMPANY_TYPES.map(([k, , s]) => (
-                    <Card key={k} on={type === k} title={k} sub={s} onClick={() => setType(k)} />
-                  ))}
-                </div>
-                {sf.companyNumber && (
-                  <div className="sm:w-1/2">
-                    <Q htmlFor="crn">Companies House number</Q>
-                    <input id="crn" className={inputCls} value={details.company_no} onChange={setD('company_no')} placeholder={sf.companyPlaceholder(details.jurisdiction)} aria-invalid={Boolean(crnError)} />
-                    {crnError && <p className="text-xs text-[#B8432F] mt-1">{crnError}</p>}
+
+                <div className={section}>
+                  <p className="text-[11px] font-semibold text-[#4A5878] mb-1.5">What kind of entity is it?</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2" role="radiogroup" aria-label="Entity type">
+                    {COMPANY_TYPES.map(([k, std, s]) => (
+                      <Card key={k} on={type === k} title={k.replace(/ \(.*\)$/, '')} sub={s} tag={std} onClick={() => setType(k)} />
+                    ))}
                   </div>
-                )}
-                <Q>{sf.addressLabel}</Q>
-                {postcodeError && <p className="text-xs text-[#B8432F] -mt-1 mb-2">{postcodeError}</p>}
-                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-3">
+                </div>
+
+                <div className={`${section} grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1.2fr)] gap-x-3`}>
+                  {sf.companyNumber && (
+                    <div className="sm:col-span-3 sm:w-1/2">
+                      <Q htmlFor="crn">Companies House number</Q>
+                      <input id="crn" className={inputCls} value={details.company_no} onChange={setD('company_no')} placeholder={sf.companyPlaceholder(details.jurisdiction)} aria-invalid={Boolean(crnError)} />
+                      {crnError && <p className="text-[11px] text-[#B8432F] mt-1">{crnError}</p>}
+                    </div>
+                  )}
+                  <div className="sm:col-span-3">
+                    <Q>{sf.addressLabel}</Q>
+                  </div>
                   <input aria-label="Address" className={inputCls} value={details.address_line} onChange={setD('address_line')} placeholder="12 High Street, Leeds" />
-                  <input aria-label="Postcode" className={inputCls} value={details.postcode} onChange={setD('postcode')} placeholder="LS1 4AB" aria-invalid={Boolean(postcodeError)} />
-                  <select aria-label="Country" className={inputCls} value={details.jurisdiction} onChange={setD('jurisdiction')}>
+                  <input aria-label="Postcode" className={`${inputCls} mt-2 sm:mt-0`} value={details.postcode} onChange={setD('postcode')} placeholder="LS1 4AB" aria-invalid={Boolean(postcodeError)} />
+                  <select aria-label="Country" className={`${inputCls} mt-2 sm:mt-0`} value={details.jurisdiction} onChange={setD('jurisdiction')}>
                     <option value="england_wales">England and Wales</option>
                     <option value="scotland">Scotland</option>
                     <option value="northern_ireland">Northern Ireland</option>
                   </select>
+                  {postcodeError && <p className="sm:col-span-3 text-[11px] text-[#B8432F] mt-1">{postcodeError}</p>}
                 </div>
-                <Q>Is it VAT registered?</Q>
-                <YesNo label="VAT registered" value={vat} yes="VAT registered" no="Not registered" onChange={setVat} />
-                {vat && (
-                  <div className="sm:w-1/2">
-                    <Q htmlFor="vat">VAT number</Q>
-                    <input id="vat" className={inputCls} value={details.vat_number} onChange={setD('vat_number')} placeholder="GB123456789" aria-invalid={Boolean(vatError)} />
-                    {vatError && <p className="text-xs text-[#B8432F] mt-1">{vatError}</p>}
+
+                <div className={`${section} grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3`}>
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#4A5878] mb-1">Is it VAT registered?</p>
+                    <YesNo label="VAT registered" value={vat} yes="VAT registered" no="Not registered" onChange={setVat} />
+                    {vat && (
+                      <div className="mt-2 max-w-[220px]">
+                        <input id="vat" aria-label="VAT number" className={inputCls} value={details.vat_number} onChange={setD('vat_number')} placeholder="VAT number, e.g. GB123456789" aria-invalid={Boolean(vatError)} />
+                        {vatError && <p className="text-[11px] text-[#B8432F] mt-1">{vatError}</p>}
+                      </div>
+                    )}
                   </div>
-                )}
-                <Q>Does it run payroll?</Q>
-                <YesNo label="Runs payroll" value={payroll} yes="Runs payroll" no="No payroll" onChange={setPayroll} />
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#4A5878] mb-1">Does it run payroll?</p>
+                    <YesNo label="Runs payroll" value={payroll} yes="Runs payroll" no="No payroll" onChange={setPayroll} />
+                  </div>
+                </div>
               </>
             )}
 
             {step === 1 && (
               <>
-                <h1 className="text-[28px] font-extrabold tracking-tight mt-1 text-[#122654]">Period</h1>
-                <p className="text-sm text-[#4A5878] mt-1">How often you prepare a file for this client, and the period it covers.</p>
-                <Q>How often?</Q>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5" role="radiogroup" aria-label="Frequency">
+                <h2 className="text-lg font-bold text-[#122654]">Period</h2>
+                <p className="text-xs text-[#4A5878]">How often you prepare a file for this client, and the period it covers.</p>
+                <p className="text-[11px] font-semibold text-[#4A5878] mt-4 mb-1.5">How often?</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Frequency">
                   {FREQUENCIES.map(([k, title, sub]) => (
                     <Card
                       key={k}
@@ -338,7 +367,7 @@ export default function NewEngagementWizard() {
                     />
                   ))}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={`${section} grid grid-cols-1 sm:grid-cols-2 gap-x-3`}>
                   <div>
                     <Q htmlFor="year-end">{END_LABEL[frequency]}</Q>
                     <input id="year-end" type="date" className={inputCls} value={yearEnd} onChange={(e) => setEnd(e.target.value)} />
@@ -346,7 +375,7 @@ export default function NewEngagementWizard() {
                   <div>
                     <Q htmlFor="period-start">Period start</Q>
                     <input id="period-start" type="date" className={inputCls} value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
-                    <p className="text-[11px] text-[#7E8DA6] mt-1">Change it for a short or long first period.</p>
+                    <p className="text-[10px] text-[#7E8DA6] mt-1">Change it for a short or long first period.</p>
                   </div>
                 </div>
               </>
@@ -354,17 +383,17 @@ export default function NewEngagementWizard() {
 
             {step === 2 && (
               <>
-                <h1 className="text-[28px] font-extrabold tracking-tight mt-1 text-[#122654]">Team</h1>
-                <p className="text-sm text-[#4A5878] mt-1">Tick who works on this client. Optional: you can change it later on the client page.</p>
+                <h2 className="text-lg font-bold text-[#122654]">Team</h2>
+                <p className="text-xs text-[#4A5878]">Tick who works on this client. Optional: you can change it later on the client page.</p>
                 <TeamManager clientId={isNew ? undefined : clientId} clientName={clientName} team={team} setTeam={setTeam} invited={invited} setInvited={setInvited} />
               </>
             )}
 
             {step === 3 && (
               <>
-                <h1 className="text-[28px] font-extrabold tracking-tight mt-1 text-[#122654]">Data source</h1>
-                <p className="text-sm text-[#4A5878] mt-1">Where the client’s books are.</p>
-                <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5" role="radiogroup" aria-label="Data source">
+                <h2 className="text-lg font-bold text-[#122654]">Data source</h2>
+                <p className="text-xs text-[#4A5878]">Where the client’s books are.</p>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Data source">
                   {SOURCES.map(([k, title, sub]) => (
                     <Card key={k} on={source === k} title={title} sub={sub} onClick={() => setSource(k)} />
                   ))}
@@ -372,42 +401,59 @@ export default function NewEngagementWizard() {
               </>
             )}
 
-            {changes[step].length > 0 && (
-              <div className="mt-8 flex gap-3 p-4 rounded-[12px] bg-[#EEF2F9] border border-[#1D4E89]/15">
-                <Zap className="w-4 h-4 text-[#1D4E89] shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#1D4E89] mb-1">What this changes in Blynt</p>
-                  {changes[step].map((l) => (
-                    <p key={l} className="text-xs text-[#122654] leading-relaxed">{l}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {error && (
-              <div role="alert" className="mt-6 p-3 rounded-[10px] bg-[#FFF4DB] border border-[#6B4700]/20 text-[#6B4700] text-xs font-medium">
+              <div role="alert" className="mt-5 p-2.5 rounded-lg bg-[#FFF4DB] border border-[#6B4700]/20 text-[#6B4700] text-xs font-medium">
                 {error}
               </div>
             )}
 
-            <div className="mt-8 flex items-center gap-3">
-              {step > 0 && (
-                <button type="button" onClick={() => go(step - 1)} className="inline-flex items-center gap-1.5 min-h-[42px] px-4 bg-white border border-[#D3DCEE] rounded-[10px] text-xs font-bold text-[#122654] hover:border-[#A6B4D0] cursor-pointer">
+            <div className="mt-6 pt-4 border-t border-[#EEF2F9] flex items-center justify-between gap-3">
+              {step > 0 ? (
+                <button type="button" onClick={() => go(step - 1)} className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 bg-white border border-[#D3DCEE] rounded-lg text-xs font-bold text-[#122654] hover:border-[#A6B4D0] cursor-pointer">
                   <ArrowLeft className="w-3.5 h-3.5" /> Back
                 </button>
+              ) : (
+                <span />
               )}
               <button
                 type="button"
                 onClick={next}
                 disabled={saving}
-                className="inline-flex items-center gap-2 min-h-[42px] px-5 bg-[#122654] hover:bg-[#0B1A3B] text-white font-bold text-xs rounded-[10px] cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 min-h-[36px] px-4 bg-[#122654] hover:bg-[#0B1A3B] text-white font-bold text-xs rounded-lg cursor-pointer disabled:opacity-60"
               >
                 {saving ? 'Creating…' : step < STEPS.length - 1 ? 'Continue' : source === 'csv' ? 'Create engagement' : `Create and connect ${sourceName}`}
-                {!saving && <ArrowRight className="w-4 h-4" />}
+                {!saving && <ArrowRight className="w-3.5 h-3.5" />}
               </button>
             </div>
-          </div>
-        </main>
+          </main>
+
+          {/* Running summary and what this step changes */}
+          <aside className="border-t lg:border-t-0 lg:border-l border-[#EEF2F9] bg-[#F9FAFC] px-4 py-5 lg:rounded-br-xl space-y-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7E8DA6] mb-2">Your engagement</p>
+              <dl className="space-y-2">
+                {summary.map(([label, value, from]) => (
+                  <div key={label} className={from > furthest ? 'opacity-40' : ''}>
+                    <dt className="text-[10px] text-[#7E8DA6]">{label}</dt>
+                    <dd className="text-xs font-semibold text-[#122654] truncate" title={value}>{from > furthest ? '…' : value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            {changes[step].length > 0 && (
+              <div className="p-3 rounded-lg bg-[#EEF2F9] border border-[#1D4E89]/15">
+                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#1D4E89] mb-1.5">
+                  <Zap className="w-3 h-3" /> What this changes
+                </p>
+                <ul className="space-y-1">
+                  {changes[step].map((l) => (
+                    <li key={l} className="text-[11px] text-[#122654] leading-snug">{l}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   );
