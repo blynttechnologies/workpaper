@@ -43,6 +43,7 @@ export default function PracticeSettingsPage() {
 
   // Basic Operational Defaults
   const [signOffLevels, setSignOffLevels] = useState<'3' | '2'>('3');
+  const [selfApprove, setSelfApprove] = useState(false);
   const [reconciliationTolerance, setReconciliationTolerance] = useState('1.00');
   const [reviewThreshold, setReviewThreshold] = useState('500.00');
   const [savingCompany, setSavingCompany] = useState(false);
@@ -89,6 +90,7 @@ export default function PracticeSettingsPage() {
         setSignOffLevels(d.defaults.signoff_levels === 2 ? '2' : '3');
         setReconciliationTolerance((Number(d.defaults.tolerance_p) / 100).toFixed(2));
         setReviewThreshold((Number(d.defaults.review_threshold_p) / 100).toFixed(2));
+        setSelfApprove(!!d.defaults.self_approve_journals);
       })
       .catch(() => {});
   }, []);
@@ -144,6 +146,7 @@ export default function PracticeSettingsPage() {
           tolerance: reconciliationTolerance,
           review_threshold: reviewThreshold,
           signoff_levels: Number(signOffLevels),
+          self_approve_journals: selfApprove,
         }),
       });
 
@@ -805,6 +808,15 @@ export default function PracticeSettingsPage() {
                     </div>
                   </label>
                 </div>
+                <label className="flex items-start gap-3 p-4 rounded-xl border border-[#E3E7EF] bg-white text-xs cursor-pointer">
+                  <input type="checkbox" checked={selfApprove} onChange={(e) => setSelfApprove(e.target.checked)} className="mt-0.5" aria-label="Partners and admins may approve their own journals" />
+                  <div>
+                    <div className="font-bold text-[#122654]">Partners and admins may approve their own journals</div>
+                    <div className="text-[11px] text-[#4A5878] mt-0.5">
+                      For sole practitioners. Normally a journal needs a second person to approve it. With this on, a partner or admin can approve one they proposed, after giving a reason, which is kept on the journal and in the activity log. Only a partner or admin can change this.
+                    </div>
+                  </div>
+                </label>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
