@@ -17,7 +17,7 @@ import {
 import { db } from '@/lib/server/db';
 import { AccountMapping, LearnedRule } from '@/lib/types/models';
 import { asPence, formatPence } from '@/lib/money';
-import { getStatutoryDetails } from '@/lib/mapping/auto-mapper';
+import { getStatutoryDetails, topSuggestions } from '@/lib/mapping/auto-mapper';
 import { whyNotConfirmed } from '@/lib/mapping/why';
 import { getActor } from '@/lib/session';
 import { engagementSummary } from '@/lib/api';
@@ -58,6 +58,10 @@ export default function AccountMappingPage() {
   const [showReason, setShowReason] = useState(false);
   const [batchTargetCode, setBatchTargetCode] = useState('');
   const [correctionToast, setCorrectionToast] = useState<{ message: string; undoAction?: () => void } | null>(null);
+  // Confirmed lines fold into "Saved accounts"; a chart account picked in "Confirm by account" narrows the list to its lines
+  const [showSaved, setShowSaved] = useState(false);
+  const [targetFilter, setTargetFilter] = useState<string | null>(null);
+  const [showAllTargets, setShowAllTargets] = useState(false);
 
   // Rule creation modal (DAT-09)
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
@@ -214,6 +218,7 @@ export default function AccountMappingPage() {
         (m.statutory_line || '').toLowerCase().includes(statutoryFilter.toLowerCase());
 
       if (!matchSearch || !matchType || !matchStat) return false;
+      if (targetFilter && (m.status === 'confirmed' || m.blynt_code !== targetFilter)) return false;
 
       if (activeTab === 'ready') return m.status !== 'confirmed' && (m.gate === 'ready' || (m.confidence >= 90 && m.blynt_code));
       if (activeTab === 'check') return m.status !== 'confirmed' && (m.gate === 'check' || (m.confidence >= 70 && m.confidence < 90 && m.blynt_code));
@@ -221,8 +226,34 @@ export default function AccountMappingPage() {
       if (activeTab === 'confirmed') return m.status === 'confirmed';
       return true;
     });
-  }, [mappings, search, typeFilter, statutoryFilter, activeTab]);
-  const groups = useMemo(() => groupMappings(filteredMappings, sortBy), [filteredMappings, sortBy]);
+  }, [mappings, search, typeFilter, statutoryFilter, activeTab, targetFilter]);
+
+  // Lines still to decide come first; confirmed ones sit in "Saved accounts", folded unless asked for
+  const savedRows = useMemo(() => filteredMappings.filter((m) => m.status === 'confirmed'), [filteredMappings]);
+  const sections = useMemo(() => {
+    const openSaved = showSaved || activeTab === 'confirmed';
+    return [
+      { key: 'todo', groups: groupMappings(filteredMappings.filter((m) => m.status !== 'confirmed'), sortBy) },
+      ...(savedRows.length ? [{ key: 'saved', groups: openSaved ? groupMappings(savedRows, sortBy) : [] }] : []),
+    ];
+  }, [filteredMappings, savedRows, sortBy, showSaved, activeTab]);
+  const visibleRows = sections.flatMap((s) => s.groups.flatMap((g) => g.rows));
+
+  // Confirm by account: open lines grouped by the chart account suggested for them, most lines first.
+  // A balance on the unusual side for its account is left out, to be looked at on its own.
+  const byTarget = useMemo(() => {
+    const m = new Map<string, AccountMapping[]>();
+    for (const row of mappings) {
+      if (row.status === 'confirmed' || !row.blynt_code) continue;
+      const stat = getStatutoryDetails(row.blynt_code, row.source_name, row.source_type);
+      const bal = asPence(row.balance_p);
+      if ((stat.is_credit_area && bal > 0n) || (!stat.is_credit_area && bal < 0n)) continue;
+      m.set(row.blynt_code, [...(m.get(row.blynt_code) ?? []), row]);
+    }
+    return [...m.entries()]
+      .map(([code, rows]) => ({ code, name: db.blynt_accounts.find((a) => a.code === code)?.name ?? '', rows, total: rows.reduce((a, r) => a + asPence(r.balance_p), 0n) }))
+      .sort((a, b) => b.rows.length - a.rows.length || a.code.localeCompare(b.code));
+  }, [mappings]);
   const columns = 6 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
   const canApprove = ['manager', 'partner', 'admin'].includes(getActor().role);
   const patternsHint = alsoApply.length ? `these ${alsoApply.length + 1} accounts` : 'this account';
@@ -247,10 +278,48 @@ export default function AccountMappingPage() {
   };
 
   const handleSelectAllVisible = () => {
-    if (selectedIds.length === filteredMappings.length) {
+    if (selectedIds.length === visibleRows.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredMappings.map((m) => m.id));
+      setSelectedIds(visibleRows.map((m) => m.id));
+    }
+  };
+
+  // A confirmed line is remembered for this client (a client rule on its code), so the next pull maps it the same way
+  const rememberForClient = (items: AccountMapping[], actor: ReturnType<typeof getActor>, now: string) => {
+    if (!engagementClientId) return;
+    for (const m of items) {
+      if (!m.blynt_code || m.method === 'rule') continue;
+      const pattern = `code:${m.source_code}`;
+      const existing = db.learned_rules.find(
+        (r) => r.firm_id === firmId && r.type === 'mapping' && r.scope === 'client' && r.client_id === engagementClientId && r.pattern.trim().toLowerCase() === pattern.toLowerCase()
+      );
+      if (existing) {
+        if (existing.target_value === m.blynt_code && existing.active) continue;
+        const before = { ...existing };
+        Object.assign(existing, { target_value: m.blynt_code, active: true });
+        db.logAudit(firmId, actor, 'UPDATE_RULE', 'learned_rules', existing.id, before, existing);
+        continue;
+      }
+      const rule: LearnedRule = {
+        id: `rule_${Date.now()}_${m.id}`,
+        firm_id: firmId,
+        client_id: engagementClientId,
+        supplier_name: null,
+        type: 'mapping',
+        scope: 'client',
+        pattern,
+        target_value: m.blynt_code,
+        explanation: `${m.source_code} ${m.source_name} confirmed as ${m.blynt_code}`,
+        created_by: actor.id,
+        created_by_name: actor.name,
+        created_at: now,
+        times_used: 0,
+        active: true,
+        approved_by_manager: true,
+      };
+      db.learned_rules.unshift(rule);
+      db.logAudit(firmId, actor, 'CREATE_LEARNED_RULE', 'learned_rules', rule.id, null, rule);
     }
   };
 
@@ -310,6 +379,7 @@ export default function AccountMappingPage() {
         );
       }
     });
+    rememberForClient(db.account_mappings.filter((m) => readyIds.includes(m.id)), actor, now);
 
     setCorrectionToast({
       message: `Confirmed ${readyIds.length} Ready account mappings.`,
@@ -386,6 +456,7 @@ export default function AccountMappingPage() {
         );
       }
     });
+    rememberForClient(db.account_mappings.filter((m) => validIds.includes(m.id)), actor, now);
 
     setCorrectionToast({
       message: `Confirmed ${validIds.length} mapping${validIds.length === 1 ? '' : 's'}.${skipped.length ? ` Not confirmed: ${skipped.join(', ')} (no chart account chosen yet).` : ''}`,
@@ -903,6 +974,58 @@ export default function AccountMappingPage() {
           </div>
         </div>
 
+        {/* Confirm by account: decide a whole group of lines suggested for the same chart account at once */}
+        {byTarget.length > 0 && (
+          <div className="p-4 border-b border-[#E3E7EF] bg-[#FBFCFE]">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <h2 className="text-xs font-bold text-[#122654]">Confirm by account</h2>
+              <span className="text-[10px] text-[#4A5878]">Open lines grouped by the account suggested for them. Show a group to check it, then confirm it in one go.</span>
+            </div>
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              {(showAllTargets ? byTarget : byTarget.slice(0, 8)).map((t) => (
+                <li
+                  key={t.code}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[11px] ${targetFilter === t.code ? 'border-[#1D4E89] bg-[#EAF5FC]' : 'border-[#E3E7EF] bg-white'}`}
+                >
+                  <span className="font-bold text-[#122654] shrink-0">
+                    {t.rows.length} line{t.rows.length === 1 ? '' : 's'}
+                  </span>
+                  <ArrowRight className="w-3 h-3 text-[#7E8DA6] shrink-0" aria-hidden="true" />
+                  <span className="font-mono font-bold text-[#1D4E89] shrink-0">{t.code}</span>
+                  <span className="truncate text-[#122654]" title={t.name}>
+                    {t.name}
+                  </span>
+                  <span className="ml-auto font-mono-numbers text-[#4A5878] shrink-0">{formatPence(t.total, { accountingFormat: true })}</span>
+                  <button
+                    type="button"
+                    aria-pressed={targetFilter === t.code}
+                    onClick={() => setTargetFilter(targetFilter === t.code ? null : t.code)}
+                    className="shrink-0 px-2 py-0.5 font-semibold text-[#1D4E89] hover:underline"
+                  >
+                    {targetFilter === t.code ? 'Show all' : 'Show'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      confirmMappings(t.rows.map((r) => r.id));
+                      if (targetFilter === t.code) setTargetFilter(null);
+                    }}
+                    aria-label={`Confirm ${t.rows.length} lines as ${t.code} ${t.name}`}
+                    className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 font-bold text-white bg-[#122654] hover:bg-[#0B1A3B] rounded-full"
+                  >
+                    <Check className="w-3 h-3 stroke-[2.5]" /> Confirm {t.rows.length}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {byTarget.length > 8 && (
+              <button type="button" onClick={() => setShowAllTargets(!showAllTargets)} className="mt-2 text-[11px] font-semibold text-[#1D4E89] hover:underline">
+                {showAllTargets ? 'Show fewer accounts' : `Show all ${byTarget.length} accounts`}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-[#122654]">
@@ -911,7 +1034,8 @@ export default function AccountMappingPage() {
                 <th scope="col" className="p-3 pl-4 w-10">
                   <input
                     type="checkbox"
-                    checked={selectedIds.length > 0 && selectedIds.length === filteredMappings.length}
+                    aria-label="Select every line shown"
+                    checked={selectedIds.length > 0 && selectedIds.length === visibleRows.length}
                     onChange={handleSelectAllVisible}
                     className="w-4 h-4 rounded border-[#D3DCEE] text-[#122654] focus:ring-[#FF7A66]"
                   />
@@ -926,7 +1050,35 @@ export default function AccountMappingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E3E7EF]">
-              {groups.map((g) => (
+              {sections.map((section) => (
+                <Fragment key={section.key}>
+                  {section.key === 'todo' && section.groups.length === 0 && (
+                    <tr>
+                      <td colSpan={columns} className="p-4 text-[11px] text-[#4A5878]">
+                        {targetFilter ? 'Every line for this account is decided.' : savedRows.length ? 'Nothing left to decide here. Confirmed lines are under Saved accounts.' : 'No lines match.'}
+                      </td>
+                    </tr>
+                  )}
+                  {section.key === 'saved' && (
+                    <tr className="bg-[#E6F4EF]/60">
+                      <th scope="rowgroup" colSpan={columns} className="px-4 py-2.5 text-left">
+                        <button
+                          type="button"
+                          aria-expanded={section.groups.length > 0}
+                          onClick={() => setShowSaved(!showSaved)}
+                          disabled={activeTab === 'confirmed'}
+                          className="inline-flex items-center gap-2 text-[11px] font-bold text-[#0B6B52]"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Saved accounts
+                          <span className="font-normal text-[#4A5878]">
+                            {savedRows.length} confirmed{activeTab === 'confirmed' ? '' : section.groups.length ? ' · hide' : ' · show'}
+                          </span>
+                        </button>
+                      </th>
+                    </tr>
+                  )}
+              {section.groups.map((g) => (
                 <Fragment key={g.type}>
                   <tr className="bg-[#F5F8FD]">
                     <th scope="rowgroup" colSpan={columns} className="px-4 py-2 text-left text-[11px] font-bold text-[#122654]">
@@ -1107,6 +1259,27 @@ export default function AccountMappingPage() {
                         suggestName={row.source_name}
                         onPick={(code) => handleInitiateChangeMapping(row.id, code)}
                       />
+                      {/* Other likely accounts for a line not yet sure, one click each (it then asks whether to remember) */}
+                      {row.status !== 'confirmed' && gateName !== 'ready' && (() => {
+                        const others = topSuggestions(row, db.accountsFor(engagementId));
+                        return others.length ? (
+                          <div className="mt-1.5 flex flex-col gap-1 max-w-[280px]" aria-label={`Other suggestions for ${row.source_name}`}>
+                            {others.map((a) => (
+                              <button
+                                key={a.code}
+                                type="button"
+                                onClick={() => handleInitiateChangeMapping(row.id, a.code)}
+                                title={`Map ${row.source_name} to ${a.code} ${a.name}`}
+                                className="flex items-center gap-1.5 text-left text-[11px] text-[#122654] hover:text-[#1D4E89] hover:underline"
+                              >
+                                <Sparkles className="w-3 h-3 shrink-0 text-[#B8432F]" aria-hidden="true" />
+                                <span className="font-mono font-bold shrink-0">{a.code}</span>
+                                <span className="truncate">{a.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
                       {/* No chart account fits (the AI says so, or the match is weak): offer a new account, created only when someone approves it */}
                       {proposal && (
                         creatingFor === row.id ? (
@@ -1150,6 +1323,8 @@ export default function AccountMappingPage() {
                   </tr>
                 );
               })}
+                </Fragment>
+              ))}
                 </Fragment>
               ))}
             </tbody>
