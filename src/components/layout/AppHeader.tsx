@@ -22,6 +22,7 @@ import { useCompany } from '@/context/CompanyContext';
 import { useLocale } from '@/context/LocaleContext';
 import { CompanySelector } from './CompanySelector';
 import { PeriodSelector } from './PeriodSelector';
+import { LedgerSyncButton } from './LedgerSyncButton';
 
 interface AppHeaderProps {
   onMenuToggle?: () => void;
@@ -181,6 +182,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
 
         {/* Right: Global Search (⌘K), Blynt Bot, Notifications, User Menu */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <LedgerSyncButton />
           {/* Global Search Button */}
           <button
             type="button"
