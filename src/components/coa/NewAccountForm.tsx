@@ -25,6 +25,8 @@ function papersIn(cat: CoaCategory) {
   return [...[...found].map(([ref, label]) => ({ ref, label })), ...(none ? [{ ref: NO_PAPER, label: 'None: shows in the accounts only' }] : [])];
 }
 const accountsOnPaper = (cat: CoaCategory, ref: string) => accountsIn(cat).filter((a) => (ref === NO_PAPER ? !refsOf(a.code).length : refsOf(a.code).includes(ref)));
+// Every working paper any account is worked on, for choosing one outside the category
+const ALL_PAPERS = [...new Map(CATEGORIES.flatMap(papersIn).map((p) => [p.ref, p])).values()].sort((a, b) => (a.ref === NO_PAPER ? 1 : b.ref === NO_PAPER ? -1 : a.ref.localeCompare(b.ref)));
 
 /**
  * Creates a practice account: the name recommends a category, the code is the next free number
@@ -63,11 +65,17 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
     setError('');
   };
   // Picking a paper treats the account like the category's general account when that is on it, else the paper's first
+  // A paper from another category moves the account to the category of that paper's first account, so its code range fits
   const choosePaper = (ref: string) => {
     setTouched(true);
     const onIt = accountsOnPaper(cat, ref);
     const b = onIt.find((a) => a.code === base) ?? onIt.find((a) => a.code === cat.other) ?? onIt[0];
-    if (b) choose(catIdx, b.code, ref);
+    if (b) return choose(catIdx, b.code, ref);
+    for (const [i, c] of CATEGORIES.entries()) {
+      const there = accountsOnPaper(c, ref);
+      const pick = there.find((a) => a.code === c.other) ?? there[0];
+      if (pick) return choose(i, pick.code, ref);
+    }
   };
   // Ask once the name settles. A suggested practice account stands for the standard account it works like.
   useEffect(() => {
@@ -140,17 +148,18 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
       </label>
       <div className="space-y-1">
         <label htmlFor={paperId} className="block font-semibold">Working paper</label>
-        {paperOptions.length > 1 ? (
-          <select id={paperId} value={paper} onChange={(e) => choosePaper(e.target.value)} className={field}>
+        <select id={paperId} value={paper} onChange={(e) => choosePaper(e.target.value)} className={field}>
+          <optgroup label={`For ${cat.name}`}>
             {paperOptions.map((p) => (
               <option key={p.ref || 'none'} value={p.ref}>{p.label}</option>
             ))}
-          </select>
-        ) : (
-          <div id={paperId} className={`${field} bg-[#EEF1F6]`}>
-            {paperOptions[0]?.label ?? 'None: shows in the accounts only'}
-          </div>
-        )}
+          </optgroup>
+          <optgroup label="Other working papers (moves the category)">
+            {ALL_PAPERS.filter((p) => !paperOptions.some((o) => o.ref === p.ref)).map((p) => (
+              <option key={p.ref || 'none'} value={p.ref}>{p.label}</option>
+            ))}
+          </optgroup>
+        </select>
       </div>
       {/* The account it is treated like sets debit or credit, the line in the accounts and the tax treatment */}
       <label className="block space-y-1">

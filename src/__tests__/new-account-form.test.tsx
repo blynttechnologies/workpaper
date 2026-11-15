@@ -20,11 +20,12 @@ const setup = (name: string) => {
 };
 
 describe('new account: working paper', () => {
-  it('a bank account goes on the bank reconciliation, with no choice to make', () => {
+  it('a bank account goes on the bank reconciliation, the only paper for its category', () => {
     const { onCreated, pickCategory } = setup('Savings account');
     pickCategory('Bank and cash');
-    expect(screen.queryByRole('combobox', { name: 'Working paper' })).toBeNull();
-    expect(screen.getByText('B-10 Bank and cash reconciliation')).toBeTruthy();
+    const paper = screen.getByRole('combobox', { name: 'Working paper' }) as HTMLSelectElement;
+    expect(paper.value).toBe('B-10');
+    expect([...paper.querySelectorAll('optgroup')[0].querySelectorAll('option')].map((o) => o.value)).toEqual(['B-10']);
     fireEvent.click(screen.getByRole('button', { name: 'Approve and create' }));
     expect(papersForCode(onCreated.mock.calls[0][0].code).map((t) => t.ref)).toContain('B-10');
   });
@@ -40,6 +41,21 @@ describe('new account: working paper', () => {
     const acc = onCreated.mock.calls[0][0];
     expect(papersForCode(acc.code).map((t) => t.ref)).toContain('P-20');
     expect(papersForCode(acc.parent_code).map((t) => t.ref)).toContain('P-20');
+  });
+
+  it('every working paper can be chosen; one from another category moves the account there', () => {
+    const { onCreated, pickCategory } = setup('HSRL variances');
+    pickCategory('Administrative expenses');
+    const paper = screen.getByRole('combobox', { name: 'Working paper' }) as HTMLSelectElement;
+    const others = [...paper.querySelectorAll('optgroup')[1].querySelectorAll('option')].map((o) => o.value);
+    expect(others).toEqual(expect.arrayContaining(['B-10', 'K-20', 'D-10', 'T-20']));
+    fireEvent.change(paper, { target: { value: 'D-10' } });
+    expect(paper.value).toBe('D-10');
+    expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe(String(CATEGORIES.findIndex((c) => c.name === 'Current assets')));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and create' }));
+    const acc = onCreated.mock.calls[0][0];
+    expect(Number(acc.code)).toBeGreaterThanOrEqual(7000);
+    expect(papersForCode(acc.code).map((t) => t.ref)).toContain('D-10');
   });
 
   it('the account it is treated like is a choice among accounts on the same paper only', () => {
