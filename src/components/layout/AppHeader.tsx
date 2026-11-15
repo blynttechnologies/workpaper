@@ -23,6 +23,7 @@ import { useLocale } from '@/context/LocaleContext';
 import { CompanySelector } from './CompanySelector';
 import { PeriodSelector } from './PeriodSelector';
 import { LedgerSyncButton } from './LedgerSyncButton';
+import { WorkpaperBanner } from './WorkpaperBanner';
 
 interface AppHeaderProps {
   onMenuToggle?: () => void;
@@ -141,7 +142,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
             </button>
           )}
 
-          <nav aria-label="Breadcrumbs" className="hidden lg:flex items-center gap-1.5 text-xs text-[#4A5878] min-w-0 overflow-hidden whitespace-nowrap">
+          {/* The dashboard has no trail to show: working-paper updates instead */}
+          {onDashboard && <WorkpaperBanner />}
+
+          <nav aria-label="Breadcrumbs" className={`${onDashboard ? 'hidden' : 'hidden lg:flex'} items-center gap-1.5 text-xs text-[#4A5878] min-w-0 overflow-hidden whitespace-nowrap`}>
             <Link
               href="/"
               className="hover:text-[#B8432F] font-medium transition-colors"
