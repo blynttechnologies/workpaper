@@ -22,6 +22,7 @@ const PUBLIC_PATHS = [
   '/api/oauth/token',
   '/api/oauth/revoke',
   '/api/mcp',
+  '/api/v1/integrations/xero/auto-sync', // the scheduler; guarded by its key
 ];
 
 export function proxy(request: NextRequest) {

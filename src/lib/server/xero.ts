@@ -5,6 +5,7 @@ import { db } from './db';
 import { secret } from './auth';
 import { ServiceError } from './services';
 import { importTrialBalance, ImportResult, TbLineInput } from './tb-import';
+import { toPence } from '../money';
 import { DebtorOpenItem, DebtorPayment, LedgerTransaction, UserRole } from '../types/models';
 
 /**
@@ -51,6 +52,8 @@ export interface XeroConnection {
   connected_by: string;
   connected_at: string;
   last_synced_at: string | null;
+  last_checked_at?: string | null; // the automatic end-of-day check
+  auto_sync?: { at: string; engagement_id: string; changes: number }; // the last automatic pull that found changes
 }
 
 export class XeroReconnectError extends ServiceError {
@@ -689,6 +692,29 @@ async function accessTokenFor(conn: XeroConnection): Promise<string> {
     }
     throw err;
   }
+}
+
+/**
+ * Whether Xero's trial balance at the period end differs from the last one imported: two calls and
+ * nothing imported. Compared by account name and balance, so codes Blynt made up for code-less lines don't count.
+ */
+export async function xeroTbChanged(conn: XeroConnection, engagementId: string, periodEnd: string): Promise<boolean> {
+  const prior = db.tb_snapshots.filter((s) => s.engagement_id === engagementId).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const token = await accessTokenFor(conn);
+  const deadline = Date.now() + 30_000;
+  const [accounts, report] = await Promise.all([
+    xeroGet<{ Accounts: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id, deadline),
+    xeroGet<unknown>(`${API}/Reports/TrialBalance?date=${periodEnd}`, token, conn.tenant_id, deadline),
+  ]);
+  if (!prior) return true;
+  const key = (name: string, net: bigint) => `${name.trim()}\u0000${net}`;
+  const now = parseTrialBalance(report, accounts.Accounts ?? []).map((l) => key(String(l.name ?? ''), toPence(l.debit) - toPence(l.credit)));
+  const before = db.tb_lines
+    .filter((l) => l.snapshot_id === prior.id)
+    .map((l) => [l.source_name, BigInt(l.debit_p) - BigInt(l.credit_p)] as const)
+    .filter(([, net]) => net !== 0n)
+    .map(([name, net]) => key(name, net));
+  return now.sort().join('\n') !== before.sort().join('\n');
 }
 
 /** Pulls the trial balance at the engagement's period end and imports it (DAT-01, DAT-06). */

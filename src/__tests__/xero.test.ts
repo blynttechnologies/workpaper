@@ -21,6 +21,7 @@ import {
   decryptToken,
   parseTrialBalance,
   withComparatives,
+  xeroTbChanged,
 } from '../lib/server/xero';
 import { GET as connect } from '../app/api/v1/integrations/xero/connect/route';
 import { GET as callback } from '../app/api/v1/integrations/xero/callback/route';
@@ -435,6 +436,18 @@ describe('Pulling the trial balance from Xero', () => {
     fakeXero({ tb: () => trialBalance('2750.00') });
     const body = await (await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }))).json();
     expect(body.changes.find((c: any) => c.account_code === '429')).toMatchObject({ diff_p: '25000', direction: 'increased' });
+  });
+
+  it('the end-of-day check tells a moved balance from an unchanged one without importing', async () => {
+    await connected();
+    fakeXero();
+    await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
+    const eng = db.engagements.find((e) => e.id === ENG)!;
+    const snapshots = db.tb_snapshots.length;
+    expect(await xeroTbChanged(db.xero_connections[0], ENG, eng.period_end)).toBe(false);
+    fakeXero({ tb: () => trialBalance('2750.00') });
+    expect(await xeroTbChanged(db.xero_connections[0], ENG, eng.period_end)).toBe(true);
+    expect(db.tb_snapshots).toHaveLength(snapshots);
   });
 
   it('refreshes an expired access token and keeps the rotated refresh token', async () => {
