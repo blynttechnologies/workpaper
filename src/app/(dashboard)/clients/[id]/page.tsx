@@ -86,8 +86,10 @@ export default function ClientRecordPage() {
       <div>
         <div className="space-y-6">
           <WorkflowCards engagementIds={[...clientEngagements].sort((a, b) => b.period_end.localeCompare(a.period_end)).map((e) => e.id)} />
-          <XeroPanel clientId={client.id} engagementId={latestEngagement?.id} reconnectNeeded={Boolean(client.reconnect_needed)} />
-          <QuickBooksPanel clientId={client.id} engagementId={latestEngagement?.id} reconnectNeeded={Boolean(client.reconnect_needed)} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <XeroPanel clientId={client.id} engagementId={latestEngagement?.id} reconnectNeeded={Boolean(client.reconnect_needed)} />
+            <QuickBooksPanel clientId={client.id} engagementId={latestEngagement?.id} reconnectNeeded={Boolean(client.reconnect_needed)} />
+          </div>
           <ClientWorkpapers clientId={client.id} />
 
           <ClientProfileForm key={client.id} client={client as Client} />
