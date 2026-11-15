@@ -253,6 +253,27 @@ export interface Engagement {
   budgets?: Budget[]; // MGT-03
   forecast?: ForecastAssumptions; // MGT-05
   quarterly?: QuarterlyPack; // QTR-01
+  /** Sales invoices, credit notes and money on account still open at the period end, read from the ledger; C-10 ages from these */
+  debtor_open_items?: DebtorOpenItems;
+}
+
+export interface DebtorOpenItem {
+  contact: string;
+  kind: 'invoice' | 'credit note' | 'prepayment' | 'overpayment';
+  ref: string;
+  date: string;
+  due: string; // the invoice's due date; a credit's own date
+  amount_p: string; // open at the period end: an invoice positive, a credit negative
+  received_after_p: string; // paid against it after the period end, up to the pull
+  received_after_on?: string; // the last of those payments
+  url?: string;
+}
+
+export interface DebtorOpenItems {
+  as_at: string; // the period end the items were open at
+  fetched_at: string;
+  source: 'Xero';
+  items: DebtorOpenItem[];
 }
 
 export interface Commentary {

@@ -587,12 +587,19 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const refresh = () => {
     const r = agedDebtorsFromLedger(result.engagementId, live().lines ?? []);
     if (!r) return setNote({ kind: 'error', text: 'There are no ledger transactions on the debtors control account yet. Import them from the accounting system, or enter customers by hand.' });
-    save({ lines: r.lines, receipts_from_ledger: r.receiptsKnown, refreshed_at: new Date().toISOString() });
+    save({ lines: r.lines, receipts_from_ledger: r.receiptsKnown, refreshed_at: new Date().toISOString(), basis: r.basis });
     setNote({
       kind: 'ok',
-      text: `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} aged from the ledger at ${peLabel}.${r.receiptsKnown ? '' : ' The ledger has nothing after the period end, so enter receipts after it by hand.'}`,
+      text:
+        r.basis === 'due'
+          ? `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} from Xero's invoices, credits and payments on account open at ${peLabel}, aged by due date.`
+          : `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} aged from this year's ledger at ${peLabel}.${r.receiptsKnown ? '' : ' The ledger has nothing after the period end, so enter receipts after it by hand.'}${'fromXero' in r && r.fromXero ? " Pull from Xero again to age from its open invoices instead, so last year's unpaid invoices are included." : ''}`,
     });
   };
+  // Aged from open items: by days past the due date; otherwise by invoice age
+  const byDue = data.basis === 'due';
+  const BUCKETS = byDue ? ['Not due', '1–30 overdue', '31–60 overdue', 'Over 60 overdue'] : ['Current', '31–60', '61–90', '90+'];
+  const oldestLabel = byDue ? 'Over 60 days overdue' : 'Over 90 days';
 
   const need = debtorsJournal(result.totals);
   const journalLines = [
@@ -742,7 +749,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
           </div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Over 90 days</div>
+          <div className="text-[11px] text-[#4A5878]">{oldestLabel}</div>
           <div className={`text-lg font-bold font-mono ${tot('over90') > 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(tot('over90'))}</div>
           <div className="text-[10px] text-[#4A5878]">
             {String(tot('over90_count'))} customer{tot('over90_count') === 1n ? '' : 's'}
@@ -796,7 +803,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
             onClick={() => setFilter(key)}
             className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${filter === key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE]'}`}
           >
-            {label} {count(key)}
+            {key === 'over90' ? oldestLabel : label} {count(key)}
           </button>
         ))}
         {!locked && (
@@ -819,10 +826,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
             <tr>
               <th className="w-8" />
               <th className={`${th} text-left`}>Customer</th>
-              <th className={`${th} text-right`}>Current</th>
-              <th className={`${th} text-right`}>31–60</th>
-              <th className={`${th} text-right`}>61–90</th>
-              <th className={`${th} text-right`}>90+</th>
+              {BUCKETS.map((b) => (
+                <th key={b} className={`${th} text-right`}>
+                  {b}
+                </th>
+              ))}
               <th className={`${th} text-right`}>Total</th>
               <th className={`${th} text-right`}>Received after date</th>
               <th className={`${th} text-right`}>Recoverability</th>
@@ -876,7 +884,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                       {items ? (
                         <div className="text-[10px] text-[#4A5878]">
                           {items} item{items === 1 ? '' : 's'}
-                          {l.oldest_days ? ` · oldest ${l.oldest_days} days` : ''}
+                          {l.oldest_days ? (byDue ? ` · most overdue ${l.oldest_days} days` : ` · oldest ${l.oldest_days} days`) : ''}
                         </div>
                       ) : null}
                     </td>
@@ -917,10 +925,10 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                             <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                               {(
                                 [
-                                  ['current_p', 'Current'],
-                                  ['d30_p', '31–60'],
-                                  ['d60_p', '61–90'],
-                                  ['d90_p', '90+'],
+                                  ['current_p', BUCKETS[0]],
+                                  ['d30_p', BUCKETS[1]],
+                                  ['d60_p', BUCKETS[2]],
+                                  ['d90_p', BUCKETS[3]],
                                   ['after_date_p', 'Received after'],
                                 ] as const
                               ).map(([key, label]) => (

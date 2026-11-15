@@ -5,7 +5,7 @@ import { db } from './db';
 import { secret } from './auth';
 import { ServiceError } from './services';
 import { importTrialBalance, ImportResult, TbLineInput } from './tb-import';
-import { LedgerTransaction, UserRole } from '../types/models';
+import { DebtorOpenItem, LedgerTransaction, UserRole } from '../types/models';
 
 /**
  * Xero connection (DAT-01): OAuth 2.0 authorisation code flow, encrypted token storage with
@@ -342,12 +342,87 @@ interface XeroDoc {
   ToBankAccount?: { Code?: string };
   Total?: number;
   IsReconciled?: boolean;
+  // Open items: what is still owed, and what was set against it and when
+  InvoiceNumber?: string;
+  CreditNoteNumber?: string;
+  PrepaymentID?: string;
+  OverpaymentID?: string;
+  DueDate?: string;
+  DueDateString?: string;
+  AmountDue?: number;
+  RemainingCredit?: number;
+  Payments?: XeroAllocation[];
+  CreditNotes?: XeroAllocation[];
+  Prepayments?: XeroAllocation[];
+  Overpayments?: XeroAllocation[];
+  Allocations?: XeroAllocation[];
+}
+interface XeroAllocation {
+  Date?: string;
+  DateString?: string;
+  Amount?: number;
+  AppliedAmount?: number;
 }
 
 const pence = (n: number | undefined) => BigInt(Math.round((n ?? 0) * 100));
 // Xero sends "DateString" (2026-05-10T00:00:00) or the older "/Date(1780000000000+0000)/"
 const docDate = (d: XeroDoc) =>
   d.DateString?.slice(0, 10) ?? new Date(Number(/\/Date\((\d+)/.exec(d.Date ?? '')?.[1] ?? 0)).toISOString().slice(0, 10);
+
+/**
+ * Sales invoices, credit notes, prepayments and overpayments open at the period end, as Xero's Aged
+ * Receivables shows them: what is owed now, plus whatever was set against it after the period end.
+ * Each invoice keeps its own payments, so nothing is matched oldest-first. Credits come out negative.
+ */
+export function openDebtorItems(pe: string, shortCode: string | null, docs: { invoices: XeroDoc[]; creditNotes: XeroDoc[]; prepayments: XeroDoc[]; overpayments: XeroDoc[] }): DebtorOpenItem[] {
+  const out: DebtorOpenItem[] = [];
+  const live = (d: XeroDoc) => ['AUTHORISED', 'PAID'].includes(d.Status ?? '') && docDate(d) <= pe;
+  const later = (list: XeroAllocation[] | undefined, field: 'Amount' | 'AppliedAmount') =>
+    (list ?? []).filter((a) => docDate(a as XeroDoc) > pe).reduce((s, a) => s + pence(a[field]), 0n);
+  const dueOf = (d: XeroDoc) => (d.DueDateString || d.DueDate ? docDate({ DateString: d.DueDateString, Date: d.DueDate }) : docDate(d));
+  for (const inv of docs.invoices) {
+    if (inv.Type !== 'ACCREC' || !live(inv) || !inv.InvoiceID) continue;
+    const paidAfter = later(inv.Payments, 'Amount');
+    const open = pence(inv.AmountDue) + paidAfter + later(inv.CreditNotes, 'AppliedAmount') + later(inv.Prepayments, 'AppliedAmount') + later(inv.Overpayments, 'AppliedAmount');
+    if (open <= 0n) continue;
+    const lastPaid = (inv.Payments ?? []).map((p) => docDate(p as XeroDoc)).filter((d) => d > pe).sort().pop();
+    out.push({
+      contact: inv.Contact?.Name ?? '',
+      kind: 'invoice',
+      ref: inv.InvoiceNumber || inv.Reference || 'Invoice',
+      date: docDate(inv),
+      due: dueOf(inv),
+      amount_p: open.toString(),
+      received_after_p: paidAfter.toString(),
+      ...(lastPaid ? { received_after_on: lastPaid } : {}),
+      url: xeroDeepLink(shortCode, `/AccountsReceivable/View.aspx?InvoiceID=${inv.InvoiceID}`),
+    });
+  }
+  const credits: [DebtorOpenItem['kind'], XeroDoc[], (d: XeroDoc) => boolean, (d: XeroDoc) => string | undefined][] = [
+    ['credit note', docs.creditNotes, (d) => d.Type === 'ACCRECCREDIT', (d) => d.CreditNoteID && `/AccountsReceivable/ViewCreditNote.aspx?creditNoteID=${d.CreditNoteID}`],
+    ['prepayment', docs.prepayments, (d) => d.Type === 'RECEIVE-PREPAYMENT', () => undefined],
+    ['overpayment', docs.overpayments, (d) => d.Type === 'RECEIVE-OVERPAYMENT', () => undefined],
+  ];
+  for (const [kind, list, mine, path] of credits) {
+    for (const c of list) {
+      if (!mine(c) || !live(c)) continue;
+      const open = pence(c.RemainingCredit) + later(c.Allocations, 'Amount');
+      if (open <= 0n) continue;
+      const p = path(c);
+      out.push({
+        contact: c.Contact?.Name ?? '',
+        kind,
+        ref: c.CreditNoteNumber || c.Reference || kind[0].toUpperCase() + kind.slice(1),
+        date: docDate(c),
+        due: docDate(c),
+        amount_p: (-open).toString(),
+        received_after_p: '0',
+        ...(p ? { url: xeroDeepLink(shortCode, p) } : {}),
+      });
+    }
+  }
+  return out;
+}
 
 /** Opens the record in the client's own Xero organisation (falls back to plain go.xero.com). */
 export function xeroDeepLink(shortCode: string | null, path: string): string {
@@ -451,9 +526,37 @@ export function parseTransactions(engagementId: string, shortCode: string | null
  * endpoint takes pageSize, which keeps a pull well inside Xero's 60 calls a minute.
  */
 async function allPages(endpoint: string, key: string, token: string, tenantId: string, from: string, to: string, deadline = 0): Promise<XeroDoc[]> {
-  const dt = (d: string) => `DateTime(${d.replaceAll('-', ', ')})`;
-  const where = encodeURIComponent(`Date >= ${dt(from)} && Date <= ${dt(to)}`);
-  const idOf = (d: XeroDoc) => d.InvoiceID ?? d.CreditNoteID ?? d.BankTransactionID ?? d.PaymentID ?? d.BankTransferID ?? d.ManualJournalID ?? JSON.stringify(d);
+  return allPagesWhere(endpoint, key, token, tenantId, `Date >= ${xeroDt(from)} && Date <= ${xeroDt(to)}`, deadline);
+}
+
+const xeroDt = (d: string) => `DateTime(${d.replace(/-02-29$/, '-02-28').replaceAll('-', ', ')})`;
+
+/**
+ * Sales documents open at the period end, however old: unpaid now, or settled only after the period end.
+ * Xero's filter on when an invoice was fully paid is used where it works; otherwise invoices settled in
+ * the last three years are read and the rest dropped by date. shortcut: credits settled more than three
+ * years before the pull are not read, which only matters if one was still open at a period end that old.
+ */
+async function openDebtorsAt(token: string, tenantId: string, shortCode: string | null, pe: string, deadline: number): Promise<DebtorOpenItem[]> {
+  const asOf = xeroDt(pe);
+  const since = xeroDt(`${Number(pe.slice(0, 4)) - 3}${pe.slice(4)}`);
+  const settled = `(Status=="AUTHORISED" || (Status=="PAID" && Date >= ${since}))`;
+  const get = (endpoint: string, where: string) => allPagesWhere(endpoint, endpoint, token, tenantId, where, deadline);
+  const invoices = await get('Invoices', `Type=="ACCREC" && Date <= ${asOf} && (Status=="AUTHORISED" || (Status=="PAID" && FullyPaidOnDate > ${asOf}))`).catch((err) => {
+    if (!(err instanceof ServiceError) || err.code !== 'XERO_ERROR') throw err;
+    return get('Invoices', `Type=="ACCREC" && Date <= ${asOf} && ${settled}`);
+  });
+  const [creditNotes, prepayments, overpayments] = await Promise.all([
+    get('CreditNotes', `Type=="ACCRECCREDIT" && Date <= ${asOf} && ${settled}`),
+    get('Prepayments', `Type=="RECEIVE-PREPAYMENT" && Date <= ${asOf} && ${settled}`),
+    get('Overpayments', `Type=="RECEIVE-OVERPAYMENT" && Date <= ${asOf} && ${settled}`),
+  ]);
+  return openDebtorItems(pe, shortCode, { invoices, creditNotes, prepayments, overpayments });
+}
+
+async function allPagesWhere(endpoint: string, key: string, token: string, tenantId: string, filter: string, deadline = 0): Promise<XeroDoc[]> {
+  const where = encodeURIComponent(filter);
+  const idOf = (d: XeroDoc) => d.InvoiceID ?? d.CreditNoteID ?? d.PrepaymentID ?? d.OverpaymentID ?? d.BankTransactionID ?? d.PaymentID ?? d.BankTransferID ?? d.ManualJournalID ?? JSON.stringify(d);
   const out: XeroDoc[] = [];
   const seen = new Set<string>();
   for (let page = 1; page <= 50; page++) {
@@ -638,6 +741,15 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
   // Replace this engagement's Xero transactions so a re-pull never doubles them up
   db.transactions = [...db.transactions.filter((t) => !(t.engagement_id === engagementId && t.source === 'Xero')), ...tx];
   out.body.transactionCount = tx.length;
+  // Trade debtors are aged from what was open at the period end, however old, not from one year's movements
+  try {
+    const items = await openDebtorsAt(token, conn.tenant_id, conn.short_code, eng.period_end, deadline);
+    eng.debtor_open_items = { as_at: eng.period_end, fetched_at: new Date().toISOString(), source: 'Xero', items };
+    out.body.openDebtorItems = items.length;
+  } catch (err) {
+    if (err instanceof XeroReconnectError) throw err;
+    notGathered.push('open debtors at the period end');
+  }
   if (notGathered.length) out.body.notGathered = notGathered;
   return out;
 }
