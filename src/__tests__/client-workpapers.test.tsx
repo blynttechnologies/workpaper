@@ -22,7 +22,15 @@ describe('working papers on the client page', () => {
     render(<ClientWorkpapers clientId="cli_harlow" />);
     expect(screen.getByRole('link', { name: /B-10.*Bank and cash/ }).getAttribute('href')).toBe(`/engagements/${eng.id}/workpapers/wp_${eng.id}_b10`);
     for (const t of TEMPLATES) expect(screen.getAllByText(t.title).length).toBeGreaterThan(0);
-    expect(screen.getByText(`Not in this file (${TEMPLATES.length - 2})`)).toBeTruthy();
+    expect(screen.getByText(`Add more working papers (${TEMPLATES.length - 2})`)).toBeTruthy();
+  });
+
+  it('filters the papers by where they stand', () => {
+    setup();
+    render(<ClientWorkpapers clientId="cli_harlow" />);
+    fireEvent.click(screen.getByRole('tab', { name: /^Not started/ }));
+    expect(screen.getByRole('link', { name: /B-10/ })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /^Done/ })).toBeNull(); // no paper is done, so no chip
   });
 
   it('adds a paper to the file', () => {
