@@ -104,7 +104,7 @@ describe('papers follow the client profile', () => {
 describe('practice defaults', () => {
   it('saves tolerance, review threshold and sign-off levels in pence', () => {
     saveFirmDefaults(admin, { tolerance: '1.00', review_threshold: '500', signoff_levels: 2 });
-    expect(db.firms.find((f) => f.id === FIRM)!.settings?.defaults).toEqual({ tolerance_p: '100', review_threshold_p: '50000', signoff_levels: 2 });
+    expect(db.firms.find((f) => f.id === FIRM)!.settings?.defaults).toEqual({ tolerance_p: '100', review_threshold_p: '50000', signoff_levels: 2, self_approve_journals: false });
     expect(() => saveFirmDefaults(admin, { tolerance: '-1', review_threshold: '500', signoff_levels: 2 })).toThrow(/tolerance/);
     expect(() => saveFirmDefaults(admin, { tolerance: 'abc', review_threshold: '500', signoff_levels: 2 })).toThrow(/amount/);
     expect(() => saveFirmDefaults(admin, { tolerance: '1', review_threshold: '12.345', signoff_levels: 2 })).toThrow(/amount/);

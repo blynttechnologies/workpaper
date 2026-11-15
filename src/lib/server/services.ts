@@ -469,13 +469,19 @@ export const services = {
   approveAdjustment(
     firmId: string,
     actor: { id: string; name: string; role: UserRole },
-    adjustmentId: string
+    adjustmentId: string,
+    reason?: string
   ) {
     const adj = db.adjustments.find((a) => a.id === adjustmentId);
     if (!adj) throw new ServiceError('Adjustment not found', 404);
 
-    // Rule: Approver must differ from proposer
-    if (adj.proposed_by === actor.id) {
+    // Rule: Approver must differ from proposer, unless the practice lets a partner or admin approve their own with a reason
+    const own = adj.proposed_by === actor.id;
+    const selfAllowed = own && !!db.firms.find((f) => f.id === firmId)?.settings?.defaults?.self_approve_journals && ['partner', 'admin'].includes(actor.role);
+    if (selfAllowed && String(reason ?? '').trim().length < 10) {
+      throw new ServiceError('Give a reason of at least 10 characters for approving your own journal.', 400, 'SELF_APPROVAL_REASON');
+    }
+    if (own && !selfAllowed) {
       db.logAudit(firmId, actor, 'REJECTED_SELF_APPROVAL', 'adjustments', adjustmentId, null, {
         reason: 'Proposer cannot approve their own adjustment',
       });
@@ -503,8 +509,9 @@ export const services = {
     adj.status = 'approved';
     adj.approved_by = actor.id;
     adj.approved_by_name = actor.name;
+    if (own) adj.self_approval_reason = String(reason).trim().slice(0, 500);
 
-    db.logAudit(firmId, actor, 'APPROVE_ADJUSTMENT', 'adjustments', adjustmentId, before, adj);
+    db.logAudit(firmId, actor, own ? 'SELF_APPROVE_ADJUSTMENT' : 'APPROVE_ADJUSTMENT', 'adjustments', adjustmentId, before, adj);
     return adj;
   },
 

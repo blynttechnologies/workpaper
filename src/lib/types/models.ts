@@ -167,6 +167,8 @@ export interface PracticeDefaults {
   tolerance_p: string; // pence; differences below this count as reconciled
   review_threshold_p: string; // pence; movements above this are flagged
   signoff_levels: 1 | 2 | 3; // preparer / + reviewer / + partner
+  /** Sole practitioners: a partner or admin may approve a journal they proposed, giving a reason that is audited */
+  self_approve_journals?: boolean;
 }
 
 export interface User {
@@ -441,6 +443,8 @@ export interface Adjustment {
   reverses_id?: string;
   reversed_by_id?: string;
   reject_reason?: string;
+  /** Why the person who proposed it also approved it (only where the practice allows it) */
+  self_approval_reason?: string;
   proposed_by: string;
   proposed_by_name: string;
   approved_by: string | null;

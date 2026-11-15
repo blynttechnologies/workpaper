@@ -88,6 +88,14 @@ export default function JournalsPage() {
   const engagement = db.engagements.find((e) => e.id === engagementId);
   const actor = getActor();
   const canApprove = REVIEWER_UP.includes(actor.role);
+  // Sole practitioners: the practice may let a partner or admin approve their own journal, with a reason
+  const firmId = db.memberships.find((m) => m.user_id === actor.id)?.firm_id;
+  const canSelfApprove = !!db.firms.find((f) => f.id === firmId)?.settings?.defaults?.self_approve_journals && ['partner', 'admin'].includes(actor.role);
+  const selfApprove = (j: Adjustment) => {
+    const reason = window.prompt(`You proposed ${j.ref}. Why are you approving it yourself? (at least 10 characters; kept on the journal and in the activity log)`);
+    if (reason && reason.trim().length >= 10) act(j, 'approve', reason.trim());
+    else if (reason !== null) setNotice({ ok: false, text: 'Give a reason of at least 10 characters to approve your own journal.' });
+  };
 
   const [rev, setRev] = useState(0);
   const [preview, setPreview] = useState<Attachment | null>(null);
@@ -248,6 +256,7 @@ export default function JournalsPage() {
             )}
             {shown.map((j) => {
               const approvable = canApprove && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by !== actor.id;
+              const ownApprovable = canSelfApprove && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by === actor.id;
               return (
                 <tr key={j.id} className="align-top">
                   <td className="py-2.5 px-3">
@@ -273,6 +282,7 @@ export default function JournalsPage() {
                     {j.source_schedule && <span className="block text-[11px] text-[#4A5878]">From {j.source_schedule}{j.calculation ? `: ${j.calculation}` : ''}</span>}
                     {j.reverses_id && <span className="block text-[11px] text-[#4A5878]">Reverses {db.adjustments.find((a) => a.id === j.reverses_id)?.ref ?? 'a prior journal'}</span>}
                     {j.reject_reason && <span className="block text-[11px] text-[#4A5878]">Rejected: {j.reject_reason}</span>}
+                    {j.self_approval_reason && <span className="block text-[11px] text-[#8A5A00]">Approved by the person who proposed it: {j.self_approval_reason}</span>}
                     {j.auto_reverse && <span className="block text-[11px] text-[#1D4E89]">Auto-reverses next period</span>}
                     {j.ledger && (
                       <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline">
@@ -309,6 +319,11 @@ export default function JournalsPage() {
                         )}
                         {approvable && (
                           <button type="button" disabled={busy} onClick={() => act(j, 'approve')} className="px-2 py-1 rounded bg-[#E6F4EF] text-[#0B6B52] font-semibold cursor-pointer">Approve</button>
+                        )}
+                        {ownApprovable && (
+                          <button type="button" disabled={busy} onClick={() => selfApprove(j)} title="You proposed this journal. Approving it yourself needs a reason." className="px-2 py-1 rounded bg-[#E6F4EF] text-[#0B6B52] font-semibold cursor-pointer">
+                            Approve my own…
+                          </button>
                         )}
                         {canApprove && (j.status === 'approved' || j.status === 'posted') && (!j.ledger || ['DELETED', 'VOIDED'].includes(j.ledger.status)) && (
                           <button type="button" disabled={busy} onClick={() => setSending(j)} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#122654] text-white font-semibold cursor-pointer">

@@ -128,7 +128,12 @@ export function saveFirmDefaults(actor: Actor, d: any): PracticeDefaults {
   if (![1, 2, 3].includes(levels)) throw new ServiceError('Choose the sign-off levels.');
 
   const before = firm.settings?.defaults ?? null;
-  const defaults: PracticeDefaults = { tolerance_p: tolerance.toString(), review_threshold_p: review.toString(), signoff_levels: levels as 1 | 2 | 3 };
+  // Relaxing the four-eyes rule on journals is a partner's or admin's call; left out, the setting keeps its value
+  const selfApprove = typeof d?.self_approve_journals === 'boolean' ? d.self_approve_journals : !!before?.self_approve_journals;
+  if (selfApprove !== !!before?.self_approve_journals && !['partner', 'admin'].includes(actor.role)) {
+    throw new ServiceError('Only a partner or admin can change who may approve their own journals.', 403, 'FORBIDDEN');
+  }
+  const defaults: PracticeDefaults = { tolerance_p: tolerance.toString(), review_threshold_p: review.toString(), signoff_levels: levels as 1 | 2 | 3, self_approve_journals: selfApprove };
   firm.settings = { ...firm.settings, defaults };
   db.logAudit(actor.firmId, actor, 'UPDATE_PRACTICE_DEFAULTS', 'firms', firm.id, before, defaults);
   return defaults;
