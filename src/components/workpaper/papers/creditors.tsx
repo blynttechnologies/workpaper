@@ -370,7 +370,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                                   <div className="text-[11px] text-[#7E8DA6]">None from the ledger.</div>
                                 </>
                               )}
-                              {!!s.invoices?.length && <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} />}
+                              {!!s.invoices?.length && <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} refLabel="Bill #" byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} />}
                               {!s.invoices && (
                                 <label className="flex flex-col gap-1 mt-1">
                                   <span className="text-[10px] font-semibold text-[#4A5878]">Supplier name and ledger balance</span>
