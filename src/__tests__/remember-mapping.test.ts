@@ -39,4 +39,12 @@ describe('remembering a mapping', () => {
     expect(mapping('721')?.status).toBe('confirmed');
     expect(mapping('721')?.blynt_code).toBe(m.blynt_code);
   });
+
+  it('a confirmed account survives a pull even with no rule saved for it', () => {
+    importTrialBalance(actor, ENG, lines, 'xero');
+    services.confirmSelectedMappings(FIRM, actor, ENG, [mapping('721')!.id]);
+    db.learned_rules = db.learned_rules.filter((r) => r.pattern !== 'code:721');
+    importTrialBalance(actor, ENG, lines, 'xero');
+    expect(mapping('721')?.status).toBe('confirmed');
+  });
 });
