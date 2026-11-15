@@ -39,7 +39,7 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
             <th scope="col" className={`${cell} font-semibold`}>Paid date</th>
             <th scope="col" className={`${cell} font-semibold text-right`}>Paid amount</th>
             <th scope="col" className={`${cell} font-semibold text-right`}>Open at {peLabel}</th>
-            <th scope="col" className="py-1 font-semibold">{byDue ? 'Overdue' : 'Age'}</th>
+            <th scope="col" className="py-1 font-semibold text-right">Overdue</th>
           </tr>
         </thead>
         <tbody>
@@ -47,6 +47,10 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
             const pays = inv.payments ?? [];
             const many = pays.length > 1;
             const open = opened.has(i);
+            const paid = pays.reduce((s, p) => s + asPence(p.amount_p), 0n);
+            // Still unpaid: the invoice total less everything paid or credited against it, before and after the period end
+            const unpaid = inv.total_p ? asPence(inv.total_p) - paid : null;
+            const age = byDue ? (inv.days ? `${inv.days} day${inv.days === 1 ? '' : 's'} overdue` : 'not due') : `${inv.days} days old`;
             return (
               <React.Fragment key={i}>
                 <tr className="border-t border-[#EEF1F6] align-top">
@@ -61,7 +65,10 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
                   </td>
                   <td className={cell}>
                     {ukDate(inv.date)}
-                    {inv.due && <span className="block text-[10px] text-[#4A5878]">due {ukDate(inv.due)}</span>}
+                    <span className={`block text-[10px] ${inv.days > warnAfter ? 'text-[#B42318]' : 'text-[#4A5878]'}`}>
+                      {inv.due ? `due ${ukDate(inv.due)} · ` : ''}
+                      {age}
+                    </span>
                   </td>
                   <td className={`${cell} text-right font-mono`}>{inv.total_p ? money(inv.total_p) : '–'}</td>
                   <td className={cell}>
@@ -76,11 +83,9 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
                       '–'
                     )}
                   </td>
-                  <td className={`${cell} text-right font-mono`}>{pays.length ? money(pays.reduce((s, p) => s + asPence(p.amount_p), 0n)) : '–'}</td>
+                  <td className={`${cell} text-right font-mono`}>{pays.length ? money(paid) : '–'}</td>
                   <td className={`${cell} text-right font-mono`}>{money(inv.amount_p)}</td>
-                  <td className={`py-1 ${inv.days > warnAfter ? 'text-[#B42318]' : ''}`}>
-                    {byDue ? (inv.days ? `${inv.days} day${inv.days === 1 ? '' : 's'}` : 'Not due') : `${inv.days} days old`}
-                  </td>
+                  <td className={`py-1 text-right font-mono ${unpaid && unpaid > 0n ? 'text-[#B42318] font-bold' : ''}`}>{unpaid ? money(unpaid) : '–'}</td>
                 </tr>
                 {many &&
                   open &&
