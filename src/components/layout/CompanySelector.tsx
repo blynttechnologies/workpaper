@@ -44,11 +44,19 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
     setActiveCompanyId(clientId);
     setOpen(false);
 
+    // On a client's own page, open the chosen client's page instead
+    if (/^\/clients\/[^/]+/.test(pathname)) {
+      router.push(`/clients/${clientId}`);
+      return;
+    }
+
     // If currently on an engagement-specific page, redirect to the new company's engagement or dashboard
-    if (pathname.includes('/engagements/')) {
+    if (pathname.includes('/engagements/') && !pathname.startsWith('/engagements/new')) {
       const match = pathname.match(/\/engagements\/([^/]+)(\/.*)?/);
       if (match) {
-        const subpath = match[2] || '';
+        // Keep the section (/mapping, /workpapers) but not a paper or workflow id from the old company
+        const section = (match[2] || '').split('/')[1] ?? '';
+        const subpath = !section || section === 'workflows' ? '' : `/${section}`;
         // Find engagement for selected company
         const nextEng =
           engagements.find((e) => e.client_id === clientId && e.status !== 'locked') ||
@@ -112,7 +120,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
                 <span className="truncate">{activeCompany.name}</span>
               </span>
               <span className="text-[11px] text-[#A6B4D0] mt-0.5 truncate">
-                Co #{activeCompany.company_no} • {activeCompany.company_type}
+                {activeCompany.company_no ? `Co #${activeCompany.company_no} • ` : ''}{activeCompany.company_type}
               </span>
             </div>
             <ChevronDown className={`w-4 h-4 text-[#A6B4D0] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -158,7 +166,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
                     <div className="min-w-0">
                       <div className="truncate font-semibold">{client.name}</div>
                       <div className="text-[10px] text-[#4A5878] truncate">
-                        #{client.company_no} • {client.company_type}
+                        {client.company_no ? `#${client.company_no} • ` : ''}{client.company_type}
                       </div>
                     </div>
                     {isSelected && <Check className="w-4 h-4 text-[#1D4E89] shrink-0 mt-0.5" />}
@@ -213,7 +221,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
             {activeCompany.name}
           </span>
           <span className="text-[10px] text-[#4A5878] truncate leading-tight">
-            Co #{activeCompany.company_no}
+            {activeCompany.company_no ? `Co #${activeCompany.company_no}` : activeCompany.company_type}
           </span>
         </div>
         <ChevronDown className={`w-3.5 h-3.5 text-[#4A5878] transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -258,7 +266,7 @@ export const CompanySelector: React.FC<CompanySelectorProps> = ({
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{client.name}</div>
                     <div className="text-[11px] text-[#4A5878] truncate mt-0.5">
-                      #{client.company_no} • {client.company_type}
+                      {client.company_no ? `#${client.company_no} • ` : ''}{client.company_type}
                     </div>
                   </div>
                   {isSelected && <Check className="w-4 h-4 text-[#1D4E89] shrink-0 mt-0.5" />}
