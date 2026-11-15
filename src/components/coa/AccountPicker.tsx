@@ -7,8 +7,14 @@ import { db } from '@/lib/server/db';
 import { CATEGORIES, accountsForClient, categoryOf } from '@/lib/coa';
 import { NewAccountForm } from '@/components/coa/NewAccountForm';
 
-const MENU_WIDTH = 340;
+const MENU_WIDTH = 520;
+const MENU_HEIGHT = 520;
 const OTHER_GROUP = 'System and clearing';
+
+// A sub-account (a movement account, or one the practice added) sits straight under the account it belongs to
+type Orderable = { code: string; parent_code?: string };
+const chartOrder = (a: Orderable, b: Orderable) =>
+  Number(a.parent_code ?? a.code) - Number(b.parent_code ?? b.code) || Number(!!a.parent_code) - Number(!!b.parent_code) || Number(a.code) - Number(b.code);
 
 /** Pick an account from the whole chart, grouped by category; typing filters by code or name. */
 export function AccountPicker({ value, label, firmId, clientId, onPick, suggestName = '' }: { value: string; label: string; firmId: string; clientId?: string; onPick: (code: string) => void; suggestName?: string }) {
@@ -28,7 +34,7 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
   const groups = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = [...visible()]
-      .sort((a, b) => Number(a.code) - Number(b.code))
+      .sort(chartOrder)
       .filter((a) => words.every((w) => `${a.code} ${a.name}`.toLowerCase().includes(w)));
     return [...CATEGORIES.map((c) => c.name), OTHER_GROUP]
       .map((name) => ({ name, accounts: matches.filter((a) => (categoryOf(a.code)?.name ?? OTHER_GROUP) === name) }))
@@ -42,16 +48,16 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
     const r = inputRef.current?.getBoundingClientRect();
     if (!r) return;
     const below = window.innerHeight - r.bottom;
-    const flip = below < 240 && r.top > below;
+    const flip = below < 360 && r.top > below;
     const width = Math.min(Math.max(r.width, MENU_WIDTH), window.innerWidth - 16);
     setMenuStyle({
       left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
       width,
-      maxHeight: Math.min(340, (flip ? r.top : below) - 12),
+      maxHeight: Math.min(MENU_HEIGHT, (flip ? r.top : below) - 12),
       ...(flip ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
     });
     setQuery('');
-    setActive(Math.max(0, [...visible()].sort((a, b) => Number(a.code) - Number(b.code)).findIndex((a) => a.code === value)));
+    setActive(Math.max(0, [...visible()].sort(chartOrder).findIndex((a) => a.code === value)));
     setOpen(true);
   };
 
@@ -116,7 +122,7 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
 
   let index = -1;
   return (
-    <div className="w-full max-w-[260px] space-y-1.5">
+    <div className="w-full max-w-[300px] space-y-1.5">
       <div className="flex gap-1">
         <div className="relative min-w-0 flex-1">
           <input
@@ -129,6 +135,7 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
             aria-activedescendant={open && flat[active] ? optionId(flat[active].code) : undefined}
             autoComplete="off"
             value={open ? query : currentText}
+            title={currentText || undefined}
             placeholder={open ? currentText || 'Search code or name…' : 'Select an account…'}
             onFocus={() => !open && openMenu()}
             onClick={() => !open && openMenu()}
@@ -137,7 +144,7 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
               setActive(0);
             }}
             onKeyDown={onKeyDown}
-            className="w-full text-xs font-semibold py-1.5 pl-2 pr-6 border border-[#D3DCEE] focus:border-[#122654] rounded-lg bg-white text-[#122654] truncate outline-none cursor-pointer"
+            className="w-full min-h-[36px] text-[13px] font-semibold py-1.5 pl-2.5 pr-7 border border-[#D3DCEE] focus:border-[#122654] rounded-lg bg-white text-[#122654] truncate outline-none cursor-pointer"
           />
           <ChevronDown aria-hidden="true" className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4A5878] pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
         </div>
@@ -154,11 +161,16 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
             role="listbox"
             aria-label={label}
             style={menuStyle}
-            className="fixed z-[60] overflow-y-auto bg-white border border-[#D3DCEE] rounded-[10px] shadow-xl py-1 text-xs text-[#122654]"
+            className="fixed z-[60] overflow-y-auto bg-white border border-[#D3DCEE] rounded-xl shadow-2xl pb-1 text-[13px] text-[#122654]"
           >
+            <div className="px-4 py-2 text-[11px] text-[#4A5878] border-b border-[#E3E7EF]">
+              {query ? `${flat.length} account${flat.length === 1 ? '' : 's'} match “${query}”` : 'Type in the box to search by code or name'} · ↑ ↓ to move, Enter to choose
+            </div>
             {groups.map((g) => (
               <div key={g.name} role="group" aria-label={g.name}>
-                <div className="sticky top-0 bg-[#F5F8FD] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#4A5878]">{g.name}</div>
+                <div className="sticky top-0 z-[1] bg-[#F5F8FD] px-4 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#4A5878] border-y border-[#E3E7EF]">
+                  {g.name} <span className="font-normal normal-case tracking-normal">· {g.accounts.length}</span>
+                </div>
                 {g.accounts.map((a) => {
                   index += 1;
                   const i = index;
@@ -171,11 +183,11 @@ export function AccountPicker({ value, label, firmId, clientId, onPick, suggestN
                       onMouseEnter={() => setActive(i)}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => choose(a.code)}
-                      className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer ${i === active ? 'bg-[#EAF5FC]' : ''}`}
+                      className={`flex items-start gap-3 py-2 pr-4 cursor-pointer ${a.parent_code ? 'pl-9' : 'pl-4'} ${i === active ? 'bg-[#EAF5FC]' : ''} ${a.code === value ? 'bg-[#E6F4EF]' : ''}`}
                     >
-                      <span className="font-mono text-[#4A5878] w-8 shrink-0">{a.code}</span>
-                      <span className={`flex-1 min-w-0 ${a.code === value ? 'font-bold' : ''}`}>{a.name}</span>
-                      {a.code === value && <Check className="w-3.5 h-3.5 text-[#0B6B52] shrink-0" aria-hidden="true" />}
+                      <span className={`font-mono w-11 shrink-0 ${a.parent_code ? 'text-[#7E8DA6]' : 'text-[#4A5878] font-semibold'}`}>{a.code}</span>
+                      <span className={`flex-1 min-w-0 leading-snug ${a.code === value ? 'font-bold' : a.parent_code ? 'text-[#4A5878]' : 'font-medium'}`}>{a.name}</span>
+                      {a.code === value && <Check className="w-4 h-4 text-[#0B6B52] shrink-0" aria-hidden="true" />}
                     </div>
                   );
                 })}
