@@ -31,6 +31,7 @@ interface AppHeaderProps {
 export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
+  const onDashboard = pathname === '/';
   const { inactivityTimeoutMinutes } = useCompany();
   const { jurisdiction } = useLocale();
 
@@ -173,16 +174,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
             })}
           </nav>
 
-          {/* Active Company Switcher & Period Selector */}
-          <div className="hidden lg:flex items-center gap-2.5 ml-4">
-            <CompanySelector variant="header" />
-            <PeriodSelector />
-          </div>
+          {/* Active Company Switcher & Period Selector: not on the dashboard, which covers the whole practice */}
+          {!onDashboard && (
+            <div className="hidden lg:flex items-center gap-2.5 ml-4">
+              <CompanySelector variant="header" />
+              <PeriodSelector />
+            </div>
+          )}
         </div>
 
         {/* Right: Global Search (⌘K), Blynt Bot, Notifications, User Menu */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <LedgerSyncButton />
+          {!onDashboard && <LedgerSyncButton />}
           {/* Global Search Button */}
           <button
             type="button"
