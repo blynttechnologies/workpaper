@@ -223,7 +223,7 @@ export default function AccountMappingPage() {
     });
   }, [mappings, search, typeFilter, statutoryFilter, activeTab]);
   const groups = useMemo(() => groupMappings(filteredMappings, sortBy), [filteredMappings, sortBy]);
-  const columns = 5 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
+  const columns = 6 + (showStatutory ? 1 : 0) + (showReason ? 1 : 0);
   const canApprove = ['manager', 'partner', 'admin'].includes(getActor().role);
   const patternsHint = alsoApply.length ? `these ${alsoApply.length + 1} accounts` : 'this account';
   // Lines that look like the one being corrected, offered in the rule pop-up
@@ -916,7 +916,8 @@ export default function AccountMappingPage() {
                     className="w-4 h-4 rounded border-[#D3DCEE] text-[#122654] focus:ring-[#FF7A66]"
                   />
                 </th>
-                <th scope="col" className="p-3">Ledger Code &amp; Name</th>
+                <th scope="col" className="p-3">Codes</th>
+                <th scope="col" className="p-3">Ledger Name</th>
                 <th scope="col" className="p-3 text-right">Balance</th>
                 {showStatutory && <th scope="col" className="p-3">Statutory Line &amp; Schedule</th>}
                 <th scope="col" className="p-3">Confidence &amp; Gate</th>
@@ -975,17 +976,29 @@ export default function AccountMappingPage() {
                       />
                     </td>
 
-                    {/* Code & Name */}
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-[#122654] bg-[#F5F8FD] px-2 py-0.5 rounded text-[11px]">
-                          {row.source_code}
-                        </span>
-                        <div>
-                          <div className="font-bold text-[#122654]">{row.source_name}</div>
-                          <div className="text-[10px] text-[#4A5878]">{row.source_type}</div>
-                        </div>
+                    {/* The company's own ledger code, and the Blynt chart code it maps to */}
+                    <td className="p-3 whitespace-nowrap">
+                      <div className="grid grid-cols-[52px_auto] items-center gap-x-1.5 gap-y-1 text-[11px]">
+                        <span className="text-[9px] font-bold uppercase tracking-wide text-[#7E8DA6]">Company</span>
+                        <span className="font-mono font-bold text-[#122654] bg-[#F5F8FD] px-2 py-0.5 rounded">{row.source_code}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wide text-[#7E8DA6]">Blynt</span>
+                        {row.blynt_code ? (
+                          <span
+                            title={`${row.blynt_code} ${db.blynt_accounts.find((a) => a.code === row.blynt_code)?.name ?? ''}`}
+                            className={`font-mono font-bold px-2 py-0.5 rounded ${row.status === 'confirmed' ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#EAF5FC] text-[#1D4E89]'}`}
+                          >
+                            {row.blynt_code}
+                          </span>
+                        ) : (
+                          <span className="text-[#7E8DA6]">–</span>
+                        )}
                       </div>
+                    </td>
+
+                    {/* Name */}
+                    <td className="p-3">
+                      <div className="font-bold text-[#122654]">{row.source_name}</div>
+                      <div className="text-[10px] text-[#4A5878]">{row.source_type}</div>
                     </td>
 
                     {/* Balance */}

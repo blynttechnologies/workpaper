@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { OWNER_ACCOUNTS, STANDARD_CHART } from '@/lib/standard-chart';
+import { ADD_ON_ACCOUNTS, STANDARD_CHART } from '@/lib/standard-chart';
 import { accountsForClient } from '@/lib/coa';
 import { migrateCodes } from '@/lib/coa-migration';
 import {
@@ -123,7 +123,7 @@ class Database {
     const standard = new Set(STANDARD_CHART.map((a) => a.code));
     const own = this.blynt_accounts.filter((a) => !a.is_system && !standard.has(a.code));
     // A code the practice already used for its own account keeps that account
-    const owners = OWNER_ACCOUNTS.filter((a) => !own.some((o) => o.code === a.code));
+    const owners = ADD_ON_ACCOUNTS.filter((a) => !own.some((o) => o.code === a.code));
     this.blynt_accounts = [...STANDARD_CHART, ...owners].map((a) => ({ ...a })).concat(own);
   }
 
@@ -333,7 +333,7 @@ class Database {
     ];
 
     // Standard Blynt Chart of Accounts
-    this.blynt_accounts = [...STANDARD_CHART, ...OWNER_ACCOUNTS].map((a) => ({ ...a }));
+    this.blynt_accounts = [...STANDARD_CHART, ...ADD_ON_ACCOUNTS].map((a) => ({ ...a }));
 
     // Clean slate: if demo data is not requested, keep workspace clean and empty
     if (!withDemo) {
