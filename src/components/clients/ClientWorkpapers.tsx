@@ -15,13 +15,6 @@ type Filter = 'all' | 'attention' | 'in_progress' | 'not_started' | 'done';
 const bucket = (w: Workpaper): Exclude<Filter, 'all'> =>
   w.status === 'unreconciled' ? 'attention' : w.status === 'in_progress' ? 'in_progress' : w.status === 'not_started' ? 'not_started' : 'done';
 
-// Left stripe colour on each paper card
-const STRIPE: Record<Exclude<Filter, 'all'>, string> = {
-  attention: 'border-l-[#FF7A66]',
-  in_progress: 'border-l-[#1D4E89]',
-  not_started: 'border-l-[#D3DCEE]',
-  done: 'border-l-[#0B6B52]',
-};
 
 const DOT: Record<Exclude<Filter, 'all'>, string> = {
   attention: 'bg-[#FF7A66]',
@@ -131,18 +124,27 @@ export function ClientWorkpapers({ clientId }: { clientId: string }) {
 
               {shown.length === 0 && <p className="text-xs text-[#4A5878] py-2">No papers here.</p>}
 
-              {/* Papers grouped by area (B Cash and bank, C Debtors…), each a small card striped by where it stands */}
-              <div className="space-y-2.5">
+              {/* One box per area (B Cash and bank, C Debtors…), laid out in columns, its papers listed inside */}
+              <div className="columns-1 md:columns-2 xl:columns-3 gap-3">
                 {groupByArea(shown).map(({ area, name, papers: group }) => {
                   const groupDone = group.filter((w) => bucket(w) === 'done').length;
+                  const groupAttention = group.filter((w) => bucket(w) === 'attention').length;
                   return (
-                    <section key={area} aria-label={`${area} ${name}`}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="w-4 h-4 rounded bg-[#122654] text-white text-[9px] font-bold flex items-center justify-center">{area}</span>
-                        <h3 className="text-[11px] font-bold text-[#122654]">{name}</h3>
-                        <span className="text-[10px] text-[#7E8DA6]">{groupDone}/{group.length}</span>
+                    <section key={area} aria-label={`${area} ${name}`} className="break-inside-avoid mb-3 rounded-xl border border-[#E3E7EF] bg-white overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-[#F5F8FD] border-b border-[#E3E7EF]">
+                        <span className="w-6 h-6 rounded-md bg-[#122654] text-white text-[11px] font-bold flex items-center justify-center shrink-0">{area}</span>
+                        <h3 className="flex-1 min-w-0 truncate text-xs font-bold text-[#122654]">{name}</h3>
+                        {groupAttention > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 rounded-full bg-[#FFF1EE] text-[#A23A27]" title={`${groupAttention} need attention`}>
+                            ! {groupAttention}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-semibold text-[#4A5878]">{groupDone}/{group.length}</span>
+                        <span className="w-10 h-1 rounded-full bg-[#E3E7EF] overflow-hidden" aria-hidden="true">
+                          <span className="block h-full bg-[#0B6B52]" style={{ width: `${(groupDone / group.length) * 100}%` }} />
+                        </span>
                       </div>
-                      <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-1.5">
+                      <ul className="divide-y divide-[#EEF2F9]">
                         {group.map((w) => {
                           const st = STATUS_DEFINITIONS[w.status] ?? STATUS_DEFINITIONS.not_started;
                           const title = templateOf(w)?.title ?? w.ref;
@@ -151,8 +153,9 @@ export function ClientWorkpapers({ clientId }: { clientId: string }) {
                               <Link
                                 href={`/engagements/${eng.id}/workpapers/${w.id}`}
                                 title={`${w.ref} ${title} · ${st.label}`}
-                                className={`flex items-center gap-2 px-2 py-1.5 rounded-md border border-[#E3E7EF] border-l-[3px] ${STRIPE[bucket(w)]} bg-white hover:bg-[#F5F8FD] transition-colors`}
+                                className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#F5F8FD] transition-colors"
                               >
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${DOT[bucket(w)]}`} aria-hidden="true" />
                                 <span className="font-mono text-[10px] font-bold text-[#7E8DA6] shrink-0">{w.ref}</span>
                                 <span className="flex-1 min-w-0 truncate text-[11px] font-medium text-[#122654]">{title}</span>
                                 <span className={`shrink-0 text-[10px] font-semibold ${st.colorClass}`}>{st.label}</span>
