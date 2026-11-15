@@ -2,6 +2,7 @@ import { jsonResponse, errorResponse } from '@/lib/server/api-helpers';
 import { autoSyncKeyOk, autoSyncXero } from '@/lib/server/xero-auto-sync';
 import { freshWrite } from '@/lib/server/store';
 import { learnNightly } from '@/lib/server/learning';
+import { fetchTaxSources, recordTaxCheck, taxCheckDue } from '@/lib/server/tax-watch';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,9 @@ export async function POST(req: Request) {
     const synced = await autoSyncXero();
     // After the sync, so the night's pulls keep the mappings people confirmed today
     const learned = await freshWrite(() => learnNightly());
-    return jsonResponse({ ...synced, learned });
+    // Once a weekend: has GOV.UK changed a page the tax library cites?
+    const taxCheck = taxCheckDue() ? await fetchTaxSources().then((r) => freshWrite(() => recordTaxCheck(r))) : null;
+    return jsonResponse({ ...synced, learned, taxCheck });
   } catch (err) {
     return errorResponse(err);
   }
