@@ -16,6 +16,33 @@ type Filter = 'all' | 'attention' | 'in_progress' | 'not_started' | 'done';
 const bucket = (w: Workpaper): Exclude<Filter, 'all'> =>
   w.status === 'unreconciled' ? 'attention' : w.status === 'in_progress' ? 'in_progress' : w.status === 'not_started' ? 'not_started' : 'done';
 
+// Left stripe colour on each paper card
+const STRIPE: Record<Exclude<Filter, 'all'>, string> = {
+  attention: 'border-l-[#FF7A66]',
+  in_progress: 'border-l-[#1D4E89]',
+  not_started: 'border-l-[#D3DCEE]',
+  done: 'border-l-[#0B6B52]',
+};
+
+const DOT: Record<Exclude<Filter, 'all'>, string> = {
+  attention: 'bg-[#FF7A66]',
+  in_progress: 'bg-[#1D4E89]',
+  not_started: 'bg-[#B9C3E6]',
+  done: 'bg-[#0B6B52]',
+};
+
+/** Papers in their template's area (B Cash and bank, C Debtors…), areas in letter order. */
+function groupByArea(papers: Workpaper[]) {
+  const groups = new Map<string, { area: string; name: string; papers: Workpaper[] }>();
+  for (const w of papers) {
+    const t = templateOf(w);
+    const area = t?.area ?? w.ref.charAt(0);
+    if (!groups.has(area)) groups.set(area, { area, name: t?.areaName ?? 'Other', papers: [] });
+    groups.get(area)!.papers.push(w);
+  }
+  return [...groups.values()].sort((a, b) => a.area.localeCompare(b.area));
+}
+
 const FILTERS: [Filter, string][] = [
   ['all', 'All'],
   ['attention', 'Needs attention'],
@@ -96,23 +123,47 @@ export function ClientWorkpapers({ clientId }: { clientId: string }) {
                           : 'bg-white border-[#D3DCEE] text-[#4A5878] hover:border-[#122654]'
                     }`}
                   >
+                    {f !== 'all' && <span className={`w-1.5 h-1.5 rounded-full ${DOT[f]}`} aria-hidden="true" />}
                     {label}
                     <span className={filter === f ? 'opacity-80' : 'opacity-70'}>{count(f)}</span>
                   </button>
                 ))}
               </div>
 
-              <ul className="grid grid-cols-1 lg:grid-cols-2 gap-x-6">
-                {shown.map((w) => (
-                  <li key={w.id} className="border-b border-[#EEF2F9]">
-                    <Link href={`/engagements/${eng.id}/workpapers/${w.id}`} className="flex items-center gap-2.5 px-1.5 py-1.5 rounded-md hover:bg-[#F5F8FD] text-xs text-[#122654]">
-                      <span className="font-mono text-[10px] font-bold text-[#4A5878] bg-[#F5F8FD] border border-[#E3E7EF] rounded px-1.5 py-0.5 w-12 text-center shrink-0">{w.ref}</span>
-                      <span className="flex-1 min-w-0 truncate" title={templateOf(w)?.title ?? w.ref}>{templateOf(w)?.title ?? w.ref}</span>
-                      <StatusBadge status={w.status} size="sm" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              {shown.length === 0 && <p className="text-xs text-[#4A5878] py-2">No papers here.</p>}
+
+              {/* Papers grouped by area (B Cash and bank, C Debtors…), each a small card striped by where it stands */}
+              <div className="space-y-4">
+                {groupByArea(shown).map(({ area, name, papers: group }) => {
+                  const groupDone = group.filter((w) => bucket(w) === 'done').length;
+                  return (
+                    <section key={area} aria-label={`${area} ${name}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-6 h-6 rounded-md bg-[#122654] text-white text-[11px] font-bold flex items-center justify-center">{area}</span>
+                        <h3 className="text-xs font-bold text-[#122654]">{name}</h3>
+                        <span className="text-[10px] text-[#7E8DA6]">{groupDone}/{group.length} done</span>
+                        <span className="flex-1 h-px bg-[#EEF2F9]" aria-hidden="true" />
+                      </div>
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                        {group.map((w) => (
+                          <li key={w.id}>
+                            <Link
+                              href={`/engagements/${eng.id}/workpapers/${w.id}`}
+                              className={`flex h-full flex-col gap-2 p-3 rounded-lg border border-[#E3E7EF] border-l-4 ${STRIPE[bucket(w)]} bg-white hover:shadow-sm hover:-translate-y-px transition-all`}
+                            >
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-[10px] font-bold text-[#4A5878]">{w.ref}</span>
+                                <StatusBadge status={w.status} size="sm" />
+                              </span>
+                              <span className="text-xs font-semibold text-[#122654] leading-snug line-clamp-2">{templateOf(w)?.title ?? w.ref}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  );
+                })}
+              </div>
 
               {missing.length > 0 && (
                 <details>

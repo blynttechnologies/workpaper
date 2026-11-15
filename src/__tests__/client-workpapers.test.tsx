@@ -25,6 +25,14 @@ describe('working papers on the client page', () => {
     expect(screen.getByText(`Add more working papers (${TEMPLATES.length - 2})`)).toBeTruthy();
   });
 
+  it('groups the papers by area', () => {
+    setup();
+    render(<ClientWorkpapers clientId="cli_harlow" />);
+    const bank = screen.getByRole('region', { name: /^B / });
+    expect(bank.textContent).toContain('B-10');
+    expect(bank.textContent).not.toContain('I-10');
+  });
+
   it('filters the papers by where they stand', () => {
     setup();
     render(<ClientWorkpapers clientId="cli_harlow" />);
