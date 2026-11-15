@@ -44,6 +44,19 @@ describe('mapping review', () => {
     }
   });
 
+  it('works from the keyboard: arrow to a line, Enter confirms it, / goes to search', () => {
+    render(<AccountMappingPage />);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Account mapping');
+    const firstOpen = document.querySelector('tr[data-row]')!.getAttribute('data-row')!;
+    const line = lines().find((m) => m.id === firstOpen)!;
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    expect(document.querySelector(`tr[data-row="${firstOpen}"]`)!.getAttribute('aria-current')).toBe('true');
+    fireEvent.keyDown(window, { key: 'Enter' });
+    if (line.blynt_code) expect(lines().find((m) => m.id === firstOpen)!.status).toBe('confirmed');
+    fireEvent.keyDown(window, { key: '/' });
+    expect(document.activeElement?.id).toBe('mapping-search');
+  });
+
   it('offers other likely accounts under a line that is not yet sure', () => {
     render(<AccountMappingPage />);
     expect(screen.queryAllByLabelText(/^Other suggestions for /).length).toBeGreaterThan(0);
