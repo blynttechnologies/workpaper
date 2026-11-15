@@ -47,6 +47,13 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
       </div>
 
       {error && <p role="alert" className="mb-3 text-xs text-[#B8432F]">{error}</p>}
+      {/* Say why Archive and Delete are greyed out, and where the role is changed */}
+      {!manager && cards.length > 0 && (
+        <p id="workflow-role-hint" className="mb-3 text-[11px] text-[#6B4700]">
+          Only a manager, partner or admin can archive or delete a workflow. A partner or admin can change your role under team roles in{' '}
+          <Link href="/settings" className="underline font-semibold">Settings</Link>.
+        </p>
+      )}
       {cards.length === 0 && <p className="text-xs text-[#4A5878]">No workflows yet. Add one to start working on a client year.</p>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -107,10 +114,10 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
                   >
                     Continue working papers <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                   </Link>
-                  {manager && eng.status !== 'locked' && (
+                  {eng.status !== 'locked' && (
                     <>
-                      <button type="button" onClick={() => run(archiveWorkflow, wf.engagement_id, wf.id)} aria-label={`Archive ${wf.name}`} className="text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer">Archive</button>
-                      <button type="button" onClick={() => setConfirmDelete(`${wf.engagement_id}:${wf.id}`)} aria-label={`Delete ${wf.name}`} className="text-xs font-semibold text-[#4A5878] hover:text-[#B8432F] cursor-pointer">Delete</button>
+                      <button type="button" disabled={!manager} onClick={() => run(archiveWorkflow, wf.engagement_id, wf.id)} aria-label={`Archive ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Archive</button>
+                      <button type="button" disabled={!manager} onClick={() => setConfirmDelete(`${wf.engagement_id}:${wf.id}`)} aria-label={`Delete ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="text-xs font-semibold text-[#4A5878] hover:text-[#B8432F] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Delete</button>
                     </>
                   )}
                 </div>
