@@ -181,24 +181,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           <div className="mt-4 flex flex-col animate-in fade-in duration-200">
             <div className="px-5 pb-1 text-[11px] font-bold uppercase tracking-wider text-[#7E8DA6] flex items-center justify-between">
               <span className="truncate" title={activeClient?.name}>Workpapers</span>
-              <span className="text-[9px] text-[#FF7A66] font-mono lowercase shrink-0">active</span>
             </div>
             <nav className="flex flex-col">
-              {/* 1. Overview */}
-              <Link
-                href={`${engagementBase}`}
-                onClick={onMobileClose}
-                aria-current={isLinkActive(engagementBase, true) ? 'page' : undefined}
-                className={`relative flex items-center gap-3 mx-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                  isLinkActive(engagementBase, true)
-                    ? 'text-white bg-[#1E3A73] font-semibold shadow-sm'
-                    : 'text-[#A6B4D0] hover:text-white hover:bg-[#122654]/50'
-                }`}
-              >
-                <Home className="w-4 h-4 shrink-0" />
-                <span>Overview</span>
-              </Link>
-
               <Link
                 href={`${engagementBase}/workflow`}
                 onClick={onMobileClose}
