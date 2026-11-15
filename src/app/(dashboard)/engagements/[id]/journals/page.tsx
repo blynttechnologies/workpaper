@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { AlertCircle, Check, ExternalLink, Paperclip, Plus, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
@@ -324,6 +325,21 @@ export default function JournalsPage() {
                           <button type="button" disabled={busy} onClick={() => selfApprove(j)} title="You proposed this journal. Approving it yourself needs a reason." className="px-2 py-1 rounded bg-[#E6F4EF] text-[#0B6B52] font-semibold cursor-pointer">
                             Approve my own…
                           </button>
+                        )}
+                        {/* Your own journal and no way to approve it: say why, and what to do */}
+                        {!ownApprovable && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by === actor.id && (
+                          <span className="max-w-[220px] text-right text-[10px] text-[#6B4700]">
+                            You proposed this, so another reviewer must approve it.
+                            {['partner', 'admin'].includes(actor.role) && (
+                              <>
+                                {' '}Working alone? Turn on{' '}
+                                <Link href="/settings" className="underline font-semibold">
+                                  approving your own journals
+                                </Link>{' '}
+                                in Settings.
+                              </>
+                            )}
+                          </span>
                         )}
                         {canApprove && (j.status === 'approved' || j.status === 'posted') && (!j.ledger || ['DELETED', 'VOIDED'].includes(j.ledger.status)) && (
                           <button type="button" disabled={busy} onClick={() => setSending(j)} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#122654] text-white font-semibold cursor-pointer">
