@@ -63,7 +63,7 @@ export interface GatedResult<T> {
   accepted: boolean;
 }
 
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+export const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
 const SCOPE_ORDER: RuleScope[] = ['supplier', 'client', 'practice'];
 

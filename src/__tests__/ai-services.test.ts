@@ -171,10 +171,13 @@ describe('accounting, review and reporting services', () => {
     expect(byId.a.source).toBe('rule');
     expect(byId.b).toMatchObject({ source: 'ai', suggested_blynt_code: '4000', confidence: 88 });
     expect(byId.c.source).toBe('rule');
-    // Only the weak accounts were sent
+    // Only the weak accounts were sent to be mapped (the firm's confirmed examples may name others)
     const sent = JSON.stringify(calls[0].messages);
-    expect(sent).toContain('Special Transition Consulting Fee');
-    expect(sent).not.toContain('Sales Ledger Control Account');
+    const toMap = sent.slice(sent.indexOf('<client_accounts>'), sent.indexOf('</client_accounts>'));
+    expect(toMap).toContain('Special Transition Consulting Fee');
+    expect(toMap).not.toContain('Sales Ledger Control Account');
+    // The practice's confirmed mappings go with them as examples
+    expect(sent).toContain('<confirmed_examples>');
   });
 
   it('mapping with all: every account goes to the AI in batches, and its reading wins over the name matcher', async () => {
