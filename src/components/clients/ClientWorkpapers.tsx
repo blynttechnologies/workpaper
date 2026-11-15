@@ -7,8 +7,7 @@ import { db } from '@/lib/server/db';
 import { getActor } from '@/lib/session';
 import { periodLabel } from '@/lib/periods';
 import { TEMPLATES, templateOf } from '@/lib/workpapers/templates';
-import { StatusBadge } from '@/components/ui/StatusPill';
-import { Engagement, Workpaper } from '@/lib/types/models';
+import { Engagement, STATUS_DEFINITIONS, Workpaper } from '@/lib/types/models';
 
 type Filter = 'all' | 'attention' | 'in_progress' | 'not_started' | 'done';
 
@@ -133,32 +132,34 @@ export function ClientWorkpapers({ clientId }: { clientId: string }) {
               {shown.length === 0 && <p className="text-xs text-[#4A5878] py-2">No papers here.</p>}
 
               {/* Papers grouped by area (B Cash and bank, C Debtors…), each a small card striped by where it stands */}
-              <div className="space-y-4">
+              <div className="space-y-2.5">
                 {groupByArea(shown).map(({ area, name, papers: group }) => {
                   const groupDone = group.filter((w) => bucket(w) === 'done').length;
                   return (
                     <section key={area} aria-label={`${area} ${name}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="w-6 h-6 rounded-md bg-[#122654] text-white text-[11px] font-bold flex items-center justify-center">{area}</span>
-                        <h3 className="text-xs font-bold text-[#122654]">{name}</h3>
-                        <span className="text-[10px] text-[#7E8DA6]">{groupDone}/{group.length} done</span>
-                        <span className="flex-1 h-px bg-[#EEF2F9]" aria-hidden="true" />
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="w-4 h-4 rounded bg-[#122654] text-white text-[9px] font-bold flex items-center justify-center">{area}</span>
+                        <h3 className="text-[11px] font-bold text-[#122654]">{name}</h3>
+                        <span className="text-[10px] text-[#7E8DA6]">{groupDone}/{group.length}</span>
                       </div>
-                      <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                        {group.map((w) => (
-                          <li key={w.id}>
-                            <Link
-                              href={`/engagements/${eng.id}/workpapers/${w.id}`}
-                              className={`flex h-full flex-col gap-2 p-3 rounded-lg border border-[#E3E7EF] border-l-4 ${STRIPE[bucket(w)]} bg-white hover:shadow-sm hover:-translate-y-px transition-all`}
-                            >
-                              <span className="flex items-center justify-between gap-2">
-                                <span className="font-mono text-[10px] font-bold text-[#4A5878]">{w.ref}</span>
-                                <StatusBadge status={w.status} size="sm" />
-                              </span>
-                              <span className="text-xs font-semibold text-[#122654] leading-snug line-clamp-2">{templateOf(w)?.title ?? w.ref}</span>
-                            </Link>
-                          </li>
-                        ))}
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-1.5">
+                        {group.map((w) => {
+                          const st = STATUS_DEFINITIONS[w.status] ?? STATUS_DEFINITIONS.not_started;
+                          const title = templateOf(w)?.title ?? w.ref;
+                          return (
+                            <li key={w.id}>
+                              <Link
+                                href={`/engagements/${eng.id}/workpapers/${w.id}`}
+                                title={`${w.ref} ${title} · ${st.label}`}
+                                className={`flex items-center gap-2 px-2 py-1.5 rounded-md border border-[#E3E7EF] border-l-[3px] ${STRIPE[bucket(w)]} bg-white hover:bg-[#F5F8FD] transition-colors`}
+                              >
+                                <span className="font-mono text-[10px] font-bold text-[#7E8DA6] shrink-0">{w.ref}</span>
+                                <span className="flex-1 min-w-0 truncate text-[11px] font-medium text-[#122654]">{title}</span>
+                                <span className={`shrink-0 text-[10px] font-semibold ${st.colorClass}`}>{st.label}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
                       </ul>
                     </section>
                   );
