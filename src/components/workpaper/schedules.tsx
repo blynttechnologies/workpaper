@@ -584,15 +584,16 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
     save({ lines: [...(live().lines ?? []), { id, desc: '', ref: '', current_p: '0', d30_p: '0', d60_p: '0', d90_p: '0', after_date_p: '0' }] });
     setOpen((o) => ({ ...o, [id]: true }));
   };
-  const refresh = () => {
-    const r = agedDebtorsFromLedger(result.engagementId, live().lines ?? []);
+  const hasOpenItems = !!db.engagements.find((e) => e.id === result.engagementId)?.debtor_open_items?.items.length;
+  const refresh = (by: 'due' | 'invoice' = data.basis === 'invoice' ? 'invoice' : 'due') => {
+    const r = agedDebtorsFromLedger(result.engagementId, live().lines ?? [], by);
     if (!r) return setNote({ kind: 'error', text: 'There are no ledger transactions on the debtors control account yet. Import them from the accounting system, or enter customers by hand.' });
-    save({ lines: r.lines, receipts_from_ledger: r.receiptsKnown, refreshed_at: new Date().toISOString(), basis: r.basis });
+    save({ lines: r.lines, receipts_from_ledger: r.receiptsKnown, refreshed_at: new Date().toISOString(), basis: r.basis, open_items: 'openItems' in r });
     setNote({
       kind: 'ok',
       text:
-        r.basis === 'due'
-          ? `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} from Xero's invoices, credits and payments on account open at ${peLabel}, aged by due date.`
+        'openItems' in r
+          ? `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} from Xero's invoices, credits and payments on account open at ${peLabel}, aged by ${by === 'due' ? 'due date' : 'invoice date'}.`
           : `${r.lines.length} customer${r.lines.length === 1 ? '' : 's'} aged from this year's ledger at ${peLabel}.${r.receiptsKnown ? '' : ' The ledger has nothing after the period end, so enter receipts after it by hand.'}${'fromXero' in r && r.fromXero ? " Pull from Xero again to age from its open invoices instead, so last year's unpaid invoices are included." : ''}`,
     });
   };
@@ -808,7 +809,20 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         ))}
         {!locked && (
           <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={refresh} className={addBtn}>
+            {hasOpenItems && (
+              <label className="flex items-center gap-1.5 text-[11px] text-[#4A5878]">
+                Age by
+                <select
+                  value={data.basis === 'invoice' ? 'invoice' : 'due'}
+                  onChange={(e) => refresh(e.target.value as 'due' | 'invoice')}
+                  className="text-[11px] border border-[#D3DCEE] rounded-md px-1.5 py-1 bg-white text-[#122654]"
+                >
+                  <option value="due">Due date</option>
+                  <option value="invoice">Invoice date</option>
+                </select>
+              </label>
+            )}
+            <button type="button" onClick={() => refresh()} className={addBtn}>
               <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
             </button>
             <button type="button" onClick={addCustomer} className={addBtn}>
@@ -947,23 +961,63 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                             {!!l.invoices?.length && (
                               <table className="w-full text-[11px]">
                                 <caption className="text-left font-semibold text-[#4A5878] pb-1">Open invoices at {peLabel}</caption>
+                                <thead>
+                                  <tr className="text-[10px] text-[#4A5878] text-left">
+                                    <th scope="col" className="py-1 font-semibold">Invoice</th>
+                                    <th scope="col" className="py-1 font-semibold">Date</th>
+                                    <th scope="col" className="py-1 font-semibold text-right">Amount</th>
+                                    <th scope="col" className="py-1 pl-3 font-semibold">Paid</th>
+                                    <th scope="col" className="py-1 font-semibold text-right">Open at {peLabel}</th>
+                                    <th scope="col" className="py-1 pl-3 font-semibold">Overdue</th>
+                                  </tr>
+                                </thead>
                                 <tbody>
-                                  {l.invoices.map((inv, i) => (
-                                    <tr key={i} className="border-t border-[#EEF1F6]">
-                                      <td className="py-1">
-                                        {inv.url ? (
-                                          <a href={inv.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
-                                            {inv.ref || 'Invoice'}
-                                          </a>
-                                        ) : (
-                                          inv.ref || 'Invoice'
-                                        )}
-                                      </td>
-                                      <td className="py-1">{ukDate(inv.date)}</td>
-                                      <td className={`py-1 ${inv.days > 90 ? 'text-[#B42318]' : ''}`}>{inv.days} days</td>
-                                      <td className="py-1 text-right font-mono">{formatPence(asPence(inv.amount_p), { symbol: '' })}</td>
-                                    </tr>
-                                  ))}
+                                  {l.invoices.map((inv, i) => {
+                                    const money = (p: string) => formatPence(asPence(p), { symbol: '' });
+                                    const pays = inv.payments ?? [];
+                                    const payRow = (p: (typeof pays)[number], k: number) => (
+                                      <span key={k} className="flex justify-between gap-2">
+                                        <span>{ukDate(p.date)}{p.how !== 'payment' ? ` (${p.how})` : ''}</span>
+                                        <span className="font-mono">{money(p.amount_p)}</span>
+                                      </span>
+                                    );
+                                    return (
+                                      <tr key={i} className="border-t border-[#EEF1F6] align-top">
+                                        <td className="py-1">
+                                          {inv.url ? (
+                                            <a href={inv.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
+                                              {inv.ref || 'Invoice'}
+                                            </a>
+                                          ) : (
+                                            inv.ref || 'Invoice'
+                                          )}
+                                        </td>
+                                        <td className="py-1">
+                                          {ukDate(inv.date)}
+                                          {inv.due && <span className="block text-[10px] text-[#4A5878]">due {ukDate(inv.due)}</span>}
+                                        </td>
+                                        <td className="py-1 text-right font-mono">{inv.total_p ? money(inv.total_p) : '–'}</td>
+                                        <td className="py-1 pl-3 min-w-[150px]">
+                                          {pays.length === 0 ? (
+                                            '–'
+                                          ) : pays.length === 1 ? (
+                                            payRow(pays[0], 0)
+                                          ) : (
+                                            <details>
+                                              <summary className="cursor-pointer text-[#1D4E89]">
+                                                {pays.length} payments · <span className="font-mono">{money(pays.reduce((s, p) => s + asPence(p.amount_p), 0n).toString())}</span>
+                                              </summary>
+                                              {pays.map(payRow)}
+                                            </details>
+                                          )}
+                                        </td>
+                                        <td className="py-1 text-right font-mono">{money(inv.amount_p)}</td>
+                                        <td className={`py-1 pl-3 ${inv.days > (byDue ? 60 : 90) ? 'text-[#B42318]' : ''}`}>
+                                          {byDue ? (inv.days ? `${inv.days} day${inv.days === 1 ? '' : 's'}` : 'Not due') : `${inv.days} days old`}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             )}

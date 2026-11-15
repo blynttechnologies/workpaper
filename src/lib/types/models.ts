@@ -267,7 +267,10 @@ export interface DebtorOpenItem {
   received_after_p: string; // paid against it after the period end, up to the pull
   received_after_on?: string; // the last of those payments
   url?: string;
+  total_p?: string; // the invoice's full amount
+  payments?: DebtorPayment[]; // everything set against it, before and after the period end
 }
+export interface DebtorPayment { date: string; amount_p: string; how: 'payment' | 'credit note' | 'prepayment' | 'overpayment' }
 
 export interface DebtorOpenItems {
   as_at: string; // the period end the items were open at

@@ -6,7 +6,7 @@ import { secret } from './auth';
 import { ServiceError } from './services';
 import { importTrialBalance, ImportResult, TbLineInput } from './tb-import';
 import { toPence } from '../money';
-import { DebtorOpenItem, LedgerTransaction, UserRole } from '../types/models';
+import { DebtorOpenItem, DebtorPayment, LedgerTransaction, UserRole } from '../types/models';
 
 /**
  * Xero connection (DAT-01): OAuth 2.0 authorisation code flow, encrypted token storage with
@@ -389,6 +389,14 @@ export function openDebtorItems(pe: string, shortCode: string | null, docs: { in
     const open = pence(inv.AmountDue) + paidAfter + later(inv.CreditNotes, 'AppliedAmount') + later(inv.Prepayments, 'AppliedAmount') + later(inv.Overpayments, 'AppliedAmount');
     if (open <= 0n) continue;
     const lastPaid = (inv.Payments ?? []).map((p) => docDate(p as XeroDoc)).filter((d) => d > pe).sort().pop();
+    const settled = (list: XeroAllocation[] | undefined, field: 'Amount' | 'AppliedAmount', how: DebtorPayment['how']) =>
+      (list ?? []).map((a) => ({ date: docDate(a as XeroDoc), amount_p: pence(a[field]).toString(), how }));
+    const payments = [
+      ...settled(inv.Payments, 'Amount', 'payment'),
+      ...settled(inv.CreditNotes, 'AppliedAmount', 'credit note'),
+      ...settled(inv.Prepayments, 'AppliedAmount', 'prepayment'),
+      ...settled(inv.Overpayments, 'AppliedAmount', 'overpayment'),
+    ].sort((a, b) => a.date.localeCompare(b.date));
     out.push({
       contact: inv.Contact?.Name ?? '',
       kind: 'invoice',
@@ -399,6 +407,8 @@ export function openDebtorItems(pe: string, shortCode: string | null, docs: { in
       received_after_p: paidAfter.toString(),
       ...(lastPaid ? { received_after_on: lastPaid } : {}),
       url: xeroDeepLink(shortCode, `/AccountsReceivable/View.aspx?InvoiceID=${inv.InvoiceID}`),
+      ...(inv.Total != null ? { total_p: pence(inv.Total).toString() } : {}),
+      ...(payments.length ? { payments } : {}),
     });
   }
   const credits: [DebtorOpenItem['kind'], XeroDoc[], (d: XeroDoc) => boolean, (d: XeroDoc) => string | undefined][] = [
