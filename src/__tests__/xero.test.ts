@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 vi.mock('@/lib/server/store', () => ({
   syncIn: async () => {},
   syncOut: async () => {},
+  freshWrite: async (apply: () => unknown) => apply(),
   currentVersion: () => 1,
   hasDatabase: () => false,
 }));
@@ -29,6 +30,8 @@ import { POST as sync } from '../app/api/v1/integrations/xero/sync/route';
 import { DELETE as disconnect } from '../app/api/v1/integrations/xero/connection/route';
 import { GET as getState, PUT as putState } from '../app/api/v1/state/route';
 import { GET as getLedger } from '../app/api/v1/engagements/[id]/transactions/route';
+import { GET as sendGet, POST as sendPost } from '../app/api/v1/adjustments/[id]/xero/route';
+import { JOURNAL_IN_TB } from '../lib/types/models';
 
 const FIRM = 'firm_blynt_uk';
 const CLIENT = 'cli_harlow';
@@ -112,7 +115,9 @@ const JOURNALS = [
 ];
 
 /** A fake Xero: answers the token, connections and accounting endpoints and records each call. */
-function fakeXero(opts: { tb?: () => unknown; tokenError?: string; noExtras?: boolean; transfers?: unknown[]; invoices?: unknown[] } = {}) {
+function fakeXero(
+  opts: { tb?: () => unknown; tokenError?: string; noExtras?: boolean; transfers?: unknown[]; invoices?: unknown[]; journals?: unknown[]; journalWrite?: { status: number; body: unknown } } = {}
+) {
   const calls: { url: string; init?: RequestInit }[] = [];
   let tokenCount = 0;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -138,7 +143,12 @@ function fakeXero(opts: { tb?: () => unknown; tokenError?: string; noExtras?: bo
     // Transfers ignore the page number, as Xero may
     if (!opts.noExtras && url.startsWith('https://api.xero.com/api.xro/2.0/BankTransfers')) return json({ BankTransfers: opts.transfers ?? TRANSFERS });
     if (url.startsWith('https://api.xero.com/api.xro/2.0/BankTransactions')) return json({ BankTransactions: page2 ? [] : BANK_TXS });
-    if (url.startsWith('https://api.xero.com/api.xro/2.0/ManualJournals')) return json({ ManualJournals: page2 ? [] : JOURNALS });
+    if (url.startsWith('https://api.xero.com/api.xro/2.0/ManualJournals') && init?.method === 'PUT') {
+      if (opts.journalWrite) return json(opts.journalWrite.body, opts.journalWrite.status);
+      const mj = JSON.parse(String(init.body)).ManualJournals[0];
+      return json({ ManualJournals: [{ ...mj, ManualJournalID: 'mj-new' }] });
+    }
+    if (url.startsWith('https://api.xero.com/api.xro/2.0/ManualJournals')) return json({ ManualJournals: page2 ? [] : opts.journals ?? JOURNALS });
     return json({ error: 'unexpected' }, 404);
   });
   vi.stubGlobal('fetch', impl);
@@ -169,7 +179,9 @@ describe('Xero client', () => {
     const scopes = url.searchParams.get('scope')!.split(' ');
     expect(scopes).toEqual(XERO_SCOPES);
     expect(scopes).toContain('offline_access');
-    expect(scopes.every((s) => !s.endsWith('accounting.transactions') && !s.endsWith('accounting.settings'))).toBe(true); // read-only
+    expect(scopes.every((s) => !s.endsWith('accounting.transactions') && !s.endsWith('accounting.settings'))).toBe(true);
+    // Read-only, except manual journals, which approved Blynt journals are sent to
+    expect(scopes.filter((s) => s.startsWith('accounting.') && !s.endsWith('.read'))).toEqual(['accounting.manualjournals']);
     // Retired for apps created on or after 2 March 2026 (Xero returns invalid_scope)
     for (const retired of ['accounting.transactions', 'accounting.transactions.read', 'accounting.reports.read']) expect(scopes).not.toContain(retired);
     expect(scopes).toContain('accounting.payments.read');
@@ -558,5 +570,92 @@ describe('Ledger transactions stay on the server, out of the workspace download'
     // Another firm's user cannot read them
     const outsider = db.users.find((u) => !db.memberships.some((m) => m.user_id === u.id && m.firm_id === FIRM));
     if (outsider) expect((await getLedger(get(`/api/v1/engagements/${ENG}/transactions`, outsider.id), { params: Promise.resolve({ id: ENG }) })).status).toBeGreaterThanOrEqual(400);
+  });
+});
+
+describe('Sending an approved journal to Xero', () => {
+  async function connected() {
+    const state = createState({ firmId: FIRM, userId: 'usr_admin', clientId: CLIENT });
+    fakeXero();
+    await callback(get(`/api/v1/integrations/xero/callback?code=c&state=${encodeURIComponent(state)}`, 'usr_admin'));
+  }
+  const journal = (status: 'approved' | 'accepted' = 'approved') => {
+    const j = {
+      id: 'aje_x1', engagement_id: ENG, ref: 'AJE-009', narrative: 'Specific bad debt provision', status, type: 'adjusting', date: '2026-09-30',
+      proposed_by: 'usr_test_preparer', proposed_by_name: 'Test Preparer', approved_by: 'usr_admin', created_at: '2026-11-15T10:00:00Z',
+      lines: [
+        { id: 'l1', adjustment_id: 'aje_x1', blynt_code: '4910', debit_p: '200000', credit_p: '0' },
+        { id: 'l2', adjustment_id: 'aje_x1', blynt_code: '7110', debit_p: '0', credit_p: '200000' },
+      ],
+    };
+    db.adjustments.push(j as any);
+    // The client's expense account is mapped to 4910; nothing is mapped to 7110 yet
+    db.account_mappings.push({ id: 'map_x', engagement_id: ENG, source_code: '429', source_name: 'General Expenses', blynt_code: '4910', balance_p: '7500' } as any);
+    return j;
+  };
+  const xeroRoute = (method: 'GET' | 'POST', body?: unknown, uid = 'usr_admin') =>
+    method === 'GET' ? sendGet(get('/api/v1/adjustments/aje_x1/xero', uid), { params: Promise.resolve({ id: 'aje_x1' }) }) : sendPost(post('/api/v1/adjustments/aje_x1/xero', body, 'POST', uid), { params: Promise.resolve({ id: 'aje_x1' }) });
+
+  it('suggests each line the client account it is mapped from', async () => {
+    await connected();
+    journal();
+    fakeXero();
+    const out = await (await xeroRoute('GET')).json();
+    expect(out.suggested).toEqual({ l1: '429', l2: null });
+    expect(out.accounts.map((a: any) => a.code)).toContain('970');
+    expect(out).not.toHaveProperty('tokens');
+  });
+
+  it('sends it as a draft manual journal on the chosen accounts, debits positive and credits negative', async () => {
+    await connected();
+    const j = journal();
+    const xero = fakeXero();
+    const res = await xeroRoute('POST', { accounts: { l1: '429', l2: '970' } });
+    expect(res.status).toBe(200);
+    const put = xero.calls.find((c) => c.init?.method === 'PUT')!;
+    const sent = JSON.parse(String(put.init!.body)).ManualJournals[0];
+    expect(sent).toMatchObject({ Status: 'DRAFT', Date: '2026-09-30', Narration: 'AJE-009: Specific bad debt provision' });
+    expect(sent.JournalLines).toEqual([
+      expect.objectContaining({ AccountCode: '429', LineAmount: 2000 }),
+      expect.objectContaining({ AccountCode: '970', LineAmount: -2000 }),
+    ]);
+    expect((put.init!.headers as Record<string, string>)['Idempotency-Key']).toBe('aje_x1');
+    const saved = db.adjustments.find((a) => a.id === j.id)!;
+    expect(saved).toMatchObject({ status: 'approved', ledger: { provider: 'xero', id: 'mj-new', status: 'DRAFT' } });
+    // Sent once only
+    expect((await xeroRoute('POST', { accounts: { l1: '429', l2: '970' } })).status).toBe(409);
+  });
+
+  it('needs an account for every line, an approved journal and a reviewer or above', async () => {
+    await connected();
+    journal('accepted');
+    fakeXero();
+    expect((await xeroRoute('POST', { accounts: { l1: '429', l2: '970' } })).status).toBe(409);
+    db.adjustments.find((a) => a.id === 'aje_x1')!.status = 'approved';
+    const missing = await xeroRoute('POST', { accounts: { l1: '429' } });
+    expect(missing.status).toBe(400);
+    expect((await missing.json()).error).toContain('7110');
+    expect((await xeroRoute('POST', { accounts: { l1: '429', l2: '970' } }, 'usr_test_preparer')).status).toBe(403);
+  });
+
+  it("passes on Xero's reasons when it refuses the journal", async () => {
+    await connected();
+    journal();
+    fakeXero({ journalWrite: { status: 400, body: { Elements: [{ ValidationErrors: [{ Message: 'Account code 970 is archived.' }] }] } } });
+    const res = await xeroRoute('POST', { accounts: { l1: '429', l2: '970' } });
+    expect((await res.json()).error).toBe('Xero refused the journal: Account code 970 is archived.');
+    expect(db.adjustments.find((a) => a.id === 'aje_x1')!.ledger).toBeUndefined();
+  });
+
+  it('once Xero has posted it, the next pull takes it out of the adjustments, as the trial balance now holds it', async () => {
+    await connected();
+    const j = journal();
+    Object.assign(db.adjustments.find((a) => a.id === j.id)!, { ledger: { provider: 'xero', id: 'mj-1', status: 'DRAFT', sent_at: '2026-11-15T10:00:00Z', sent_by: 'Dev' } });
+    fakeXero(); // mj-1 comes back POSTED
+    await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
+    const after = db.adjustments.find((a) => a.id === j.id)!;
+    expect(after.status).toBe('in_ledger');
+    expect(after.ledger?.status).toBe('POSTED');
+    expect(JOURNAL_IN_TB).not.toContain('in_ledger');
   });
 });

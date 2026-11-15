@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { AlertCircle, Check, Paperclip, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { AlertCircle, Check, ExternalLink, Paperclip, Plus, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { formatPence, toPence } from '@/lib/money';
 import { TEMPLATES } from '@/lib/workpapers/templates';
@@ -33,6 +33,7 @@ const STATUS_LABEL: Record<Adjustment['status'], string> = {
   posted: 'Posted',
   reversed: 'Reversed',
   rejected: 'Rejected',
+  in_ledger: 'In Xero',
 };
 const STATUS_STYLE: Record<Adjustment['status'], string> = {
   proposed: 'bg-[#FFF4DB] text-[#6B4700]',
@@ -41,6 +42,7 @@ const STATUS_STYLE: Record<Adjustment['status'], string> = {
   posted: 'bg-[#E6F4EF] text-[#0B6B52]',
   reversed: 'bg-[#F5F8FD] text-[#4A5878]',
   rejected: 'bg-[#F5F8FD] text-[#4A5878]',
+  in_ledger: 'bg-[#0B6B52] text-white',
 };
 const TABS: ['all' | Adjustment['status'], string][] = [
   ['all', 'All'],
@@ -48,6 +50,7 @@ const TABS: ['all' | Adjustment['status'], string][] = [
   ['accepted', 'Accepted'],
   ['approved', 'Approved'],
   ['posted', 'Posted'],
+  ['in_ledger', 'In Xero'],
   ['reversed', 'Reversed'],
   ['rejected', 'Rejected'],
 ];
@@ -94,6 +97,7 @@ export default function JournalsPage() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   // A schedule's "Propose journal" link opens the form for a proposal from that schedule
   const [form, setForm] = useState<null | { source?: string }>(() => (search.get('propose') ? { source: search.get('propose')! } : null));
+  const [sending, setSending] = useState<Adjustment | null>(null);
 
   const journals = useMemo(
     () => db.adjustments.filter((a) => a.engagement_id === engagementId).sort((a, b) => a.ref.localeCompare(b.ref)),
@@ -270,6 +274,18 @@ export default function JournalsPage() {
                     {j.reverses_id && <span className="block text-[11px] text-[#4A5878]">Reverses {db.adjustments.find((a) => a.id === j.reverses_id)?.ref ?? 'a prior journal'}</span>}
                     {j.reject_reason && <span className="block text-[11px] text-[#4A5878]">Rejected: {j.reject_reason}</span>}
                     {j.auto_reverse && <span className="block text-[11px] text-[#1D4E89]">Auto-reverses next period</span>}
+                    {j.ledger && (
+                      <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline">
+                        <ExternalLink className="w-3 h-3" />
+                        {j.status === 'in_ledger'
+                          ? 'Posted in Xero and in the trial balance'
+                          : j.ledger.status === 'DRAFT'
+                            ? 'Draft in Xero: approve it there'
+                            : j.ledger.status === 'POSTED'
+                              ? 'Posted in Xero: in the trial balance from the next pull'
+                              : `Xero says ${j.ledger.status.toLowerCase()}: send it again if needed`}
+                      </a>
+                    )}
                     {(j.evidence ?? []).map((e) => (
                       <button key={e.file_key} type="button" onClick={() => setPreview(evidenceFile(e))} className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline mr-2">
                         <Paperclip className="w-3 h-3" /> {e.filename}
@@ -294,6 +310,11 @@ export default function JournalsPage() {
                         {approvable && (
                           <button type="button" disabled={busy} onClick={() => act(j, 'approve')} className="px-2 py-1 rounded bg-[#E6F4EF] text-[#0B6B52] font-semibold cursor-pointer">Approve</button>
                         )}
+                        {canApprove && (j.status === 'approved' || j.status === 'posted') && (!j.ledger || ['DELETED', 'VOIDED'].includes(j.ledger.status)) && (
+                          <button type="button" disabled={busy} onClick={() => setSending(j)} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#122654] text-white font-semibold cursor-pointer">
+                            <Send className="w-3 h-3" /> Send to Xero
+                          </button>
+                        )}
                         {(j.status === 'approved' || j.status === 'posted') && (
                           <button type="button" disabled={busy} onClick={() => act(j, 'reverse')} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#F5F8FD] text-[#122654] font-semibold cursor-pointer">
                             <RotateCcw className="w-3 h-3" /> Reverse
@@ -313,6 +334,18 @@ export default function JournalsPage() {
           </tbody>
         </table>
       </div>
+
+      {sending && (
+        <SendToXero
+          journal={sending}
+          onClose={() => setSending(null)}
+          onSent={(text) => {
+            setSending(null);
+            setNotice({ ok: true, text });
+            setRev((r) => r + 1);
+          }}
+        />
+      )}
 
       {form && (
         <JournalForm
@@ -486,6 +519,129 @@ function JournalForm({ engagementId, periodStart, periodEnd, source, onClose, on
           <button type="button" onClick={onClose} className="min-h-[36px] px-4 border border-[#D3DCEE] rounded-[8px] font-bold cursor-pointer">Cancel</button>
           <button type="button" onClick={save} disabled={!balanced || busy} className="min-h-[36px] px-4 bg-[#122654] text-white rounded-[8px] font-bold cursor-pointer disabled:opacity-50">
             {busy ? 'Saving…' : 'Save journal'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface XeroAccountOption {
+  code: string;
+  name: string;
+  type: string;
+}
+
+/**
+ * Sends an approved journal to the client's Xero: each line on the Xero account picked for it (suggested from
+ * the mapping), as a draft for someone to approve in Xero unless "post now" is ticked.
+ */
+function SendToXero({ journal, onClose, onSent }: { journal: Adjustment; onClose: () => void; onSent: (text: string) => void }) {
+  const [data, setData] = useState<{ organisation: string; accounts: XeroAccountOption[] } | null>(null);
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [post, setPost] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const lines = journal.lines.filter((l) => BigInt(l.debit_p) !== BigInt(l.credit_p));
+  const url = `/api/v1/adjustments/${encodeURIComponent(journal.id)}/xero`;
+
+  useEffect(() => {
+    fetch(url)
+      .then(async (r) => {
+        const out = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(out.error || 'Could not read the Xero accounts.');
+        setData({ organisation: out.organisation, accounts: out.accounts });
+        setChosen(Object.fromEntries(Object.entries(out.suggested ?? {}).filter(([, v]) => v)) as Record<string, string>);
+      })
+      .catch((e) => setError((e as Error).message));
+  }, [url]);
+
+  const ready = !!data && lines.every((l) => chosen[l.id]);
+  const send = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accounts: chosen, post }) });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error || 'The journal could not be sent.');
+      onSent(post ? `${journal.ref} is posted in Xero. The next pull brings it into the trial balance.` : `${journal.ref} is a draft in Xero. Approve it there, and the next pull brings it in.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label={`Send ${journal.ref} to Xero`}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-xl p-5 space-y-4 text-xs text-[#122654]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold">Send {journal.ref} to Xero{data ? `: ${data.organisation}` : ''}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="p-1 text-[#4A5878] cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-[#4A5878]">{journal.narrative}. Choose the client&apos;s Xero account for each line. Each one starts on the account it is mapped from.</p>
+        {!data && !error && <p className="text-[#4A5878]">Reading the Xero accounts…</p>}
+        {data && (
+          <table className="w-full">
+            <thead className="text-[10px] uppercase tracking-wider text-[#4A5878] text-left">
+              <tr>
+                <th className="py-1.5">Blynt account</th>
+                <th className="py-1.5 text-right">Debit</th>
+                <th className="py-1.5 text-right">Credit</th>
+                <th className="py-1.5 pl-3">Xero account</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E3E7EF]">
+              {lines.map((l) => (
+                <tr key={l.id}>
+                  <td className="py-2">
+                    <span className="font-mono mr-1.5">{l.blynt_code}</span>
+                    {db.blynt_accounts.find((a) => a.code === l.blynt_code)?.name}
+                  </td>
+                  <td className="py-2 text-right font-mono">{BigInt(l.debit_p) ? formatPence(BigInt(l.debit_p), { symbol: '' }) : ''}</td>
+                  <td className="py-2 text-right font-mono">{BigInt(l.credit_p) ? formatPence(BigInt(l.credit_p), { symbol: '' }) : ''}</td>
+                  <td className="py-2 pl-3">
+                    <select
+                      aria-label={`Xero account for ${l.blynt_code}`}
+                      value={chosen[l.id] ?? ''}
+                      onChange={(e) => setChosen({ ...chosen, [l.id]: e.target.value })}
+                      className={`w-full min-h-[32px] px-2 border rounded-[8px] bg-white ${chosen[l.id] ? 'border-[#D3DCEE]' : 'border-[#B8432F]'}`}
+                    >
+                      <option value="">Choose an account…</option>
+                      {data.accounts.map((a) => (
+                        <option key={a.code} value={a.code}>
+                          {a.code} {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {data && (
+          <label className="flex items-start gap-2">
+            <input type="checkbox" checked={post} onChange={(e) => setPost(e.target.checked)} className="mt-0.5" />
+            <span>
+              Post it in Xero now
+              <span className="block text-[#4A5878]">Left unticked, it goes in as a draft for someone to approve in Xero first.</span>
+            </span>
+          </label>
+        )}
+        {error && (
+          <p role="alert" className="text-[#B42318] flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" /> {error}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="min-h-[36px] px-4 border border-[#D3DCEE] rounded-[10px] font-semibold cursor-pointer">
+            Cancel
+          </button>
+          <button type="button" disabled={!ready || busy} onClick={send} className="inline-flex items-center gap-1.5 min-h-[36px] px-4 bg-[#122654] text-white font-bold rounded-[10px] cursor-pointer disabled:opacity-50">
+            <Send className="w-3.5 h-3.5" /> {busy ? 'Sending…' : post ? 'Post in Xero' : 'Send as a draft'}
           </button>
         </div>
       </div>

@@ -138,6 +138,7 @@ export function journalAction(actor: Actor, id: string, d: { action?: string; re
       // Role and "not your own journal" checks, audited, live in the existing approval
       return services.approveAdjustment(actor.firmId, actor, j.id);
     case 'reverse': {
+      if (j.status === 'in_ledger') throw new ServiceError(`${j.ref} is posted in Xero and in the trial balance. Reverse it in Xero, then pull again.`, 409);
       if (j.status !== 'approved' && j.status !== 'posted') throw new ServiceError('Only an approved journal can be reversed.', 409);
       const r = reversal(actor, j, j.engagement_id, j.date ?? eng.period_end);
       db.adjustments.push(r);

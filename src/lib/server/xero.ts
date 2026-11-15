@@ -6,7 +6,7 @@ import { secret } from './auth';
 import { ServiceError } from './services';
 import { importTrialBalance, ImportResult, TbLineInput } from './tb-import';
 import { toPence } from '../money';
-import { DebtorOpenItem, DebtorPayment, LedgerTransaction, UserRole } from '../types/models';
+import { Adjustment, DebtorOpenItem, DebtorPayment, LedgerTransaction, UserRole } from '../types/models';
 
 /**
  * Xero connection (DAT-01): OAuth 2.0 authorisation code flow, encrypted token storage with
@@ -20,7 +20,8 @@ const TOKEN_URL = 'https://identity.xero.com/connect/token';
 const CONNECTIONS_URL = 'https://api.xero.com/connections';
 const API = 'https://api.xero.com/api.xro/2.0';
 
-// Read-only access; offline_access lets us refresh without the accountant present.
+// Read-only access, except manual journals: approved Blynt journals are sent to Xero (as drafts unless asked).
+// offline_access lets us refresh without the accountant present.
 // Granular scopes: apps created on or after 2 March 2026 can't request the old broad ones
 // (accounting.transactions, accounting.reports.read). accounting.journals.read needs Xero's
 // approval, so it is left out until the journals drill-down (DAT-07) uses it.
@@ -35,7 +36,7 @@ export const XERO_SCOPES = [
   'accounting.contacts.read',
   'accounting.invoices.read',
   'accounting.banktransactions.read',
-  'accounting.manualjournals.read',
+  'accounting.manualjournals',
   'accounting.payments.read',
 ];
 
@@ -202,6 +203,26 @@ async function xeroGet<T>(url: string, accessToken: string, tenantId?: string, d
   }
 }
 
+/** Creates a record in Xero. The idempotency key stops a retry after a lost reply from making a second one. */
+async function xeroWrite<T>(url: string, accessToken: string, tenantId: string, body: unknown, idempotencyKey: string): Promise<T> {
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json', 'Content-Type': 'application/json', 'xero-tenant-id': tenantId, 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(body),
+  });
+  if (res.status === 401) throw new XeroReconnectError();
+  if (res.status === 403) {
+    throw new ServiceError("Xero hasn't given Blynt permission to add journals for this client. Disconnect and reconnect Xero on the client's page, then send again.", 403, 'XERO_NO_WRITE');
+  }
+  if (res.status === 429) throw new ServiceError('Xero is limiting requests right now. Try again in a minute.', 429, 'XERO_RATE_LIMIT');
+  const out = (await res.json().catch(() => ({}))) as { Elements?: { ValidationErrors?: { Message?: string }[] }[]; Message?: string };
+  if (!res.ok) {
+    const why = (out.Elements ?? []).flatMap((e) => (e.ValidationErrors ?? []).map((v) => v.Message)).filter(Boolean);
+    throw new ServiceError(why.length ? `Xero refused the journal: ${why.join(' ')}` : `Xero returned an error (${res.status}).`, 502, 'XERO_REJECTED');
+  }
+  return out as T;
+}
+
 // ── Trial balance report → import lines ──
 
 interface XeroAccount {
@@ -210,6 +231,7 @@ interface XeroAccount {
   Name: string;
   Type: string;
   SystemAccount?: string; // 'DEBTORS' and 'CREDITORS' mark the trade control accounts
+  Status?: string; // ACTIVE or ARCHIVED
 }
 
 interface XeroCell {
@@ -799,6 +821,18 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
     if (err instanceof XeroReconnectError) throw err;
     notGathered.push('open debtors and creditors at the period end');
   }
+  // Journals Blynt sent: once Xero has posted one, the trial balance just pulled holds it, so it stops adding to it
+  for (const a of db.adjustments.filter((x) => x.engagement_id === engagementId && x.ledger?.provider === 'xero')) {
+    const mj = journals.find((m) => m.ManualJournalID === a.ledger!.id);
+    if (!mj?.Status) continue;
+    a.ledger!.status = mj.Status;
+    if (mj.Status === 'POSTED' && (a.status === 'approved' || a.status === 'posted')) {
+      const before = { ...a };
+      a.status = 'in_ledger';
+      a.ledger!.in_tb_at = new Date().toISOString();
+      db.logAudit(actor.firmId, actor, 'JOURNAL_IN_LEDGER', 'adjustments', a.id, before, a);
+    }
+  }
   if (notGathered.length) out.body.notGathered = notGathered;
   return out;
 }
@@ -808,4 +842,108 @@ export function disconnect(actor: Actor, clientId: string) {
   db.xero_connections = db.xero_connections.filter((c) => !(c.firm_id === actor.firmId && c.client_id === clientId));
   if (db.xero_connections.length === before) throw new ServiceError('This client is not connected to Xero.', 404, 'NOT_FOUND');
   db.logAudit(actor.firmId, actor, 'XERO_DISCONNECTED', 'clients', clientId, null, null);
+}
+
+// ── Sending approved journals to Xero ──
+
+const writableAccounts = (accounts: XeroAccount[]) => accounts.filter((a) => a.Code && a.Status !== 'ARCHIVED');
+const connTokens = (c: XeroConnection) => ({ access_token_enc: c.access_token_enc, refresh_token_enc: c.refresh_token_enc, expires_at: c.expires_at });
+
+function journalConnection(actor: Actor, journalId: string) {
+  const j = db.adjustments.find((a) => a.id === journalId);
+  const eng = j && db.engagements.find((e) => e.id === j.engagement_id && e.firm_id === actor.firmId);
+  if (!j || !eng) throw new ServiceError('Journal not found', 404, 'NOT_FOUND');
+  const conn = db.xero_connections.find((c) => c.firm_id === actor.firmId && c.client_id === eng.client_id);
+  if (!conn) throw new ServiceError('This client is not connected to Xero. Connect it on the client page first.', 409, 'XERO_NOT_CONNECTED');
+  return { j, eng, conn };
+}
+
+/**
+ * The client's Xero accounts a journal can use, and a suggestion for each line: the client account its
+ * Blynt account is mapped from (the one with the largest balance when several are). Nothing is saved but tokens.
+ */
+export async function xeroAccountsForJournal(actor: Actor, journalId: string) {
+  const { j, conn } = journalConnection(actor, journalId);
+  const token = await accessTokenFor(conn);
+  const { Accounts = [] } = await xeroGet<{ Accounts?: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id, Date.now() + 30_000);
+  const accounts = writableAccounts(Accounts).map((a) => ({ code: a.Code!, name: a.Name, type: a.Type }));
+  const codes = new Set(accounts.map((a) => a.code));
+  const size = (p: string) => (BigInt(p || '0') < 0n ? -BigInt(p || '0') : BigInt(p || '0'));
+  const suggested: Record<string, string | null> = {};
+  for (const l of j.lines) {
+    const m = db.account_mappings
+      .filter((x) => x.engagement_id === j.engagement_id && x.blynt_code === l.blynt_code && codes.has(x.source_code))
+      .sort((a, b) => (size(b.balance_p) > size(a.balance_p) ? 1 : -1))[0];
+    suggested[l.id] = m?.source_code ?? null;
+  }
+  return { organisation: conn.tenant_name, accounts, suggested, connId: conn.id, tokens: connTokens(conn) };
+}
+
+export type SentJournal = { ledger: NonNullable<Adjustment['ledger']>; connId: string; tokens: ReturnType<typeof connTokens> };
+
+/**
+ * Sends an approved journal to Xero as a manual journal, each line on the client account chosen for it:
+ * a draft unless `post` is set, so someone approves it in Xero. Talks to Xero only; recordXeroJournal saves the result.
+ */
+export async function sendJournalToXero(actor: Actor, journalId: string, input: { accounts?: Record<string, string>; post?: boolean }): Promise<SentJournal> {
+  if (!['reviewer', 'manager', 'partner', 'admin'].includes(actor.role)) throw new ServiceError('Only a reviewer or above can send journals to Xero.', 403, 'FORBIDDEN');
+  const { j, eng, conn } = journalConnection(actor, journalId);
+  if (eng.status === 'locked') throw new ServiceError('This engagement is locked. Unlock it before sending journals.', 409, 'LOCKED');
+  if (j.status !== 'approved' && j.status !== 'posted') throw new ServiceError('Approve the journal before sending it to Xero.', 409, 'NOT_APPROVED');
+  const previous = j.ledger;
+  if (previous && !['DELETED', 'VOIDED'].includes(previous.status)) throw new ServiceError(`${j.ref} is already in Xero.`, 409, 'ALREADY_SENT');
+
+  const token = await accessTokenFor(conn);
+  const { Accounts = [] } = await xeroGet<{ Accounts?: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id, Date.now() + 30_000);
+  const usable = new Set(writableAccounts(Accounts).map((a) => a.Code!));
+  const lines = j.lines.filter((l) => BigInt(l.debit_p) !== BigInt(l.credit_p));
+  const missing = lines.filter((l) => !usable.has(input.accounts?.[l.id] ?? ''));
+  if (missing.length) throw new ServiceError(`Choose a Xero account for ${Array.from(new Set(missing.map((l) => l.blynt_code))).join(', ')}.`, 400, 'XERO_ACCOUNT_NEEDED');
+
+  const out = await xeroWrite<{ ManualJournals?: XeroDoc[] }>(
+    `${API}/ManualJournals`,
+    token,
+    conn.tenant_id,
+    {
+      ManualJournals: [
+        {
+          Narration: `${j.ref}: ${j.narrative}`,
+          Date: j.date ?? eng.period_end,
+          Status: input.post ? 'POSTED' : 'DRAFT',
+          LineAmountTypes: 'NoTax',
+          // Xero takes a debit as a positive amount and a credit as a negative one
+          JournalLines: lines.map((l) => ({ AccountCode: input.accounts![l.id], LineAmount: Number(BigInt(l.debit_p) - BigInt(l.credit_p)) / 100, Description: l.narrative || j.narrative })),
+        },
+      ],
+    },
+    previous ? `${j.id}-${previous.id}` : j.id
+  );
+  const mj = out.ManualJournals?.[0];
+  if (!mj?.ManualJournalID) throw new ServiceError('Xero did not confirm the journal. Check Xero before sending it again.', 502, 'XERO_ERROR');
+  return {
+    ledger: {
+      provider: 'xero',
+      id: mj.ManualJournalID,
+      status: mj.Status ?? (input.post ? 'POSTED' : 'DRAFT'),
+      url: xeroDeepLink(conn.short_code, `/Journal/View.aspx?invoiceID=${mj.ManualJournalID}`),
+      sent_at: new Date().toISOString(),
+      sent_by: actor.name,
+    },
+    connId: conn.id,
+    tokens: connTokens(conn),
+  };
+}
+
+/** Saves a journal sent to Xero, and any tokens Xero rotated, on the latest workspace. */
+export function recordXeroJournal(actor: Actor, journalId: string, sent: SentJournal) {
+  const conn = db.xero_connections.find((c) => c.id === sent.connId);
+  if (conn) Object.assign(conn, sent.tokens);
+  const j = db.adjustments.find((a) => a.id === journalId);
+  if (!j) return null;
+  const before = { ...j };
+  j.ledger = sent.ledger;
+  // Posted straight away: in the ledger now, though the trial balance holds it only from the next pull
+  if (sent.ledger.status === 'POSTED' && j.status === 'approved') j.status = 'posted';
+  db.logAudit(actor.firmId, actor, 'SEND_JOURNAL_TO_XERO', 'adjustments', j.id, before, j);
+  return j;
 }

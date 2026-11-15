@@ -49,14 +49,28 @@ export const pair = (dr: string, cr: string, amount: bigint, narrative: string):
 export const journalSig = (lines: JLine[]) => lines.map((l) => `${l.code}:${l.debit}:${l.credit}`).join('|');
 
 /** Passes when nothing is needed and nothing was sent, or what was sent matches the decisions now. */
-export function journalCheck(sent: { ref?: string; sig?: string } | undefined, lines: JLine[], label = 'Adjustments sent to journals'): PaperCheck {
+/** Where a journal sent from a paper is now: Blynt's journals only, a draft in Xero, posted in Xero, or in the trial balance. */
+export function journalWhere(id: string | undefined, ref: string | undefined): string {
+  const j = id ? db.adjustments.find((a) => a.id === id) : undefined;
+  if (j?.status === 'in_ledger') return `${ref} is posted in Xero and in the trial balance.`;
+  if (j?.ledger?.status === 'POSTED') return `${ref} is posted in Xero. The next pull brings it into the trial balance.`;
+  if (j?.ledger?.status === 'DRAFT') return `${ref} is a draft in Xero. Approve it there, and the next pull brings it in.`;
+  if (j?.status === 'approved' || j?.status === 'posted') return `${ref} is approved in Blynt. Send it to Xero from the Journals page.`;
+  return `Saved as ${ref} in Blynt's journals, not in Xero yet. Approve it on the Journals page, then send it to Xero.`;
+}
+
+/** True once the journal is posted in Xero and inside the imported trial balance, so the paper's figures already include it. */
+export const journalInLedger = (id: string | undefined) => !!id && db.adjustments.find((a) => a.id === id)?.status === 'in_ledger';
+
+export function journalCheck(sent: { id?: string; ref?: string; sig?: string } | undefined, lines: JLine[], label = 'Adjustments sent to journals'): PaperCheck {
+  if (journalInLedger(sent?.id)) return { id: 'journal_sent', label, detail: journalWhere(sent!.id, sent!.ref), passed: true };
   const ok = sent ? sent.sig === journalSig(lines) : lines.length === 0;
   return {
     id: 'journal_sent',
     label,
     detail: ok
       ? sent
-        ? `Sent as ${sent.ref}.`
+        ? journalWhere(sent.id, sent.ref)
         : 'The decisions need no journal.'
       : sent
         ? `The decisions changed after ${sent.ref} was sent. Remove ${sent.ref} on the Journals page and send again.`
