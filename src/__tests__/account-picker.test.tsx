@@ -28,6 +28,16 @@ describe('account selection menu', () => {
     expect(within(list).getByRole('option', { selected: true }).textContent).toContain('Purchases');
   });
 
+  it('lists each sub-account straight under the account it belongs to', () => {
+    const { input } = setup();
+    fireEvent.click(input);
+    const codes = within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent!.slice(0, 4));
+    // Goodwill's additions (6880) sit under goodwill (6970), not between computer equipment and fixtures
+    expect(codes.indexOf('6970')).toBeLessThan(codes.indexOf('6880'));
+    expect(codes.indexOf('6880')).toBeLessThan(codes.indexOf('6975'));
+    expect(codes.indexOf('6601')).toBe(codes.indexOf('6600') + 1);
+  });
+
   it('filters by code or name and picks the clicked account', () => {
     const { input, onPick } = setup();
     fireEvent.click(input);
