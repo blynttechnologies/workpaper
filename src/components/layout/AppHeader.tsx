@@ -79,8 +79,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
         setBotOpen((prev) => !prev);
       }
     };
+    // Other parts of the app (such as a banner) open Blynt Bot with this event
+    const openBot = () => setBotOpen(true);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('blynt:open-bot', openBot);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('blynt:open-bot', openBot);
+    };
   }, []);
 
   const getBreadcrumbLabel = (seg: string) => {
