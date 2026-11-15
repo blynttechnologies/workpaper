@@ -10,6 +10,8 @@ FROM public.ecr.aws/docker/library/node:22-alpine
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 AWS_LWA_READINESS_CHECK_PATH=/login
+# Non-HTTP invocations (the end-of-day Xero sync schedule) arrive as a POST here
+ENV AWS_LWA_PASS_THROUGH_PATH=/api/v1/integrations/xero/auto-sync
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
