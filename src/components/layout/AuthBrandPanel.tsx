@@ -36,35 +36,35 @@ function GherkinLineArt({ className = '' }: { className?: string }) {
 }
 
 const POINTS = [
-  { title: 'Pence-exact', body: 'Every figure is held in whole pence, so totals never drift.' },
-  { title: 'AI drafts, you sign', body: 'Suggestions show where they came from. A named reviewer signs off.' },
-  { title: 'Nothing changes quietly', body: 'Each edit is logged with who made it, when and why.' },
+  { title: 'Pence-exact', body: 'Whole pence throughout, so totals never drift.' },
+  { title: 'AI drafts, you sign', body: 'Blynt Bot suggests. A named reviewer signs off.' },
+  { title: 'Nothing changes quietly', body: 'Every edit records who, when and why.' },
 ];
 
 /** The navy Blynt panel on the left of the sign-in, two-factor and password pages. */
 export function AuthBrandPanel() {
   return (
-    <div className="lg:col-span-6 xl:col-span-5 bg-[#0B1A3B] text-white p-8 sm:p-12 lg:p-14 flex flex-col justify-between gap-12">
-      <BlyntLogo variant="full" theme="dark" size="xl" />
+    <div className="lg:col-span-6 xl:col-span-5 bg-[#0B1A3B] text-white p-8 sm:p-12 lg:px-14 lg:py-10 flex flex-col justify-between gap-8">
+      <BlyntLogo variant="full" theme="dark" size="lg" />
 
       <div className="flex items-end gap-8">
         <div className="flex-1 min-w-0 max-w-[420px]">
-          <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF7A66] mb-5">
+          <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF7A66] mb-4">
             <span className="w-6 h-px bg-[#FF7A66]" aria-hidden="true" />
             Year-end working papers
           </p>
-          <h1 className="text-3xl sm:text-[40px] font-extrabold tracking-tight leading-[1.08] mb-4">
+          <h1 className="text-3xl sm:text-[36px] font-extrabold tracking-tight leading-[1.08] mb-3">
             Every number
             <br />
             in its place.
           </h1>
-          <p className="text-sm text-[#A6B4D0] leading-relaxed mb-10">
+          <p className="text-sm text-[#A6B4D0] leading-relaxed mb-6">
             Lead schedules, adjustments and sign-offs for UK accounts, tied back to the trial balance.
           </p>
 
           <ol className="border-t border-[#24396B]">
             {POINTS.map((p, i) => (
-              <li key={p.title} className="flex gap-4 py-3.5 border-b border-[#24396B]">
+              <li key={p.title} className="flex gap-4 py-3 border-b border-[#24396B]">
                 <span className="font-mono text-[11px] text-[#FF7A66] pt-0.5">{String(i + 1).padStart(2, '0')}</span>
                 <span className="text-xs text-[#A6B4D0] leading-relaxed">
                   <strong className="block text-sm text-white font-bold mb-0.5">{p.title}</strong>
@@ -76,7 +76,7 @@ export function AuthBrandPanel() {
         </div>
 
         {/* Its own column from xl up, so the drawing never sits behind the copy */}
-        <figure className="hidden xl:flex flex-col items-center shrink-0 w-[150px] 2xl:w-[180px]">
+        <figure className="hidden xl:flex flex-col items-center shrink-0 w-[130px] 2xl:w-[160px]">
           <GherkinLineArt className="w-full h-auto text-[#A6B4D0]/55" />
           <figcaption className="pt-2 w-full border-t border-[#24396B] text-center font-mono text-[10px] uppercase tracking-wider text-[#7E8DA6]">
             30 St Mary Axe
