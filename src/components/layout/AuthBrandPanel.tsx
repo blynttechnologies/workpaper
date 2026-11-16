@@ -1,4 +1,3 @@
-import { CheckCircle2 } from 'lucide-react';
 import { BlyntLogo } from '@/components/ui/BlyntLogo';
 
 const GHERKIN = 'M84 402 C62 330 50 262 54 200 C58 118 84 34 120 28 C156 34 182 118 186 200 C190 262 178 330 156 402 Z';
@@ -36,52 +35,56 @@ function GherkinLineArt({ className = '' }: { className?: string }) {
   );
 }
 
-/** The navy Blynt panel on the left of the sign-in and two-factor pages. */
+const POINTS = [
+  { title: 'Pence-exact', body: 'Every figure is held in whole pence, so totals never drift.' },
+  { title: 'AI drafts, you sign', body: 'Suggestions show where they came from. A named reviewer signs off.' },
+  { title: 'Nothing changes quietly', body: 'Each edit is logged with who made it, when and why.' },
+];
+
+/** The navy Blynt panel on the left of the sign-in, two-factor and password pages. */
 export function AuthBrandPanel() {
   return (
-    <div className="lg:col-span-6 xl:col-span-5 bg-[#0B1A3B] text-white p-8 sm:p-12 lg:p-16 flex flex-col justify-between">
-      <div className="relative z-10">
-        <div className="mb-16">
-          <BlyntLogo variant="full" theme="dark" size="lg" />
-        </div>
+    <div className="lg:col-span-6 xl:col-span-5 bg-[#0B1A3B] text-white p-8 sm:p-12 lg:p-14 flex flex-col justify-between gap-12">
+      <BlyntLogo variant="full" theme="dark" size="lg" />
 
-        <div className="max-w-[420px]">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#FF7A66] bg-[#122654] px-3 py-1 rounded-full border border-[#FF7A66]/30 inline-block mb-4">
-            UK Cloud Accounting &amp; Workpapers
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight mb-4">
-            Financial workpapers built with zero fluff
+      <div className="flex items-end gap-8">
+        <div className="flex-1 min-w-0 max-w-[420px]">
+          <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF7A66] mb-5">
+            <span className="w-6 h-px bg-[#FF7A66]" aria-hidden="true" />
+            Year-end working papers
+          </p>
+          <h1 className="text-3xl sm:text-[40px] font-extrabold tracking-tight leading-[1.08] mb-4">
+            Every number
+            <br />
+            in its place.
           </h1>
-          <p className="text-sm text-[#A6B4D0] leading-relaxed mb-8">
-            One unified Blynt account for client bookkeeping, VAT, annual statutory accounts, and transparent working papers.
+          <p className="text-sm text-[#A6B4D0] leading-relaxed mb-10">
+            Lead schedules, adjustments and sign-offs for UK accounts, tied back to the trial balance.
           </p>
 
-          <div className="flex flex-col gap-3.5 text-xs text-[#A6B4D0]">
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-white">Strict integer pence precision</strong>: Zero floating-point rounding anomalies.
-              </span>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-white">AI suggests, people decide</strong>: Full lineage and explicit named sign-offs.
-              </span>
-            </div>
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-white">Append-only activity log</strong>: every change records who, when and why.
-              </span>
-            </div>
-          </div>
+          <ol className="border-t border-[#24396B]">
+            {POINTS.map((p, i) => (
+              <li key={p.title} className="flex gap-4 py-3.5 border-b border-[#24396B]">
+                <span className="font-mono text-[11px] text-[#FF7A66] pt-0.5">{String(i + 1).padStart(2, '0')}</span>
+                <span className="text-xs text-[#A6B4D0] leading-relaxed">
+                  <strong className="block text-sm text-white font-bold mb-0.5">{p.title}</strong>
+                  {p.body}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
+
+        {/* Its own column from xl up, so the drawing never sits behind the copy */}
+        <figure className="hidden xl:flex flex-col items-center shrink-0 w-[150px] 2xl:w-[180px]">
+          <GherkinLineArt className="w-full h-auto text-[#A6B4D0]/55" />
+          <figcaption className="pt-2 w-full border-t border-[#24396B] text-center font-mono text-[10px] uppercase tracking-wider text-[#7E8DA6]">
+            30 St Mary Axe
+          </figcaption>
+        </figure>
       </div>
 
-      <div className="relative pt-8 border-t border-[#24396B] text-xs text-[#7E8DA6] flex items-center justify-between">
-        {/* Stands on the footer rule like the skyline stands on the Thames */}
-        <GherkinLineArt className="hidden lg:block absolute bottom-full right-4 h-[min(380px,45vh)] w-auto text-[#A6B4D0]/45 pointer-events-none" />
+      <div className="flex items-center justify-between text-xs text-[#7E8DA6]">
         <span>Blynt Technologies UK Ltd</span>
         <span>SOC 2 Type II • WCAG 2.2 AA</span>
       </div>

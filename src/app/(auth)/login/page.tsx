@@ -91,12 +91,12 @@ export default function LoginPage() {
         <div className="max-w-[420px] w-full">
           <div className="mb-8">
             <h2 className="text-2xl font-bold tracking-tight text-[#122654]">
-              {mfaStep ? 'Two-factor authentication' : 'Sign in to Blynt Workpapers'}
+              {mfaStep ? 'Two-factor authentication' : 'Welcome back'}
             </h2>
             <p className="text-xs text-[#4A5878] mt-1.5">
               {mfaStep
                 ? 'Enter the 6-digit code from your authenticator app (Google Authenticator, 1Password, or Authy).'
-                : 'Use your Blynt accounting credentials to access your engagements.'}
+                : 'Sign in to Blynt Workpapers with your Blynt account to pick up your engagements.'}
             </p>
           </div>
 
@@ -265,9 +265,9 @@ export default function LoginPage() {
           )}
 
           <div className="mt-8 pt-6 border-t border-[#E3E7EF] text-center text-xs text-[#4A5878]">
-            Need a practice account?{' '}
+            New to Blynt?{' '}
             <Link href="/signup" className="text-[#B8432F] font-bold hover:underline">
-              Create a firm account
+              Set up your firm
             </Link>
           </div>
         </div>
