@@ -120,7 +120,7 @@ export default function SignupPage() {
         <div>
           {/* Blynt Logo */}
           <div className="mb-12">
-            <BlyntLogo variant="full" theme="dark" size="xl" />
+            <BlyntLogo variant="full" theme="dark" size="lg" />
           </div>
 
           <div className="max-w-[440px]">

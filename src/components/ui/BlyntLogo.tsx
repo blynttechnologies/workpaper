@@ -2,7 +2,7 @@ import React from 'react';
 
 interface BlyntLogoProps {
   variant?: 'full' | 'mark' | 'text';
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg';
   theme?: 'dark' | 'light';
   className?: string;
 }
@@ -29,19 +29,18 @@ export const BlyntMark: React.FC<{ size?: number; className?: string; theme?: 'd
 );
 
 export const BlyntLogo: React.FC<BlyntLogoProps> = ({ variant = 'full', size = 'md', theme = 'dark', className = '' }) => {
-  // xl is the brand kit's 40 px size, for the sign-in panels
-  const h = { sm: 20, md: 24, lg: 32, xl: 40 }[size];
+  const h = size === 'sm' ? 20 : size === 'lg' ? 32 : 24;
   if (variant === 'mark') return <BlyntMark size={h} className={className} />;
 
   return (
-    <div className={`flex items-center select-none ${size === 'xl' ? 'gap-4' : 'gap-2.5'} ${className}`}>
+    <div className={`flex items-center gap-2.5 select-none ${className}`}>
       <Rectangle height={h}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/blynt-horizontal.svg" alt="Blynt" width={Math.round(h * (2609 / 924))} height={h} />
       </Rectangle>
       {variant === 'full' && (
         <span
-          className={`font-bold tracking-wider rounded-full uppercase ${size === 'xl' ? 'text-xs px-3.5 py-1.5' : 'text-[10px] px-2.5 py-0.5'} ${
+          className={`text-[10px] font-bold tracking-wider px-2.5 py-0.5 rounded-full uppercase ${
             theme === 'dark' ? 'bg-white/10 text-white' : 'bg-[#EEF2F9] text-[#122654]'
           }`}
         >
