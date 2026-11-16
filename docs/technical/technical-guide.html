@@ -1,0 +1,1050 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Blynt Workpaper Technical Guide</title>
+<style>
+  @font-face { font-family: Inter; src: url(../../src/app/fonts/Inter-Regular.ttf); font-weight: 400; }
+  @font-face { font-family: Inter; src: url(../../src/app/fonts/Inter-Medium.ttf); font-weight: 500; }
+  @font-face { font-family: Inter; src: url(../../src/app/fonts/Inter-SemiBold.ttf); font-weight: 600; }
+  @font-face { font-family: Inter; src: url(../../src/app/fonts/Inter-Bold.ttf); font-weight: 700; }
+  @font-face { font-family: Inter; src: url(../../src/app/fonts/Inter-ExtraBold.ttf); font-weight: 800; }
+  :root {
+    --navy: #122654; --deep: #0B1A3B; --coral: #FF7A66; --rust: #B8432F; --blue: #1D4E89;
+    --line: #D3DCEE; --rule: #E3E7EF; --muted: #4A5878; --pale: #F5F8FD; --cream: #FFF8F6; --ok: #1E7A4C;
+  }
+  @page { size: A4; margin: 13mm 14mm 14mm; }
+  @page :first { margin: 0; }
+  * { box-sizing: border-box; }
+  body { font: 9pt/1.45 Inter, "Segoe UI", Arial, sans-serif; color: var(--navy); margin: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1 { font-size: 30pt; line-height: 1.1; margin: 0; font-weight: 800; letter-spacing: -0.5pt; }
+  h2 { font-size: 17pt; margin: 0 0 3mm; font-weight: 800; letter-spacing: -0.2pt; }
+  h2 .n { color: var(--coral); margin-right: 2mm; }
+  h3 { font-size: 11pt; margin: 3.5mm 0 1.2mm; font-weight: 700; }
+  h4 { font-size: 9.8pt; margin: 3mm 0 1mm; font-weight: 700; color: var(--blue); }
+  p, li { margin: 0 0 1.6mm; }
+  ul, ol { padding-left: 5.5mm; margin: 0 0 2mm; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.6pt; background: var(--pale); padding: 0 1mm; border-radius: 2px; color: var(--deep); }
+  .section { page-break-before: always; }
+  .kicker { display: block; font-size: 7.8pt; font-weight: 700; letter-spacing: 1.2pt; text-transform: uppercase; color: var(--rust); margin-bottom: 1mm; }
+  .bar { height: 3px; width: 22mm; background: var(--coral); margin: 0 0 3mm; border-radius: 2px; }
+  .lead { font-size: 10pt; color: var(--muted); margin-bottom: 3mm; }
+
+  /* cover */
+  .cover { height: 297mm; background: var(--deep); color: #fff; padding: 22mm 20mm; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .cover img.logo { width: 46mm; }
+  .cover .mid { margin-top: auto; }
+  .cover h1 { font-size: 40pt; color: #fff; }
+  .cover h1 span { color: var(--coral); }
+  .cover .sub { font-size: 13pt; color: #C9D3EA; margin-top: 5mm; max-width: 140mm; }
+  .cover .meta { margin-top: 14mm; display: flex; gap: 10mm; font-size: 9pt; color: #C9D3EA; }
+  .cover .meta b { display: block; color: #fff; font-size: 10.5pt; }
+  .cover svg.art { position: absolute; right: -30mm; top: 40mm; width: 150mm; opacity: .16; }
+  .cover .foot { margin-top: 16mm; font-size: 8pt; color: #8FA0C6; border-top: 1px solid #2A3E6E; padding-top: 4mm; }
+
+  /* toc */
+  .toc { columns: 2; column-gap: 10mm; margin-top: 4mm; }
+  .toc div { break-inside: avoid; padding: 1.6mm 0; border-bottom: 1px solid var(--rule); display: flex; gap: 3mm; }
+  .toc b { color: var(--coral); width: 7mm; }
+
+  /* boxes */
+  .tip, .warn, .why { padding: 2.4mm 3.2mm; margin: 2.5mm 0; font-size: 9pt; border-radius: 0 4px 4px 0; break-inside: avoid; }
+  .tip { background: var(--pale); border-left: 3px solid var(--blue); }
+  .warn { background: #FFF4DB; border-left: 3px solid #A26A00; }
+  .why { background: var(--cream); border-left: 3px solid var(--coral); }
+  .tip b:first-child, .warn b:first-child, .why b:first-child { display: block; font-size: 7.6pt; letter-spacing: .8pt; text-transform: uppercase; margin-bottom: .6mm; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2.5mm; margin: 3mm 0; }
+  .stat { border: 1px solid var(--line); border-radius: 6px; padding: 3mm; background: #fff; }
+  .stat b { display: block; font-size: 17pt; font-weight: 800; color: var(--navy); line-height: 1.1; }
+  .stat span { font-size: 8pt; color: var(--muted); }
+  .stat.hot { background: var(--navy); border-color: var(--navy); }
+  .stat.hot b { color: var(--coral); } .stat.hot span { color: #C9D3EA; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.7pt; margin: 2mm 0 3mm; }
+  th, td { text-align: left; padding: 1.2mm 2mm; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { background: var(--deep); color: #fff; font-size: 7.6pt; text-transform: uppercase; letter-spacing: .5pt; font-weight: 700; }
+  tr { break-inside: avoid; }
+  td code { font-size: 8pt; }
+  td.c { white-space: nowrap; }
+
+  /* code explainer */
+  .code { display: grid; grid-template-columns: 1.3fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 2mm 0 3mm; break-inside: avoid; }
+  .code.full { grid-template-columns: 1fr; }
+  .code .file { grid-column: 1 / -1; background: var(--navy); color: #fff; font: 600 8pt Inter, sans-serif; padding: 1.6mm 3mm; display: flex; justify-content: space-between; }
+  .code .file span { color: var(--coral); font-weight: 500; }
+  .code pre { margin: 0; background: #0E1E45; color: #E6ECFA; font: 7.7pt/1.5 Consolas, "Cascadia Mono", monospace; padding: 3mm; white-space: pre-wrap; word-break: break-word; }
+  .code pre .k { color: #FF9A8A; } .code pre .s { color: #9FE0B5; } .code pre .c { color: #8DA0C8; font-style: italic; } .code pre .f { color: #9CC7FF; }
+  .code .notes { background: var(--pale); padding: 3mm; font-size: 8.4pt; }
+  .code .notes ol { padding-left: 4.5mm; margin: 0; }
+  .code .notes li { margin-bottom: 1.4mm; }
+
+  figure { margin: 2mm 0 3mm; break-inside: avoid; }
+  figure svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  figcaption { font-size: 8pt; color: var(--muted); margin-top: 1.4mm; }
+  figcaption b { color: var(--rust); }
+
+  .tree { font: 7.6pt/1.5 Consolas, monospace; background: var(--pale); border: 1px solid var(--line); border-radius: 6px; padding: 3mm 4mm; white-space: pre; break-inside: avoid; }
+  .tree i { color: var(--muted); font-style: normal; font-family: Inter, sans-serif; font-size: 7.8pt; }
+  .tree b { color: var(--blue); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .pill { display: inline-block; font-size: 7.4pt; font-weight: 700; padding: .3mm 1.8mm; border-radius: 10px; background: var(--pale); color: var(--blue); border: 1px solid var(--line); margin: 0 .6mm .8mm 0; }
+  .pill.c { background: var(--cream); color: var(--rust); border-color: #FFD2C9; }
+  .small { font-size: 8.2pt; color: var(--muted); }
+
+  /* svg type */
+  svg text { font-family: Inter, "Segoe UI", sans-serif; }
+  .t { font-size: 11px; fill: var(--navy); font-weight: 600; }
+  .tw { font-size: 11px; fill: #fff; font-weight: 700; }
+  .ts { font-size: 9px; fill: var(--muted); }
+  .tsw { font-size: 9px; fill: #C9D3EA; }
+  .tc { font-size: 9px; fill: var(--rust); font-weight: 700; }
+  .th { font-size: 10px; fill: var(--rust); font-weight: 800; letter-spacing: 1px; }
+  .bx { fill: var(--navy); }
+  .bd { fill: var(--deep); }
+  .bl { fill: var(--pale); stroke: var(--line); }
+  .bc { fill: var(--cream); stroke: var(--coral); }
+  .bw { fill: #fff; stroke: var(--line); }
+  .zone { fill: none; stroke: var(--line); stroke-dasharray: 4 3; }
+  .ar { stroke: var(--blue); stroke-width: 1.4; fill: none; marker-end: url(#a); }
+  .arc { stroke: var(--coral); stroke-width: 1.6; fill: none; marker-end: url(#ac); }
+  .ard { stroke: var(--muted); stroke-width: 1.1; fill: none; stroke-dasharray: 3 3; marker-end: url(#a); }
+  .life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 3 3; }
+</style>
+</head>
+<body>
+
+<!-- Arrow markers shared by every diagram -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1D4E89"/></marker>
+    <marker id="ac" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#FF7A66"/></marker>
+  </defs>
+</svg>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <img class="logo" src="../../public/brand/blynt-horizontal-white.svg" alt="Blynt">
+  <svg class="art" viewBox="0 0 400 400" aria-hidden="true">
+    <g fill="none" stroke="#FF7A66" stroke-width="1.2">
+      <rect x="40" y="40" width="120" height="80" rx="8"/><rect x="240" y="40" width="120" height="80" rx="8"/>
+      <rect x="140" y="170" width="120" height="80" rx="8"/><rect x="40" y="300" width="120" height="80" rx="8"/><rect x="240" y="300" width="120" height="80" rx="8"/>
+      <path d="M100 120 200 170M300 120 200 170M200 250 100 300M200 250 300 300"/>
+    </g>
+    <g fill="#fff"><circle cx="100" cy="120" r="3"/><circle cx="300" cy="120" r="3"/><circle cx="200" cy="170" r="3"/><circle cx="200" cy="250" r="3"/></g>
+  </svg>
+  <div class="mid">
+    <span class="kicker" style="color:var(--coral)">Technical documentation · v1</span>
+    <h1>Blynt Workpaper<br><span>Technical Guide</span><br>&amp; Code Explainer</h1>
+    <p class="sub">How the platform is built, hosted and deployed, how data moves through it, and a walk through the code that matters, with diagrams of each part.</p>
+    <div class="meta">
+      <div><b>Codebase</b>blynttechnologies/workpaper</div>
+      <div><b>Built from</b>master · c8dd400</div>
+      <div><b>Date</b>16 November 2026</div>
+    </div>
+  </div>
+  <div class="foot">Internal · for engineers and technical reviewers working on Blynt Workpaper. Contains no secrets or keys: values live in AWS Secrets Manager.</div>
+</section>
+
+<!-- ============ CONTENTS ============ -->
+<section class="section">
+  <span class="kicker">Contents</span>
+  <h2>What is in this guide</h2>
+  <div class="bar"></div>
+  <div class="toc">
+    <div><b>1</b>Platform at a glance</div>
+    <div><b>2</b>System architecture</div>
+    <div><b>3</b>Hosting, deployment and operations</div>
+    <div><b>4</b>Code map</div>
+    <div><b>5</b>Life of a request</div>
+    <div><b>6</b>Workspace storage and sync</div>
+    <div><b>7</b>Data model</div>
+    <div><b>8</b>Security and access</div>
+    <div><b>9</b>Trial balance, mapping and learning</div>
+    <div><b>10</b>Working papers and sign-off</div>
+    <div><b>11</b>Journals and posting to Xero</div>
+    <div><b>12</b>Integrations</div>
+    <div><b>13</b>AI platform and MCP</div>
+    <div><b>14</b>Code graph</div>
+    <div><b>15</b>Testing and local development</div>
+    <div><b>16</b>Runbook and how-tos</div>
+    <div><b>A</b>API route reference</div>
+    <div><b>B</b>Screen reference</div>
+  </div>
+  <h3>How to read the diagrams</h3>
+  <svg viewBox="0 0 760 70" style="width:100%;border:1px solid var(--line);border-radius:6px">
+    <rect class="bx" x="12" y="18" width="110" height="34" rx="6"/><text class="tw" x="67" y="39" text-anchor="middle">Our code</text>
+    <rect class="bl" x="140" y="18" width="110" height="34" rx="6"/><text class="t" x="195" y="39" text-anchor="middle">Data / store</text>
+    <rect class="bc" x="268" y="18" width="110" height="34" rx="6"/><text class="t" x="323" y="39" text-anchor="middle">Outside service</text>
+    <path class="ar" d="M400 35h70"/><text class="ts" x="480" y="38">request / data flow</text>
+    <path class="arc" d="M590 35h60"/><text class="ts" x="658" y="38">key path</text>
+  </svg>
+  <p class="small" style="margin-top:3mm">File references are paths from the repository root, such as <code>src/lib/server/store.ts</code>. Code excerpts are trimmed for reading: the repository is the source of truth.</p>
+</section>
+
+<!-- ============ 1 ============ -->
+<section class="section">
+  <span class="kicker">Section 1</span>
+  <h2><span class="n">1</span>Platform at a glance</h2>
+  <div class="bar"></div>
+  <p class="lead">Blynt Workpaper is where a UK accountancy practice prepares a client's year-end file: it pulls the trial balance, maps it to the Blynt chart, fills the working papers, raises journals, reviews and signs off, then locks the year.</p>
+  <div class="stats">
+    <div class="stat hot"><b>63k</b><span>lines of TypeScript in 321 source files</span></div>
+    <div class="stat"><b>113</b><span>API route handlers under <code>/api</code></span></div>
+    <div class="stat"><b>40</b><span>screens (pages)</span></div>
+    <div class="stat"><b>30</b><span>working paper templates, A-10 to Z-40</span></div>
+    <div class="stat"><b>81</b><span>test files (Vitest)</span></div>
+    <div class="stat"><b>10</b><span>AI tasks across 3 model providers</span></div>
+    <div class="stat"><b>32</b><span>workspace collections</span></div>
+    <div class="stat hot"><b>1</b><span>Lambda function serves everything</span></div>
+  </div>
+  <h3>Technology stack</h3>
+  <table>
+    <tr><th style="width:24%">Layer</th><th style="width:36%">Choice</th><th>Notes</th></tr>
+    <tr><td>Framework</td><td>Next.js 16 (App Router), React 19</td><td>A newer Next than most guides: <code>src/proxy.ts</code> replaces <code>middleware.ts</code>. Read <code>node_modules/next/dist/docs/</code> before changing framework code.</td></tr>
+    <tr><td>Language</td><td>TypeScript 6, strict</td><td>Type-check with <code>npx tsc --noEmit -p .</code></td></tr>
+    <tr><td>Styling</td><td>Tailwind CSS 4, lucide-react icons</td><td>Brand colours are written inline as hex values (navy <code>#122654</code>, coral <code>#FF7A66</code>).</td></tr>
+    <tr><td>Grids</td><td>AG Grid Community 36</td><td>Trial balance and the large tables.</td></tr>
+    <tr><td>Database</td><td>PostgreSQL on Amazon RDS (<code>pg</code>)</td><td>One versioned JSONB row holds the workspace, plus a files table.</td></tr>
+    <tr><td>Hosting</td><td>AWS Lambda container + Lambda Web Adapter 0.9.1</td><td>Function URL, eu-north-1. Built by CodeBuild, images in ECR.</td></tr>
+    <tr><td>AI</td><td>Anthropic, OpenAI and Gemini through one gateway</td><td>Practice-level provider choice, spending limits, a logged call for every request.</td></tr>
+    <tr><td>Email</td><td>Amazon SES v2</td><td>Invites and password resets.</td></tr>
+    <tr><td>Tests and lint</td><td>Vitest 4, Testing Library, jsdom; oxlint</td><td><code>npm test</code>, <code>npm run lint</code></td></tr>
+  </table>
+  <h3>Ground rules the code is built on</h3>
+  <div class="two">
+    <div class="why"><b>Money</b>Money is held as integer pence (<code>bigint</code>) and formatted only for display. Floats are never used for money (<code>src/lib/money.ts</code>).</div>
+    <div class="why"><b>One set of numbers</b>Adjusted TB = the imported TB plus accepted journals. Every paper, note and report reads it.</div>
+    <div class="why"><b>Rules first, AI second</b>A rule a person made always wins. AI suggestions pass a confidence gate and a person confirms them.</div>
+    <div class="why"><b>Everything audited</b><code>audit_logs</code> is append-only and records who did what, their role, the before and after values, and when.</div>
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="section">
+  <span class="kicker">Section 2</span>
+  <h2><span class="n">2</span>System architecture</h2>
+  <div class="bar"></div>
+  <p class="lead">One container image runs the whole app: pages, API and the MCP endpoint. State is loaded from Postgres at the start of each request and saved back at the end.</p>
+  <figure>
+    <svg viewBox="0 0 760 500">
+      <!-- browser -->
+      <rect class="zone" x="10" y="10" width="200" height="300" rx="10"/><text class="th" x="24" y="30">BROWSER</text>
+      <rect class="bw" x="24" y="44" width="172" height="58" rx="6"/><text class="t" x="36" y="64">React screens</text><text class="ts" x="36" y="79">src/app/(dashboard) pages</text><text class="ts" x="36" y="92">src/components</text>
+      <rect class="bl" x="24" y="114" width="172" height="58" rx="6"/><text class="t" x="36" y="134">In-browser db mirror</text><text class="ts" x="36" y="149">same Database class, firm slice</text><text class="ts" x="36" y="162">CompanyContext</text>
+      <rect class="bx" x="24" y="184" width="172" height="50" rx="6"/><text class="tw" x="36" y="204">WorkspaceSync</text><text class="tsw" x="36" y="220">GET / PUT /api/v1/state</text>
+      <rect class="bw" x="24" y="246" width="172" height="50" rx="6"/><text class="t" x="36" y="266">Direct API calls</text><text class="ts" x="36" y="282">fetch('/api/v1/…')</text>
+      <!-- outside assistants -->
+      <rect class="bc" x="24" y="330" width="172" height="52" rx="6"/><text class="t" x="36" y="351">AI assistants (MCP)</text><text class="ts" x="36" y="366">OAuth 2.1 + PKCE, /api/mcp</text>
+      <rect class="bc" x="24" y="396" width="172" height="52" rx="6"/><text class="t" x="36" y="417">EventBridge Scheduler</text><text class="ts" x="36" y="432">workpaper-xero-nightly</text>
+      <!-- lambda -->
+      <rect class="zone" x="250" y="10" width="290" height="480" rx="10"/><text class="th" x="264" y="30">AWS LAMBDA · workpaper · eu-north-1</text>
+      <rect class="bd" x="264" y="44" width="262" height="40" rx="6"/><text class="tw" x="276" y="62">Function URL → Lambda Web Adapter</text><text class="tsw" x="276" y="76">gzip on · 6 MB response cap · pass-through path</text>
+      <rect class="bx" x="264" y="96" width="262" height="40" rx="6"/><text class="tw" x="276" y="114">proxy.ts</text><text class="tsw" x="276" y="128">public paths, else a valid signed session cookie</text>
+      <rect class="bx" x="264" y="148" width="126" height="64" rx="6"/><text class="tw" x="274" y="168">Pages</text><text class="tsw" x="274" y="183">server shell,</text><text class="tsw" x="274" y="196">client screens</text>
+      <rect class="bx" x="400" y="148" width="126" height="64" rx="6"/><text class="tw" x="410" y="168">API routes</text><text class="tsw" x="410" y="183">src/app/api/v1</text><text class="tsw" x="410" y="196">+ /api/mcp, /api/oauth</text>
+      <rect class="bx" x="264" y="224" width="262" height="84" rx="6"/><text class="tw" x="276" y="244">Server services (src/lib/server)</text>
+      <text class="tsw" x="276" y="260">services · journals · signoff · tb-import · gate</text><text class="tsw" x="276" y="274">xero · quickbooks · learning · tax-* · roll-forward</text><text class="tsw" x="276" y="288">ai/gateway · ai/services · mcp/server</text>
+      <rect class="bx" x="264" y="320" width="262" height="44" rx="6"/><text class="tw" x="276" y="339">Calculation engine (src/lib/workpapers)</text><text class="tsw" x="276" y="354">pure functions: leads, schedules, checks</text>
+      <rect class="bl" x="264" y="376" width="262" height="50" rx="6"/><text class="t" x="276" y="396">In-memory db (src/lib/server/db.ts)</text><text class="ts" x="276" y="411">syncIn() loads it · syncOut() saves it</text>
+      <rect class="bl" x="264" y="436" width="262" height="40" rx="6"/><text class="t" x="276" y="454">state-guard.ts</text><text class="ts" x="276" y="468">firm slice, role rules, merge</text>
+      <!-- right side -->
+      <rect class="bl" x="580" y="44" width="170" height="64" rx="6"/><text class="t" x="592" y="64">Amazon RDS Postgres</text><text class="ts" x="592" y="79">workspace_state (JSONB, version)</text><text class="ts" x="592" y="92">files (attachments)</text>
+      <rect class="bc" x="580" y="124" width="170" height="40" rx="6"/><text class="t" x="592" y="142">Xero · QuickBooks</text><text class="ts" x="592" y="156">OAuth 2, TB, invoices, journals</text>
+      <rect class="bc" x="580" y="174" width="170" height="40" rx="6"/><text class="t" x="592" y="192">Anthropic · OpenAI · Gemini</text><text class="ts" x="592" y="206">via ai/gateway.ts only</text>
+      <rect class="bc" x="580" y="224" width="170" height="40" rx="6"/><text class="t" x="592" y="242">Amazon SES</text><text class="ts" x="592" y="256">invites, resets</text>
+      <rect class="bc" x="580" y="274" width="170" height="40" rx="6"/><text class="t" x="592" y="292">Companies House</text><text class="ts" x="592" y="306">officers, filing dates</text>
+      <rect class="bc" x="580" y="324" width="170" height="40" rx="6"/><text class="t" x="592" y="342">GOV.UK Content API</text><text class="ts" x="592" y="356">tax library checks</text>
+      <rect class="bc" x="580" y="374" width="170" height="40" rx="6"/><text class="t" x="592" y="392">Invoice platform</text><text class="ts" x="592" y="406">pushed invoices, bank feed</text>
+      <rect class="bl" x="580" y="424" width="170" height="52" rx="6"/><text class="t" x="592" y="444">Secrets Manager</text><text class="ts" x="592" y="459">workpaper/app → Lambda env</text><text class="ts" x="592" y="471">at each deploy</text>
+      <!-- arrows -->
+      <path class="arc" d="M196 209 C230 209 230 64 262 64"/>
+      <path class="ar" d="M196 271 C232 271 232 70 262 70"/>
+      <path class="ar" d="M196 356 C236 356 236 76 262 78"/>
+      <path class="ard" d="M196 422 C240 422 240 80 262 82"/>
+      <path class="ar" d="M395 84v10"/><path class="ar" d="M395 136v10"/>
+      <path class="ar" d="M327 212v10"/><path class="ar" d="M463 212v10"/>
+      <path class="ar" d="M395 308v10"/>
+      <path class="arc" d="M526 400 C556 400 556 76 578 76"/>
+      <path class="ar" d="M526 260 C552 260 552 144 578 144"/>
+      <path class="ar" d="M526 266 C556 266 556 194 578 194"/>
+      <path class="ar" d="M526 272 L578 244"/>
+      <path class="ar" d="M526 280 C552 280 552 294 578 294"/>
+      <path class="ar" d="M526 286 C556 286 556 344 578 344"/>
+      <path class="ard" d="M578 394 C552 394 540 300 528 296"/>
+    </svg>
+    <figcaption><b>Figure 2.1</b> Runtime architecture. The coral path is the main one: the browser mirrors the firm's slice of the workspace, and every save goes through the state guard before it reaches Postgres.</figcaption>
+  </figure>
+  <h3>Why the workspace is one row</h3>
+  <p>The whole practice workspace is one JSON document (<code>workspace_state.data</code>) with an integer <code>version</code>. A request loads it into memory, changes it with plain TypeScript, and writes it back only if the version hasn't moved. This keeps services simple and synchronous, and makes every save all-or-nothing, at the cost of size: see the 6 MB limit in <a>Section 6</a>.</p>
+  <div class="warn"><b>Scaling limit</b>Two people saving at the same moment conflict and one retries (<code>freshWrite</code> handles this on the server). Moving to row-per-entity tables is the planned path if practices or concurrency grow a lot.</div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="section">
+  <span class="kicker">Section 3</span>
+  <h2><span class="n">3</span>Hosting, deployment and operations</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 210">
+      <rect class="bw" x="10" y="30" width="110" height="54" rx="6"/><text class="t" x="22" y="52">git push</text><text class="ts" x="22" y="68">any branch</text>
+      <rect class="bc" x="146" y="30" width="120" height="54" rx="6"/><text class="t" x="158" y="52">GitHub webhook</text><text class="ts" x="158" y="68">no branch filter</text>
+      <rect class="bx" x="292" y="30" width="140" height="54" rx="6"/><text class="tw" x="304" y="52">CodeBuild</text><text class="tsw" x="304" y="68">project "workpaper"</text>
+      <rect class="bl" x="458" y="30" width="130" height="54" rx="6"/><text class="t" x="470" y="52">ECR</text><text class="ts" x="470" y="68">workpaper:&lt;commit sha&gt;</text>
+      <rect class="bx" x="614" y="30" width="136" height="54" rx="6"/><text class="tw" x="626" y="52">Lambda update</text><text class="tsw" x="626" y="68">image + env from secrets</text>
+      <path class="arc" d="M120 57h24"/><path class="arc" d="M266 57h24"/><path class="arc" d="M432 57h24"/><path class="arc" d="M588 57h24"/>
+      <text class="th" x="10" y="18">BUILD AND DEPLOY</text>
+      <rect class="bl" x="292" y="100" width="296" height="40" rx="6"/><text class="t" x="304" y="118">Buildspec (inline in the CodeBuild project)</text><text class="ts" x="304" y="132">docker build → push → update-function-code → update-function-configuration</text>
+      <path class="ard" d="M362 86v12"/>
+      <text class="th" x="10" y="166">VERIFY AFTER EVERY MERGE</text>
+      <rect class="bc" x="10" y="174" width="740" height="28" rx="6"/>
+      <text class="t" x="22" y="192">Lambda Code.ImageUri tag must equal origin/master's sha. If a branch build finished last, re-point: aws lambda update-function-code --image-uri …:&lt;master sha&gt;</text>
+    </svg>
+    <figcaption><b>Figure 3.1</b> Every push deploys. Because branch and master builds both deploy, the build that finishes last wins, so always check what is live after a merge.</figcaption>
+  </figure>
+  <h3>Team workflow</h3>
+  <ol>
+    <li>Branch from <code>origin/master</code> (<code>feat/…</code>, <code>fix/…</code>), commit, push and open a PR to <code>master</code>. Never push straight to master.</li>
+    <li>Merge with <code>gh pr merge N --merge</code>. Merge one PR at a time and wait for its builds, including the <code>pr/N</code> build.</li>
+    <li>Check that the live image tag equals master's sha, and re-point the Lambda if it doesn't.</li>
+  </ol>
+  <h3>Container (<code>Dockerfile</code>)</h3>
+  <table>
+    <tr><th style="width:38%">Setting</th><th>Why</th></tr>
+    <tr><td><code>output: 'standalone'</code> (next.config.mjs)</td><td>A self-contained <code>server.js</code> for the image.</td></tr>
+    <tr><td><code>aws-lambda-adapter:0.9.1</code> extension</td><td>Turns Lambda events into HTTP requests to <code>node server.js</code> on port 3000.</td></tr>
+    <tr><td><code>AWS_LWA_READINESS_CHECK_PATH=/login</code></td><td>The adapter waits for the login page before taking traffic.</td></tr>
+    <tr><td><code>AWS_LWA_PASS_THROUGH_PATH=/api/v1/integrations/xero/auto-sync</code></td><td>A non-HTTP event (the nightly schedule) arrives as a POST to this route.</td></tr>
+    <tr><td><code>AWS_LWA_ENABLE_COMPRESSION=true</code></td><td>Gzip gives the workspace download about ten times the room under the 6 MB response cap.</td></tr>
+    <tr><td><code>/app/rds-ca.pem</code></td><td>RDS CA bundle for <code>verify-full</code> TLS to Postgres.</td></tr>
+    <tr><td><code>/app/.next/cache → /tmp/next-cache</code></td><td>Only <code>/tmp</code> is writable on Lambda.</td></tr>
+  </table>
+  <h3>Environment variables (names only)</h3>
+  <table>
+    <tr><th style="width:30%">Area</th><th>Variables</th></tr>
+    <tr><td>Core</td><td><code>DATABASE_URL</code> <code>AUTH_SECRET</code> (at least 32 characters) <code>APP_URL</code> <code>NODE_ENV</code> <code>LOCAL_STATE_FILE</code> <code>TEST_USER_PASSWORD</code></td></tr>
+    <tr><td>Sign-in</td><td><code>MFA_REQUIRED</code> (off until launch)</td></tr>
+    <tr><td>Xero / QuickBooks</td><td><code>XERO_CLIENT_ID</code> <code>XERO_CLIENT_SECRET</code> <code>XERO_REDIRECT_URI</code> <code>XERO_TOKEN_KEY</code> · <code>QBO_CLIENT_ID</code> <code>QBO_CLIENT_SECRET</code> <code>QBO_REDIRECT_URI</code> <code>QBO_ENV</code></td></tr>
+    <tr><td>AI</td><td><code>ANTHROPIC_API_KEY</code> <code>ANTHROPIC_MODEL</code> <code>OPENAI_API_KEY</code> <code>OPENAI_MODEL</code> <code>OPENAI_BASE_URL</code> <code>GEMINI_API_KEY</code> <code>GEMINI_MODEL</code> <code>GEMINI_BASE_URL</code> <code>AI_PRICES</code> <code>AI_TIMEOUT_MS</code> <code>LIVE_AI</code> <code>MCP_ENABLED</code></td></tr>
+    <tr><td>Other services</td><td><code>MAIL_FROM</code> <code>MAIL_REGION</code> <code>COMPANIES_HOUSE_API_KEY</code></td></tr>
+  </table>
+  <div class="warn"><b>Adding a secret</b>The buildspec rewrites the Lambda's environment from a fixed list on every deploy. To add a variable: store it in Secrets Manager <code>workpaper/app</code> first, then add it to both the buildspec's <code>secrets-manager:</code> block and its <code>jq</code> variables list. Otherwise it never reaches the app, or is wiped on the next deploy.</div>
+  <h3>Nightly schedule</h3>
+  <p>EventBridge Scheduler <code>workpaper-xero-nightly</code> runs <code>cron(0/10 22-23 * * ? *)</code>, London time: every 10 minutes from 22:00 to 23:50. It invokes the Lambda through the role <code>workpaper-xero-nightly-scheduler</code>, with input <code>{"key": HMAC-SHA256(AUTH_SECRET, "xero-auto-sync")}</code>. Each run checks a batch of Xero connections, pulls at most one changed ledger, then runs nightly learning. If <code>AUTH_SECRET</code> changes, regenerate the key, or every run gets a 403.</p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="section">
+  <span class="kicker">Section 4</span>
+  <h2><span class="n">4</span>Code map</h2>
+  <div class="bar"></div>
+  <div class="two">
+<div class="tree"><b>src/</b>
+├─ <b>proxy.ts</b>            <i>sign-in gate for every request</i>
+├─ <b>instrumentation.ts</b>  <i>server start hook</i>
+├─ <b>app/</b>
+│  ├─ (auth)/          <i>login, MFA, signup, reset, invite</i>
+│  ├─ (dashboard)/     <i>every signed-in screen</i>
+│  │  ├─ clients/ engagements/[id]/…
+│  │  ├─ library/ settings/ my-work/
+│  ├─ api/v1/          <i>113 JSON route handlers</i>
+│  ├─ api/mcp, api/oauth, .well-known
+│  └─ fonts/           <i>Inter</i>
+├─ <b>components/</b>
+│  ├─ layout/          <i>shell, header, sidebar, sync</i>
+│  ├─ workpaper/       <i>schedules, papers/, kit</i>
+│  ├─ ui/              <i>Button, Dialog, Tabs, Tile…</i>
+│  └─ clients/ coa/ settings/ workflow/
+├─ <b>context/</b>             <i>Company + Locale</i>
+└─ <b>__tests__/</b>           <i>81 Vitest files</i></div>
+<div class="tree"><b>src/lib/</b>
+├─ <b>server/</b>           <i>runs only on the server</i>
+│  ├─ db.ts            <i>Database class, 32 collections</i>
+│  ├─ store.ts         <i>Postgres, syncIn / syncOut</i>
+│  ├─ state-guard.ts   <i>firm isolation, role rules</i>
+│  ├─ api-helpers.ts   <i>actor, access, responses</i>
+│  ├─ auth.ts totp.ts  <i>sessions, MFA</i>
+│  ├─ services.ts      <i>core business actions</i>
+│  ├─ journals.ts signoff.ts tb-import.ts
+│  ├─ gate.ts learning.ts <i>rules + AI gate</i>
+│  ├─ xero*.ts quickbooks.ts invoice-platform.ts
+│  ├─ tax-*.ts roll-forward.ts extraction.ts
+│  ├─ ai/              <i>gateway, providers, tasks</i>
+│  └─ mcp/             <i>MCP server, OAuth, tools</i>
+├─ <b>workpapers/</b>       <i>engine + one file per paper</i>
+├─ <b>mapping/</b>          <i>auto-mapper, grouping</i>
+├─ types/models.ts   <i>every entity's type</i>
+├─ money.ts tax.ts coa.ts standard-chart.ts
+└─ workflow(s).ts completion.ts analysis.ts</div>
+  </div>
+  <h3>Layers and what may call what</h3>
+  <figure>
+    <svg viewBox="0 0 760 200">
+      <rect class="bw" x="10" y="14" width="740" height="34" rx="6"/><text class="t" x="22" y="35">Screens · src/app/(dashboard) · src/components</text><text class="ts" x="460" y="35">read the browser db mirror, call /api/v1</text>
+      <rect class="bx" x="10" y="58" width="740" height="34" rx="6"/><text class="tw" x="22" y="79">Route handlers · src/app/api/**/route.ts</text><text class="tsw" x="460" y="79">syncIn → check access → service → syncOut</text>
+      <rect class="bx" x="10" y="102" width="740" height="34" rx="6"/><text class="tw" x="22" y="123">Services · src/lib/server/*</text><text class="tsw" x="460" y="123">business rules, ServiceError, audit log</text>
+      <rect class="bl" x="10" y="146" width="360" height="40" rx="6"/><text class="t" x="22" y="164">Engine · src/lib/workpapers, mapping, money</text><text class="ts" x="22" y="178">pure; shared by browser and server</text>
+      <rect class="bl" x="390" y="146" width="360" height="40" rx="6"/><text class="t" x="402" y="164">db.ts + store.ts</text><text class="ts" x="402" y="178">the only place state lives</text>
+    </svg>
+    <figcaption><b>Figure 4.1</b> Each layer calls only the one below it. Screens never write journals, sign-offs or Xero data directly; those go through API routes so the server can enforce the rules.</figcaption>
+  </figure>
+  <h3>The files that carry the most weight</h3>
+  <table>
+    <tr><th style="width:34%">File</th><th class="c" style="width:9%">Lines</th><th>What it does</th></tr>
+    <tr><td><code>components/workpaper/schedules.tsx</code></td><td>2,853</td><td>Schedule screens for the core papers and their drill-downs.</td></tr>
+    <tr><td><code>lib/server/db.ts</code></td><td>2,039</td><td><code>Database</code> class: collections, seed, <code>importState</code>, <code>logAudit</code>.</td></tr>
+    <tr><td><code>lib/server/services.ts</code></td><td>1,329</td><td>Core actions: engagements, mappings, approvals, locks.</td></tr>
+    <tr><td><code>lib/workpapers/templates.ts</code></td><td>1,245</td><td>The 30 working paper templates: leads, procedures and checks.</td></tr>
+    <tr><td><code>lib/server/xero.ts</code></td><td>949</td><td>Xero OAuth, TB pull, open items, change checks and journal sending.</td></tr>
+    <tr><td><code>lib/workpapers/engine.ts</code></td><td>910</td><td>Lead figures, reconciliations, checks and conclusion drafts.</td></tr>
+    <tr><td><code>lib/types/models.ts</code></td><td>874</td><td>Types for every stored entity.</td></tr>
+    <tr><td><code>lib/mapping/auto-mapper.ts</code></td><td>647</td><td>Name-and-type mapping to the Blynt chart.</td></tr>
+    <tr><td><code>lib/server/roll-forward.ts</code></td><td>620</td><td>Carries a year into the next: openings, papers and auto-reversals.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 5 ============ -->
+<section class="section">
+  <span class="kicker">Section 5</span>
+  <h2><span class="n">5</span>Life of a request</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 330">
+      <g>
+        <rect class="bw" x="10" y="10" width="100" height="30" rx="5"/><text class="t" x="60" y="29" text-anchor="middle">Browser</text>
+        <rect class="bx" x="150" y="10" width="100" height="30" rx="5"/><text class="tw" x="200" y="29" text-anchor="middle">proxy.ts</text>
+        <rect class="bx" x="290" y="10" width="110" height="30" rx="5"/><text class="tw" x="345" y="29" text-anchor="middle">route.ts</text>
+        <rect class="bx" x="440" y="10" width="110" height="30" rx="5"/><text class="tw" x="495" y="29" text-anchor="middle">service</text>
+        <rect class="bl" x="590" y="10" width="160" height="30" rx="5"/><text class="t" x="670" y="29" text-anchor="middle">store / Postgres</text>
+      </g>
+      <path class="life" d="M60 40v280M200 40v280M345 40v280M495 40v280M670 40v280"/>
+      <path class="arc" d="M60 62H198"/><text class="ts" x="66" y="57">POST /api/v1/engagements/E/learn</text>
+      <path class="ar" d="M200 84H343"/><text class="ts" x="206" y="79">cookie signed and in date? pass on</text>
+      <path class="ar" d="M345 106H668"/><text class="ts" x="420" y="101">syncIn(): read workspace row → db.importState()</text>
+      <path class="ard" d="M668 128H347"/><text class="ts" x="420" y="123">version N loaded</text>
+      <rect class="bc" x="290" y="138" width="110" height="34" rx="4"/><text class="tc" x="345" y="153" text-anchor="middle">requireEngagement</text><text class="tc" x="345" y="165" text-anchor="middle">Access(req, id)</text>
+      <path class="ar" d="M345 190H493"/><text class="ts" x="352" y="185">learnFromConfirmed(…)</text>
+      <rect class="bl" x="440" y="198" width="110" height="34" rx="4"/><text class="ts" x="495" y="213" text-anchor="middle">change db,</text><text class="ts" x="495" y="225" text-anchor="middle">db.logAudit(…)</text>
+      <path class="ard" d="M495 246H347"/><text class="ts" x="400" y="241">result</text>
+      <path class="ar" d="M345 266H668"/><text class="ts" x="420" y="261">syncOut(): UPDATE … WHERE version = N</text>
+      <path class="ard" d="M668 286H347"/><text class="ts" x="420" y="281">version N+1 (or conflict → error)</text>
+      <path class="arc" d="M345 308H62"/><text class="ts" x="120" y="303">jsonResponse(out) · or errorResponse(err)</text>
+    </svg>
+    <figcaption><b>Figure 5.1</b> Each API request loads the workspace, checks access, runs one service, and saves only if nobody else saved in between.</figcaption>
+  </figure>
+
+  <div class="code">
+    <div class="file">src/app/api/v1/engagements/[id]/learn/route.ts <span>route pattern</span></div>
+<pre><span class="k">export const</span> dynamic = <span class="s">'force-dynamic'</span>;
+
+<span class="k">export async function</span> <span class="f">POST</span>(req, props) {
+  <span class="k">try</span> {
+    <span class="k">await</span> <span class="f">syncIn</span>();                  <span class="c">// 1</span>
+    <span class="k">const</span> { id } = <span class="k">await</span> props.params; <span class="c">// 2</span>
+    <span class="k">const</span> actor =
+      <span class="f">requireEngagementAccess</span>(req, id);  <span class="c">// 3</span>
+    <span class="k">if</span> (!REVIEWER_UP.includes(actor.role))
+      <span class="k">throw new</span> <span class="f">ServiceError</span>(<span class="s">'Only a reviewer…'</span>,
+                             403, <span class="s">'FORBIDDEN'</span>);
+    <span class="k">const</span> out = <span class="f">learnFromConfirmed</span>(
+      actor.firmId, [id], actor);           <span class="c">// 4</span>
+    <span class="k">await</span> <span class="f">syncOut</span>();                 <span class="c">// 5</span>
+    <span class="k">return</span> <span class="f">jsonResponse</span>(out);
+  } <span class="k">catch</span> (err) {
+    <span class="k">return</span> <span class="f">errorResponse</span>(err);      <span class="c">// 6</span>
+  }
+}</pre>
+    <div class="notes"><ol>
+      <li>Load the latest saved workspace into the server's in-memory <code>db</code>. Always first.</li>
+      <li>In this Next version, <code>params</code> is a Promise.</li>
+      <li>Reads the signed session cookie and looks the user up afresh, so a removed member loses access at once. It also checks the engagement is in their firm and on a client they are assigned to.</li>
+      <li>The service changes <code>db</code> and writes the audit log.</li>
+      <li>Save. It throws if someone else saved first.</li>
+      <li>Turns <code>ServiceError</code> (status and code), <code>GuardError</code> and unknown errors into JSON responses. These three helpers are among the most-called functions in the codebase.</li>
+    </ol></div>
+  </div>
+
+  <div class="code">
+    <div class="file">src/proxy.ts <span>the sign-in gate</span></div>
+<pre><span class="k">const</span> PUBLIC_PATHS = [<span class="s">'/login'</span>, <span class="s">'/signup'</span>, …,
+  <span class="s">'/api/mcp'</span>, <span class="s">'/api/v1/integrations/xero/auto-sync'</span>];
+
+<span class="k">export function</span> <span class="f">proxy</span>(request) {
+  <span class="k">if</span> (PUBLIC_PATHS.some(p =&gt; path === p
+      || path.startsWith(p + <span class="s">'/'</span>))) <span class="k">return</span> next();
+  <span class="c">// headers are never trusted, only the signed cookie</span>
+  <span class="k">if</span> (<span class="f">verifySessionToken</span>(cookies.get(SESSION_COOKIE)))
+    <span class="k">return</span> next();
+  <span class="k">if</span> (path.startsWith(<span class="s">'/api/'</span>)) <span class="k">return</span> json(401);
+  <span class="k">return</span> redirect(<span class="s">'/login?from='</span> + path);
+}</pre>
+    <div class="notes"><ol>
+      <li>Runs before every page and API call, except static files.</li>
+      <li>Public paths guard themselves: reset and invite tokens, the MFA challenge cookie, MCP bearer tokens, and the scheduler's HMAC key.</li>
+      <li><code>auth.ts</code> doesn't import <code>db</code>, so the proxy can check sessions without loading the workspace.</li>
+      <li>Pages redirect to login and keep the original path in <code>from</code>, so an assistant's connection request survives sign-in.</li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section class="section">
+  <span class="kicker">Section 6</span>
+  <h2><span class="n">6</span>Workspace storage and sync</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 270">
+      <rect class="zone" x="10" y="10" width="230" height="250" rx="10"/><text class="th" x="24" y="30">BROWSER</text>
+      <rect class="bl" x="24" y="44" width="202" height="46" rx="6"/><text class="t" x="36" y="63">db mirror (firm slice)</text><text class="ts" x="36" y="78">screens read and write it directly</text>
+      <rect class="bx" x="24" y="104" width="202" height="62" rx="6"/><text class="tw" x="36" y="124">WorkspaceSync</text><text class="tsw" x="36" y="139">debounced save of changes</text><text class="tsw" x="36" y="152">sendBeacon on tab close</text>
+      <rect class="bw" x="24" y="180" width="202" height="66" rx="6"/><text class="t" x="36" y="199">Other API writes</text><text class="ts" x="36" y="214">pending changes saved first,</text><text class="ts" x="36" y="228">then the workspace reloads</text>
+      <rect class="zone" x="280" y="10" width="300" height="250" rx="10"/><text class="th" x="294" y="30">/api/v1/state</text>
+      <rect class="bx" x="294" y="44" width="272" height="46" rx="6"/><text class="tw" x="306" y="63">GET → publicSlice(full, firm, user)</text><text class="tsw" x="306" y="78">no ledger transactions · latest TB lines only</text>
+      <rect class="bx" x="294" y="104" width="272" height="46" rx="6"/><text class="tw" x="306" y="123">PUT {version, data}</text><text class="tsw" x="306" y="138">version ≠ current → 409 conflict + fresh copy</text>
+      <rect class="bc" x="294" y="160" width="272" height="46" rx="6"/><text class="t" x="306" y="179">mergeFirmState → checkRules</text><text class="ts" x="306" y="194">refused → 403 + saved copy to roll back</text>
+      <rect class="bl" x="294" y="214" width="272" height="36" rx="6"/><text class="t" x="306" y="236">syncOut() · version + 1</text>
+      <rect class="bl" x="610" y="70" width="140" height="120" rx="6"/><text class="t" x="622" y="92">Postgres</text><text class="ts" x="622" y="110">workspace_state</text><text class="ts" x="622" y="124">  id, version, data jsonb</text><text class="ts" x="622" y="144">files</text><text class="ts" x="622" y="158">  id, mime, sha256, bytes</text>
+      <path class="arc" d="M226 135 C258 135 258 127 292 127"/>
+      <path class="ar" d="M292 67 C258 67 258 67 228 67"/>
+      <path class="ar" d="M430 150v8"/><path class="ar" d="M430 206v6"/>
+      <path class="arc" d="M566 232 C600 232 590 170 608 170"/>
+      <path class="ard" d="M608 100 C590 100 590 67 568 67"/>
+    </svg>
+    <figcaption><b>Figure 6.1</b> The browser holds a copy of its own firm's slice and saves it back with the version it started from. The server merges only that firm's slice, and only after the role rules pass.</figcaption>
+  </figure>
+  <div class="code">
+    <div class="file">src/lib/server/store.ts <span>optimistic versioning</span></div>
+<pre><span class="k">export async function</span> <span class="f">syncIn</span>() {
+  <span class="k">const</span> state = <span class="k">await</span> <span class="f">readState</span>();
+  <span class="k">if</span> (state.data) db.<span class="f">importState</span>(clone(state.data));
+  serverVersion = state.version;
+}
+
+<span class="k">export async function</span> <span class="f">syncOut</span>() {
+  <span class="k">const</span> v = <span class="k">await</span> <span class="f">writeState</span>(serverVersion, db.<span class="f">exportState</span>());
+  <span class="k">if</span> (v === <span class="k">null</span>) <span class="k">throw new</span> Error(<span class="s">'Workspace was changed by someone else…'</span>);
+  serverVersion = v;
+}
+<span class="c">// writeState: UPDATE workspace_state SET version = version + 1, data = $2
+//             WHERE id = $1 AND version = $3 RETURNING version</span>
+
+<span class="k">export async function</span> <span class="f">freshWrite</span>(apply) {
+  <span class="k">for</span> (<span class="k">let</span> attempt = 0; ; attempt++) {
+    <span class="k">await</span> <span class="f">syncIn</span>();
+    <span class="k">const</span> out = apply();
+    <span class="k">try</span> { <span class="k">await</span> <span class="f">syncOut</span>(); <span class="k">return</span> out; }
+    <span class="k">catch</span> (e) { <span class="k">if</span> (attempt &gt;= 1 || !conflict(e)) <span class="k">throw</span> e; }
+  }
+}</pre>
+    <div class="notes"><ol>
+      <li>Without <code>DATABASE_URL</code> (local dev) the same API keeps state in memory, mirrored to <code>.workspace_state.json</code> (on Lambda, <code>/tmp</code>).</li>
+      <li>The <code>WHERE version = $3</code> is the concurrency control: a stale writer updates no rows and gets <code>null</code>.</li>
+      <li><code>freshWrite</code> is for work that follows something slow (an AI call, a Xero pull). It reloads, re-applies the change to the latest state, and tries once more.</li>
+      <li>Attachments are stored in a separate <code>files</code> table so workspace saves stay small.</li>
+    </ol></div>
+  </div>
+  <h3>Server-managed collections</h3>
+  <p><code>state-guard.ts</code> marks some collections as <em>server-managed</em>: the browser may read them, but its saves cannot change them. They change only through their own audited API routes. These are journals (<code>adjustments</code>), sign-offs, TB snapshots and lines, ledger transactions, connections, credentials and invites. Credentials, invites, uploads and connection tokens are never sent to the browser at all.</p>
+  <div class="warn"><b>The 6 MB response limit</b>A Lambda response can be at most 6 MB. <code>publicSlice</code> keeps the download small: it leaves out ledger transactions (fetched per engagement from <code>/engagements/[id]/transactions</code>), drops <code>raw_json</code> from every TB snapshot, and sends lines only for each engagement's latest snapshot. Gzip does the rest. If "Could not load the workspace" comes back, look here first.</div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section class="section">
+  <span class="kicker">Section 7</span>
+  <h2><span class="n">7</span>Data model</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 400">
+      <g>
+        <rect class="bx" x="20" y="20" width="130" height="40" rx="6"/><text class="tw" x="85" y="44" text-anchor="middle">firms</text>
+        <rect class="bl" x="20" y="90" width="130" height="40" rx="6"/><text class="t" x="85" y="114" text-anchor="middle">memberships</text>
+        <rect class="bl" x="20" y="160" width="130" height="40" rx="6"/><text class="t" x="85" y="184" text-anchor="middle">users</text>
+        <rect class="bl" x="20" y="230" width="130" height="40" rx="6"/><text class="t" x="85" y="254" text-anchor="middle">learned_rules</text>
+        <rect class="bl" x="20" y="300" width="130" height="40" rx="6"/><text class="t" x="85" y="324" text-anchor="middle">workflow_templates</text>
+
+        <rect class="bx" x="210" y="20" width="130" height="40" rx="6"/><text class="tw" x="275" y="44" text-anchor="middle">clients</text>
+        <rect class="bc" x="210" y="90" width="130" height="40" rx="6"/><text class="t" x="275" y="114" text-anchor="middle">xero / qbo_connections</text>
+
+        <rect class="bx" x="400" y="20" width="140" height="40" rx="6"/><text class="tw" x="470" y="44" text-anchor="middle">engagements</text>
+        <rect class="bl" x="400" y="90" width="140" height="40" rx="6"/><text class="t" x="470" y="114" text-anchor="middle">tb_snapshots</text>
+        <rect class="bl" x="400" y="160" width="140" height="40" rx="6"/><text class="t" x="470" y="184" text-anchor="middle">tb_lines</text>
+        <rect class="bl" x="400" y="230" width="140" height="40" rx="6"/><text class="t" x="470" y="254" text-anchor="middle">account_mappings</text>
+        <rect class="bl" x="400" y="300" width="140" height="40" rx="6"/><text class="t" x="470" y="324" text-anchor="middle">blynt_accounts (chart)</text>
+
+        <rect class="bl" x="600" y="20" width="140" height="40" rx="6"/><text class="t" x="670" y="44" text-anchor="middle">workpapers</text>
+        <rect class="bl" x="600" y="80" width="140" height="34" rx="6"/><text class="t" x="670" y="101" text-anchor="middle">signoffs</text>
+        <rect class="bl" x="600" y="122" width="140" height="34" rx="6"/><text class="t" x="670" y="143" text-anchor="middle">procedures</text>
+        <rect class="bl" x="600" y="164" width="140" height="34" rx="6"/><text class="t" x="670" y="185" text-anchor="middle">comments</text>
+        <rect class="bl" x="600" y="206" width="140" height="34" rx="6"/><text class="t" x="670" y="227" text-anchor="middle">attachments (+links)</text>
+        <rect class="bl" x="600" y="248" width="140" height="34" rx="6"/><text class="t" x="670" y="269" text-anchor="middle">adjustments (journals)</text>
+        <rect class="bl" x="600" y="290" width="140" height="34" rx="6"/><text class="t" x="670" y="311" text-anchor="middle">engagement_workflows</text>
+        <rect class="bl" x="600" y="332" width="140" height="34" rx="6"/><text class="t" x="670" y="353" text-anchor="middle">statutory_notes · checklist</text>
+      </g>
+      <path class="ar" d="M85 60v28"/><path class="ar" d="M85 130v28"/><path class="ard" d="M20 46 C8 46 8 250 18 250"/><path class="ard" d="M20 52 C3 52 3 320 18 320"/>
+      <path class="ar" d="M150 40h58"/><path class="ar" d="M275 60v28"/><path class="ar" d="M340 40h58"/>
+      <path class="ar" d="M470 60v28"/><path class="ar" d="M470 130v28"/><path class="ar" d="M470 200v28"/><path class="ard" d="M470 270v28"/>
+      <path class="ar" d="M540 40h58"/>
+      <path class="ar" d="M540 50 C575 60 575 97 598 97"/><path class="ar" d="M540 52 C580 80 580 265 598 265"/><path class="ar" d="M540 54 C585 90 585 307 598 307"/><path class="ar" d="M540 56 C590 100 590 349 598 349"/>
+      <path class="ar" d="M670 60v18"/>
+      <text class="ts" x="160" y="34">1 : many</text><text class="ts" x="350" y="34">1 : many</text><text class="ts" x="480" y="78">each import</text><text class="ts" x="480" y="148">lines</text><text class="ts" x="480" y="218">code → Blynt code</text>
+      <text class="ts" x="20" y="372">Firm-wide: audit_logs (append-only), ai_action_logs, ai_lineage, ai_review_findings, mapping_lists, mapping_rules, templates,</text>
+      <text class="ts" x="20" y="386">view_prefs, schedule_versions, transactions (ledger), invites · server-only: credentials, uploads</text>
+    </svg>
+    <figcaption><b>Figure 7.1</b> Main relationships. A <b>client</b> has one <b>engagement</b> per accounting year. Each TB import is an immutable <b>snapshot</b> with a SHA-256 hash.</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:24%">Entity</th><th>Key fields and rules</th></tr>
+    <tr><td><code>Engagement</code></td><td><code>period_start</code>, <code>period_end</code>, <code>status</code> (locked when signed), <code>debtor_open_items</code> and <code>creditor_open_items</code> from Xero.</td></tr>
+    <tr><td><code>TbLine</code></td><td>Debit-positive pence strings, a comparative, a source code and name. Lines belong to a snapshot.</td></tr>
+    <tr><td><code>AccountMapping</code></td><td>Source code → <code>blynt_code</code>, <code>confidence</code>, <code>gate</code>, <code>status</code> (suggested / confirmed). Papers read only confirmed mappings.</td></tr>
+    <tr><td><code>Workpaper</code></td><td><code>ref</code> (e.g. <code>C-10</code>), template, <code>data_json</code> (the schedule), status, review state.</td></tr>
+    <tr><td><code>Adjustment</code></td><td>A journal: <code>ref</code> AJE-nnn, type, lines, status, <code>ledger</code> (Xero id, status, url), <code>self_approval_reason</code>.</td></tr>
+    <tr><td><code>Signoff</code></td><td>Role level (preparer / reviewer / partner), user, time, <code>stale</code> once the paper changes.</td></tr>
+    <tr><td><code>LearnedRule</code></td><td>Scope (supplier / client / practice), pattern (<code>code:4000</code>, <code>*rent*</code>), target, approval and use count.</td></tr>
+    <tr><td><code>AuditLog</code></td><td>Firm, actor, role, action, entity, before and after, time. Append-only, enforced by the guard.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 8 ============ -->
+<section class="section">
+  <span class="kicker">Section 8</span>
+  <h2><span class="n">8</span>Security and access</h2>
+  <div class="bar"></div>
+  <div class="two">
+    <div>
+      <h3 style="margin-top:0">Sign-in</h3>
+      <ul>
+        <li>Passwords are hashed in <code>auth.ts</code>. Hashes live only in server-only <code>credentials</code>.</li>
+        <li><code>blynt_session</code>: an HttpOnly, SameSite=Lax cookie signed with <code>AUTH_SECRET</code>, valid for 12 hours.</li>
+        <li>MFA: TOTP (<code>totp.ts</code>), backup codes, and a 30-day trusted-device cookie. It is enforced only when <code>MFA_REQUIRED=true</code>.</li>
+        <li>Repeated failed sign-ins lock the account out (<code>isLockedOut</code>).</li>
+        <li><code>InactivityHandler</code> signs idle users out.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Isolation</h3>
+      <ul>
+        <li>Every API route resolves the actor from the cookie, then checks firm and assigned clients (<code>requireEngagementAccess</code>, <code>requireWorkpaperAccess</code>…).</li>
+        <li>Below partner, members see only their assigned clients (<code>visibleClientIds</code>).</li>
+        <li>The browser receives only its own firm's slice, without secrets.</li>
+        <li>Files can be read only by the practice that uploaded them, through engagements the user can open.</li>
+        <li>Xero and QuickBooks tokens are stored encrypted (<code>XERO_TOKEN_KEY</code>).</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Roles</h3>
+  <table>
+    <tr><th>Role</th><th>Can</th><th>Cannot</th></tr>
+    <tr><td>Read-only</td><td>View</td><td>Change anything</td></tr>
+    <tr><td>Preparer</td><td>Import, map, fill papers, raise journals, sign Prepared</td><td>Review, approve journals</td></tr>
+    <tr><td>Reviewer</td><td>The above, plus review notes, sign Reviewed, send journals to Xero, Learn now</td><td>Approve papers, lock</td></tr>
+    <tr><td>Manager</td><td>The above, plus approve practice rules and workflow templates, the tax library, practice settings</td><td>Approve papers, lock or unlock</td></tr>
+    <tr><td>Partner</td><td>The above, plus approve papers, lock, unlock with a reason, change the self-approval setting</td><td>—</td></tr>
+    <tr><td>Admin</td><td>Everything, plus users, invites and practice set-up</td><td>—</td></tr>
+  </table>
+  <h3>Rules the state guard enforces on every browser save</h3>
+  <div>
+    <span class="pill">Audit log is append-only</span><span class="pill">AI action log is append-only</span><span class="pill c">Locked year: nothing changes</span><span class="pill c">Only partner or admin locks or unlocks</span><span class="pill">Archived clients are read-only</span><span class="pill">Sign-offs only through signoff.ts</span><span class="pill">Reviewed paper is read-only until unreviewed</span><span class="pill c">Journals only through journals.ts</span><span class="pill">Review notes resolved by reviewer+</span><span class="pill">Authors own their comments</span><span class="pill">Workflow templates are manager+</span><span class="pill">Practice rules need manager approval</span><span class="pill">Mappings confirmed as the signed-in user</span>
+  </div>
+  <div class="why" style="margin-top:4mm"><b>Separation of duties</b>Nobody may approve their own journal, and no one person may sign two levels on one paper. A practice with one qualified person can let partners and admins approve their own journals (Practice settings). Each such approval needs a reason of at least 10 characters and is logged as <code>SELF_APPROVE_ADJUSTMENT</code>.</div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section class="section">
+  <span class="kicker">Section 9</span>
+  <h2><span class="n">9</span>Trial balance, mapping and learning</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 124">
+      <g>
+        <rect class="bx" x="8" y="30" width="80" height="48" rx="6"/><text class="tw" x="48" y="52" text-anchor="middle">Client &amp;</text><text class="tw" x="48" y="66" text-anchor="middle">year</text>
+        <rect class="bx" x="102" y="30" width="80" height="48" rx="6"/><text class="tw" x="142" y="52" text-anchor="middle">Import</text><text class="tw" x="142" y="66" text-anchor="middle">TB</text>
+        <rect class="bx" x="196" y="30" width="80" height="48" rx="6"/><text class="tw" x="236" y="59" text-anchor="middle">Mapping</text>
+        <rect class="bx" x="290" y="30" width="80" height="48" rx="6"/><text class="tw" x="330" y="52" text-anchor="middle">Working</text><text class="tw" x="330" y="66" text-anchor="middle">papers</text>
+        <rect class="bx" x="384" y="30" width="80" height="48" rx="6"/><text class="tw" x="424" y="59" text-anchor="middle">Journals</text>
+        <rect class="bx" x="478" y="30" width="80" height="48" rx="6"/><text class="tw" x="518" y="52" text-anchor="middle">Analysis &amp;</text><text class="tw" x="518" y="66" text-anchor="middle">notes</text>
+        <rect class="bx" x="572" y="30" width="80" height="48" rx="6"/><text class="tw" x="612" y="52" text-anchor="middle">Review &amp;</text><text class="tw" x="612" y="66" text-anchor="middle">sign-off</text>
+        <rect class="bc" x="666" y="30" width="86" height="48" rx="6"/><text class="t" x="709" y="52" text-anchor="middle">Lock &amp;</text><text class="t" x="709" y="66" text-anchor="middle">report</text>
+      </g>
+      <path class="arc" d="M88 54h12M182 54h12M276 54h12M370 54h12M464 54h12M558 54h12M652 54h12"/>
+      <text class="ts" x="102" y="98">CSV, Xero, QuickBooks</text><text class="ts" x="196" y="112">rules → AI → gate</text><text class="ts" x="290" y="98">30 templates</text><text class="ts" x="384" y="112">AJE → Xero</text><text class="ts" x="572" y="98">3 levels</text><text class="ts" x="666" y="98">partner only</text>
+    </svg>
+    <figcaption><b>Figure 9.1</b> The year-end path. Every step reads the same adjusted trial balance.</figcaption>
+  </figure>
+  <h3>Import (<code>tb-import.ts</code>)</h3>
+  <p>Every source (CSV, Xero, QuickBooks) ends in <code>importTrialBalance(actor, engagementId, lines, source)</code>. It checks that each line has a name and real amounts, that codes are unique (a missing code becomes <code>ACC-NAME</code>), and that each line is under £1bn. It rejects an unbalanced TB with the difference, stores an immutable snapshot hashed with SHA-256, records what moved since the last import, and maps every line through <code>runGated</code>.</p>
+  <figure>
+    <svg viewBox="0 0 760 210">
+      <rect class="bw" x="10" y="80" width="110" height="56" rx="6"/><text class="t" x="22" y="101">TB line</text><text class="ts" x="22" y="116">code:4000</text><text class="ts" x="22" y="127">name:sales</text>
+      <rect class="bx" x="150" y="20" width="150" height="50" rx="6"/><text class="tw" x="162" y="41">1. findRule()</text><text class="tsw" x="162" y="56">supplier › client › practice</text>
+      <rect class="bx" x="150" y="140" width="150" height="50" rx="6"/><text class="tw" x="162" y="161">2. ai() suggestion</text><text class="tsw" x="162" y="176">auto-mapper / AI task</text>
+      <rect class="bc" x="330" y="140" width="130" height="50" rx="6"/><text class="t" x="342" y="161">3. gateFor()</text><text class="ts" x="342" y="176">confidence vs thresholds</text>
+      <rect class="bx" x="500" y="10" width="120" height="40" rx="6"/><text class="tw" x="512" y="34">Ready · 100%</text>
+      <rect class="bl" x="500" y="96" width="120" height="34" rx="6"/><text class="t" x="512" y="117">Ready</text>
+      <rect class="bl" x="500" y="138" width="120" height="34" rx="6"/><text class="t" x="512" y="159">Check</text>
+      <rect class="bc" x="500" y="180" width="120" height="26" rx="6"/><text class="t" x="512" y="197">Exception</text>
+      <rect class="bl" x="640" y="70" width="112" height="90" rx="6"/><text class="t" x="650" y="90">Person confirms</text><text class="ts" x="650" y="106">or corrects →</text><text class="ts" x="650" y="120">learnFromCorrection</text><text class="ts" x="650" y="134">= new rule</text>
+      <path class="ar" d="M120 100 C135 100 135 45 148 45"/><path class="ar" d="M120 110 C135 110 135 165 148 165"/>
+      <path class="arc" d="M300 40H498"/><text class="tc" x="350" y="56">rule matched</text>
+      <path class="ar" d="M300 165h28"/><path class="ar" d="M460 160 C480 160 480 113 498 113"/><path class="ar" d="M460 165h38"/><path class="ar" d="M460 170 C480 170 480 193 498 193"/>
+      <path class="ar" d="M620 145 C630 145 630 120 638 118"/>
+      <path class="ard" d="M696 70 C696 10 640 10 302 30"/>
+    </svg>
+    <figcaption><b>Figure 9.2</b> <code>runGated</code>: a rule a person made always wins at 100%. Otherwise the AI proposes and the gate sorts the result. Auto-accept is off by default, so a person confirms, and each correction becomes a rule.</figcaption>
+  </figure>
+  <div class="code">
+    <div class="file">src/lib/server/gate.ts <span>runGated()</span></div>
+<pre><span class="k">const</span> rule = <span class="f">findRule</span>(firmId, ruleType, keys,
+                     { clientId, supplier });
+<span class="k">if</span> (rule) {
+  rule.times_used += 1;
+  <span class="k">return</span> { value: decode(rule.target_value),
+    confidence: 100, gate: <span class="s">'ready'</span>,
+    source: <span class="s">'rule'</span>, accepted: <span class="k">true</span>, … };
+}
+<span class="k">const</span> p = opts.<span class="f">ai</span>();
+<span class="k">if</span> (!p) <span class="k">return</span> { value: <span class="k">null</span>, gate: <span class="s">'exception'</span>, … };
+<span class="k">const</span> gate = <span class="f">gateFor</span>(firmId, outputType, p.confidence);
+<span class="k">return</span> { …p, gate, source: <span class="s">'ai'</span>,
+  accepted: gate === <span class="s">'ready'</span>
+    &amp;&amp; <span class="f">thresholdsFor</span>(firmId, outputType).auto_accept };</pre>
+    <div class="notes"><ol>
+      <li>Rule keys are exact typed keys (<code>code:4000</code>, <code>name:sales ledger</code>) or wildcard name patterns (<code>*rent*</code>).</li>
+      <li>The AI function is called only when no rule matched, so a rule saves both cost and time.</li>
+      <li>Thresholds are set per output type in Practice settings.</li>
+      <li>The same interface is meant for other outputs too: extraction, journals and findings.</li>
+    </ol></div>
+  </div>
+  <h3>Learning (<code>learning.ts</code>)</h3>
+  <ul>
+    <li><b>Nightly:</b> after the Xero sync, <code>learnNightly()</code> runs once per practice every 20 hours. It turns each client's latest confirmed mapping per code into a client rule (<code>code:&lt;x&gt;</code>).</li>
+    <li><b>Learn now:</b> the Mapping page button (reviewer and above) runs the same step for one engagement straight away.</li>
+    <li><b>Examples for the AI:</b> <code>mappingExamples()</code> sends up to 40 confirmed mappings to <code>suggest_mapping</code>, the same client's first. They come only from the user's own practice.</li>
+  </ul>
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="section">
+  <span class="kicker">Section 10</span>
+  <h2><span class="n">10</span>Working papers and sign-off</h2>
+  <div class="bar"></div>
+  <p>Each paper is a <b>template</b> (<code>lib/workpapers/templates.ts</code>: lead codes, procedures, checks), a <b>calculator</b> (<code>lib/workpapers/&lt;paper&gt;.ts</code>, pure functions) and a <b>screen</b> (<code>components/workpaper/papers/*.tsx</code> or <code>schedules.tsx</code>). <code>engine.ts</code> computes lead figures from confirmed mappings, compares the schedule total with the TB, and drafts the conclusion.</p>
+  <table>
+    <tr><th>Area</th><th>Papers</th></tr>
+    <tr><td>Planning</td><td><code>A-10</code> Planning and materiality</td></tr>
+    <tr><td>Assets</td><td><code>B-10</code> Bank and cash · <code>C-10</code> Trade debtors · <code>C-20</code> Prepayments and accrued income · <code>C-30</code> Other debtors · <code>D-10</code> Stock and WIP · <code>F-10</code> Fixed assets · <code>G-10</code> Investments</td></tr>
+    <tr><td>Equity and directors</td><td><code>D-20</code> Director's loan account · <code>E-10</code> Share capital and dividends · <code>E-20</code> Reserves</td></tr>
+    <tr><td>Liabilities</td><td><code>K-10</code> Trade creditors · <code>K-20</code> Accruals and deferred income · <code>L-10</code> Leases · <code>L-20</code> Loans · <code>L-30</code> Hire purchase · <code>Q-10</code> Provisions · <code>Q-20</code> Grants</td></tr>
+    <tr><td>Income and costs</td><td><code>I-10</code> Revenue and cut-off · <code>P-10</code> Costs and overheads · <code>P-20</code> Payroll and PAYE/NIC</td></tr>
+    <tr><td>Tax</td><td><code>T-10</code> Corporation tax · <code>T-20</code> VAT control · <code>T-30</code> Deferred tax</td></tr>
+    <tr><td>Other</td><td><code>R-10</code> Related parties · <code>R-20</code> Statutory information · <code>S-10</code> Suspense (must be zero)</td></tr>
+    <tr><td>Completion</td><td><code>Z-10</code> Completion checklist · <code>Z-20</code> FRS 102 1A disclosures · <code>Z-30</code> P&amp;L analytical review · <code>Z-40</code> Balance sheet analysis</td></tr>
+  </table>
+  <h3>Debtor and creditor ageing</h3>
+  <p>Open items come from Xero at the period end (<code>openDebtorItems</code>): each invoice's amount due plus payments allocated after the period end, with its payments list. Ageing by due date counts the due date as day 1, so an invoice due on the year end is 1–30 days overdue.</p>
+  <figure>
+    <svg viewBox="0 0 760 120">
+      <rect class="bl" x="20" y="30" width="170" height="44" rx="6"/><text class="t" x="105" y="50" text-anchor="middle">Current</text><text class="ts" x="105" y="65" text-anchor="middle">due after the year end (≤ 0)</text>
+      <rect class="bc" x="205" y="30" width="170" height="44" rx="6"/><text class="t" x="290" y="50" text-anchor="middle">1–30 days</text><text class="ts" x="290" y="65" text-anchor="middle">includes due on the year end</text>
+      <rect class="bx" x="390" y="30" width="170" height="44" rx="6"/><text class="tw" x="475" y="50" text-anchor="middle">31–60 days</text>
+      <rect class="bd" x="575" y="30" width="170" height="44" rx="6"/><text class="tw" x="660" y="50" text-anchor="middle">over 60 days</text>
+      <text class="ts" x="20" y="98">age = days(due → period end) + 1 · Overdue amount = invoice total − total paid · due date shown only while unpaid</text>
+    </svg>
+    <figcaption><b>Figure 10.1</b> Due-date buckets in <code>agedFromOpenItems</code> (<code>lib/workpapers/debtors.ts</code>). Creditors use the same rule in <code>suppliersFromOpenItems</code>.</figcaption>
+  </figure>
+  <h3>Sign-off (<code>signoff.ts</code>)</h3>
+  <figure>
+    <svg viewBox="0 0 760 140">
+      <rect class="bw" x="10" y="40" width="110" height="44" rx="6"/><text class="t" x="65" y="66" text-anchor="middle">In progress</text>
+      <rect class="bx" x="170" y="40" width="130" height="44" rx="6"/><text class="tw" x="235" y="60" text-anchor="middle">Prepared</text><text class="tsw" x="235" y="74" text-anchor="middle">preparer +</text>
+      <rect class="bx" x="350" y="40" width="130" height="44" rx="6"/><text class="tw" x="415" y="60" text-anchor="middle">Reviewed</text><text class="tsw" x="415" y="74" text-anchor="middle">reviewer / manager / partner</text>
+      <rect class="bc" x="530" y="40" width="130" height="44" rx="6"/><text class="t" x="595" y="60" text-anchor="middle">Approved</text><text class="ts" x="595" y="74" text-anchor="middle">partner / admin</text>
+      <path class="arc" d="M120 62h48M300 62h48M480 62h48"/>
+      <path class="ard" d="M415 86 C415 120 235 120 235 88"/><text class="ts" x="270" y="128">unreview with a reason (10+ characters)</text>
+      <text class="ts" x="128" y="18">reconciled, procedures done,</text><text class="ts" x="128" y="30">AI values confirmed</text>
+      <text class="ts" x="310" y="30">no open findings</text>
+      <text class="ts" x="490" y="30">prepared + reviewed, no open points</text>
+      <text class="tc" x="672" y="58">paper edited</text><text class="tc" x="672" y="72">→ sign-off stale</text>
+    </svg>
+    <figcaption><b>Figure 10.2</b> A practice can use one, two or three levels. One person cannot sign two levels on the same paper, and a reviewed paper is read-only until it is unreviewed.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="section">
+  <span class="kicker">Section 11</span>
+  <h2><span class="n">11</span>Journals and posting to Xero</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 220">
+      <rect class="bw" x="10" y="30" width="110" height="40" rx="6"/><text class="t" x="65" y="49" text-anchor="middle">proposed</text><text class="ts" x="65" y="62" text-anchor="middle">from a schedule / AI</text>
+      <rect class="bl" x="160" y="30" width="110" height="40" rx="6"/><text class="t" x="215" y="49" text-anchor="middle">accepted</text><text class="ts" x="215" y="62" text-anchor="middle">counts in adjusted TB</text>
+      <rect class="bx" x="310" y="30" width="110" height="40" rx="6"/><text class="tw" x="365" y="54" text-anchor="middle">approved</text>
+      <rect class="bx" x="460" y="30" width="110" height="40" rx="6"/><text class="tw" x="515" y="49" text-anchor="middle">posted</text><text class="tsw" x="515" y="62" text-anchor="middle">sent as POSTED</text>
+      <rect class="bc" x="610" y="30" width="140" height="40" rx="6"/><text class="t" x="680" y="49" text-anchor="middle">in_ledger</text><text class="ts" x="680" y="62" text-anchor="middle">seen in the next Xero pull</text>
+      <rect class="bw" x="10" y="120" width="110" height="34" rx="6"/><text class="t" x="65" y="141" text-anchor="middle">rejected</text>
+      <rect class="bw" x="310" y="120" width="110" height="34" rx="6"/><text class="t" x="365" y="141" text-anchor="middle">reversed</text>
+      <path class="ar" d="M120 50h38M270 50h38"/><path class="arc" d="M420 50h38M570 50h38"/>
+      <path class="ar" d="M65 70v48"/><text class="ts" x="72" y="100">with a reason</text>
+      <path class="ar" d="M365 70v48"/><text class="ts" x="372" y="100">creates a swapped AJE</text>
+      <path class="ard" d="M420 60 C540 110 600 100 640 72"/><text class="ts" x="470" y="112">sent as DRAFT, posted in Xero</text>
+      <text class="ts" x="10" y="190">The manual journal line uses LineAmount = (debit − credit) / 100, LineAmountTypes NoTax, Narration "AJE-002: …". The Idempotency-Key is the journal id,</text>
+      <text class="ts" x="10" y="204">so a retry never creates a second Xero journal. in_ledger journals are left out of the adjusted TB because the pulled TB already holds them.</text>
+    </svg>
+    <figcaption><b>Figure 11.1</b> Journal states. Approved journals are never deleted, only reversed. A journal already in Xero must be reversed in Xero.</figcaption>
+  </figure>
+  <div class="code">
+    <div class="file">src/lib/server/xero.ts <span>sendJournalToXero()</span></div>
+<pre><span class="c">// reviewer+ only; approved or posted only; not already sent
+// unless Xero shows the earlier one DELETED / VOIDED</span>
+<span class="k">const</span> body = { ManualJournals: [{
+  Narration: <span class="s">`${j.ref}: ${j.narrative}`</span>,
+  Date: j.date,
+  Status: post ? <span class="s">'POSTED'</span> : <span class="s">'DRAFT'</span>,
+  LineAmountTypes: <span class="s">'NoTax'</span>,
+  JournalLines: j.lines.map(l =&gt; ({
+    AccountCode: accounts[l.blynt_code],
+    LineAmount: <span class="f">pounds</span>(debit(l) - credit(l)),
+    Description: l.narrative })) }] };
+<span class="k">return</span> <span class="f">xeroWrite</span>(<span class="s">'/ManualJournals'</span>, token, tenant, body,
+  previous ? <span class="s">`${j.id}-${previous.id}`</span> : j.id);</pre>
+    <div class="notes"><ol>
+      <li>The dialog asks which Xero account each Blynt line goes to, and suggests the mapped source account with the largest balance.</li>
+      <li><code>xeroWrite</code> is a PUT. 401 means reconnect, 403 means the connection lacks the write scope (<code>accounting.manualjournals</code>, added later, so older connections must reconnect), and Xero's validation errors are shown as "Xero refused the journal: …".</li>
+      <li><code>recordXeroJournal</code> runs inside <code>freshWrite</code> and logs <code>SEND_JOURNAL_TO_XERO</code>.</li>
+      <li>On the next pull, a POSTED Xero journal moves the Blynt journal to <code>in_ledger</code>, so it is not counted twice.</li>
+    </ol></div>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section class="section">
+  <span class="kicker">Section 12</span>
+  <h2><span class="n">12</span>Integrations</h2>
+  <div class="bar"></div>
+  <h3>Xero</h3>
+  <figure>
+    <svg viewBox="0 0 760 250">
+      <rect class="bw" x="10" y="20" width="130" height="44" rx="6"/><text class="t" x="22" y="40">Connect</text><text class="ts" x="22" y="55">/xero/connect → callback</text>
+      <rect class="bl" x="170" y="20" width="160" height="44" rx="6"/><text class="t" x="182" y="40">xero_connections</text><text class="ts" x="182" y="55">encrypted tokens, tenant</text>
+      <rect class="bx" x="10" y="90" width="130" height="44" rx="6"/><text class="tw" x="22" y="110">Sync now</text><text class="tsw" x="22" y="125">header button / panel</text>
+      <rect class="bx" x="10" y="160" width="130" height="60" rx="6"/><text class="tw" x="22" y="180">Nightly</text><text class="tsw" x="22" y="195">autoSyncXero()</text><text class="tsw" x="22" y="208">every ~20 h per client</text>
+      <rect class="bc" x="170" y="160" width="160" height="60" rx="6"/><text class="t" x="182" y="180">xeroTbChanged()?</text><text class="ts" x="182" y="195">compare name + net with</text><text class="ts" x="182" y="208">the latest snapshot</text>
+      <rect class="bx" x="370" y="90" width="190" height="130" rx="6"/><text class="tw" x="382" y="110">pullTrialBalance()</text>
+      <text class="tsw" x="382" y="128">· TrialBalance report at period end</text><text class="tsw" x="382" y="142">· comparative year</text><text class="tsw" x="382" y="156">· open debtor + creditor items</text><text class="tsw" x="382" y="170">· sent journals → in_ledger</text><text class="tsw" x="382" y="184">· importTrialBalance(source xero)</text><text class="tsw" x="382" y="198">· "not gathered" notes</text>
+      <rect class="bl" x="600" y="90" width="150" height="56" rx="6"/><text class="t" x="612" y="110">Snapshot + lines</text><text class="ts" x="612" y="125">mapped through rules</text><text class="ts" x="612" y="138">papers refresh</text>
+      <rect class="bc" x="600" y="160" width="150" height="60" rx="6"/><text class="t" x="612" y="180">My work notice</text><text class="ts" x="612" y="195">"ledger changed" or</text><text class="ts" x="612" y="208">"reconnect Xero"</text>
+      <path class="ar" d="M140 42h28"/><path class="arc" d="M140 112h228"/><path class="ar" d="M140 190h28"/><path class="ar" d="M330 190 C350 190 350 170 368 170"/><text class="ts" x="336" y="230">changed: at most one full pull per run</text>
+      <path class="ar" d="M560 118h38"/><path class="ar" d="M560 190h38"/>
+    </svg>
+    <figcaption><b>Figure 12.1</b> Xero pulls, manual and nightly. Each nightly run has a 60-second check budget. A failed check keeps the tokens and is tried again next time.</figcaption>
+  </figure>
+  <p>Scopes are read-only (granular <code>accounting.*.read</code> scopes) except <code>accounting.manualjournals</code>, which journal posting needs. Lists are paged with <code>where</code> filters. A bank-payments endpoint supports the bank paper.</p>
+  <table>
+    <tr><th style="width:22%">Integration</th><th>Code</th><th>What it does</th></tr>
+    <tr><td>QuickBooks Online</td><td><code>quickbooks.ts</code>, <code>/integrations/quickbooks/*</code></td><td>OAuth connect, trial balance pull and sync. Same import path as Xero.</td></tr>
+    <tr><td>Invoice platform</td><td><code>invoice-platform.ts</code></td><td>Receives pushed invoices and a bank feed. The Open Banking feed is simulated for now.</td></tr>
+    <tr><td>Companies House</td><td><code>companies-house.ts</code></td><td>Officers, company details and filing dates for an engagement.</td></tr>
+    <tr><td>GOV.UK</td><td><code>tax-watch.ts</code>, <code>tax-pull.ts</code></td><td>Weekly check of when each cited page last changed, and Pull from GOV.UK, which reads stated figures for side-by-side comparison. Neither changes figures automatically: a person adds a dated entry.</td></tr>
+    <tr><td>Amazon SES</td><td><code>mail.ts</code>, <code>invite-email.ts</code></td><td>Invite and password-reset emails.</td></tr>
+  </table>
+  <h3>Tax library (<code>lib/tax.ts</code>)</h3>
+  <p>Built-in, dated UK VAT entries sourced from GOV.UK: rates (17.5% to 2011-01-03, then 20%, plus 5% and 0%), registration and deregistration thresholds, flat rate, cash and annual accounting limits, and the flat-rate categories. Practices can add their own entries (<code>firm.settings.tax_entries</code>, manager and above), which take priority. <code>inForce(key, date)</code> and <code>inPeriod(key, from, to)</code> answer "what applied when". <code>vatFactsFor(engagementId)</code> gives the AI review the client's scheme, rates, thresholds and warnings, such as an unregistered client over the threshold.</p>
+</section>
+
+<!-- ============ 13 ============ -->
+<section class="section">
+  <span class="kicker">Section 13</span>
+  <h2><span class="n">13</span>AI platform and MCP</h2>
+  <div class="bar"></div>
+  <figure>
+    <svg viewBox="0 0 760 260">
+      <rect class="bw" x="10" y="20" width="140" height="56" rx="6"/><text class="t" x="22" y="40">Module</text><text class="ts" x="22" y="55">ai/services.ts names a</text><text class="ts" x="22" y="68">task: run(task, input)</text>
+      <rect class="bx" x="190" y="10" width="300" height="240" rx="8"/><text class="tw" x="204" y="32">gateway.run()</text>
+      <text class="tsw" x="204" y="54">1  routeFor: practice settings → task default</text>
+      <text class="tsw" x="204" y="72">2  monthly spend limit → blocked + logged</text>
+      <text class="tsw" x="204" y="90">3  task.build(input) → message parts</text>
+      <text class="tsw" x="204" y="108">4  mode:</text>
+      <rect class="bd" x="214" y="116" width="84" height="52" rx="4"/><text class="tw" x="256" y="136" text-anchor="middle">single</text><text class="tsw" x="256" y="152" text-anchor="middle">fallback</text>
+      <rect class="bd" x="304" y="116" width="84" height="52" rx="4"/><text class="tw" x="346" y="136" text-anchor="middle">review</text><text class="tsw" x="346" y="152" text-anchor="middle">2 reads, agree?</text>
+      <rect class="bd" x="394" y="116" width="84" height="52" rx="4"/><text class="tw" x="436" y="136" text-anchor="middle">collaborate</text><text class="tsw" x="436" y="152" text-anchor="middle">2nd checks 1st</text>
+      <text class="tsw" x="204" y="190">5  3 attempts per call, 400 ms backoff, 120 s timeout</text>
+      <text class="tsw" x="204" y="208">6  validate output against the task's schema</text>
+      <text class="tsw" x="204" y="226">7  read-only tool loop (max 6 rounds)</text>
+      <text class="tsw" x="204" y="244">8  one usage row per provider call (tokens, cost)</text>
+      <rect class="bc" x="530" y="20" width="220" height="40" rx="6"/><text class="t" x="542" y="44">Anthropic (Claude)</text>
+      <rect class="bc" x="530" y="70" width="220" height="40" rx="6"/><text class="t" x="542" y="94">OpenAI</text>
+      <rect class="bc" x="530" y="120" width="220" height="40" rx="6"/><text class="t" x="542" y="144">Google Gemini</text>
+      <rect class="bl" x="530" y="180" width="220" height="70" rx="6"/><text class="t" x="542" y="200">Caller decides</text><text class="ts" x="542" y="216">confidence gate · confirm flow</text><text class="ts" x="542" y="230">approval rules · action log</text><text class="ts" x="542" y="244">the gateway only proposes</text>
+      <path class="arc" d="M150 48h38"/><path class="ar" d="M490 40h38M490 90h38M490 140h38"/><path class="ar" d="M490 215h38"/>
+    </svg>
+    <figcaption><b>Figure 13.1</b> Every model call goes through <code>ai/gateway.ts</code>. Modules never call a provider directly, so limits, fallbacks and logging apply everywhere.</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:28%">Task id</th><th>Used for</th></tr>
+    <tr><td><code>suggest_mapping</code></td><td>Map TB lines to the Blynt chart, using confirmed examples.</td></tr>
+    <tr><td><code>review_workpaper</code></td><td>Review findings on a paper, with VAT facts.</td></tr>
+    <tr><td><code>draft_conclusion</code></td><td>The paper's conclusion text.</td></tr>
+    <tr><td><code>summarise_engagement</code> · <code>risk_review</code></td><td>Engagement summary and risk areas.</td></tr>
+    <tr><td><code>suggest_provision</code></td><td>Debtor provision percentage with a reason (the Provision picker's "Ask AI").</td></tr>
+    <tr><td><code>research</code></td><td>Technical research questions.</td></tr>
+    <tr><td><code>extract_document</code> · <code>classify_document</code></td><td>Read uploaded evidence (loans, leases, payroll, VAT returns, invoices…).</td></tr>
+    <tr><td><code>read_bank_statement</code></td><td>Closing balances from a statement, offered on the bank paper.</td></tr>
+  </table>
+  <h4>Adding an AI task</h4>
+  <p>Define a <code>TaskDef</code> in <code>ai/tasks/*.ts</code> (id, version, module, schema, <code>build(input)</code>) and add it to <code>ai/catalog.ts</code>. Call <code>run(task, input, ctx)</code> from <code>ai/services.ts</code>, and send the result through the gate or a confirm step. Bump <code>version</code> when the prompt changes, so logs show which version produced which output.</p>
+  <h3>MCP server (<code>lib/server/mcp</code>)</h3>
+  <p>Outside assistants (Claude, ChatGPT and others) connect with OAuth 2.1 and PKCE: <code>/.well-known/*</code>, <code>/api/oauth/register|authorize|token|revoke</code>. They then call JSON-RPC at <code>/api/mcp</code>, which is stateless so it suits Lambda. Each call is checked against the user as they are now (role, practice, assigned clients), the practice's MCP switch and tool list, and the token's scope, and every call is logged. Tools: <code>search_workpapers</code>, <code>get_client_summary</code>, <code>get_account_details</code>, <code>find_missing_documents</code>, <code>generate_report</code>, <code>create_reconciliation_draft</code>, <code>retrieve_review_exceptions</code>, <code>get_workpaper_status</code>. It is off unless <code>MCP_ENABLED=1</code>.</p>
+</section>
+
+<!-- ============ 14 ============ -->
+<section class="section">
+  <span class="kicker">Section 14</span>
+  <h2><span class="n">14</span>Code graph</h2>
+  <div class="bar"></div>
+  <p class="lead">A knowledge graph of the repository is built with graphify (<code>graphify-out/</code>, open <code>graph.html</code> in a browser). The last build had 2,125 nodes, 7,893 edges and 94 communities, with 98% of edges read directly from the code.</p>
+  <figure>
+    <svg viewBox="0 0 760 300">
+      <text class="th" x="16" y="24">MOST-CONNECTED FUNCTIONS (EDGES)</text>
+      <g>
+        <text class="t" x="180" y="52" text-anchor="end">syncIn()</text><rect x="190" y="40" width="530" height="16" rx="3" fill="#122654"/><text class="tw" x="712" y="52" text-anchor="end">176</text>
+        <text class="t" x="180" y="76" text-anchor="end">errorResponse()</text><rect x="190" y="64" width="524" height="16" rx="3" fill="#122654"/><text class="tw" x="706" y="76" text-anchor="end">174</text>
+        <text class="t" x="180" y="100" text-anchor="end">jsonResponse()</text><rect x="190" y="88" width="506" height="16" rx="3" fill="#122654"/><text class="tw" x="688" y="100" text-anchor="end">168</text>
+        <text class="t" x="180" y="124" text-anchor="end">db</text><rect x="190" y="112" width="449" height="16" rx="3" fill="#FF7A66"/><text class="tw" x="631" y="124" text-anchor="end">149</text>
+        <text class="t" x="180" y="148" text-anchor="end">asPence()</text><rect x="190" y="136" width="440" height="16" rx="3" fill="#1D4E89"/><text class="tw" x="622" y="148" text-anchor="end">146</text>
+        <text class="t" x="180" y="172" text-anchor="end">syncOut()</text><rect x="190" y="160" width="388" height="16" rx="3" fill="#122654"/><text class="tw" x="570" y="172" text-anchor="end">129</text>
+        <text class="t" x="180" y="196" text-anchor="end">formatPence()</text><rect x="190" y="184" width="379" height="16" rx="3" fill="#1D4E89"/><text class="tw" x="561" y="196" text-anchor="end">126</text>
+        <text class="t" x="180" y="220" text-anchor="end">getActorFromRequest()</text><rect x="190" y="208" width="265" height="16" rx="3" fill="#122654"/><text class="tw" x="447" y="220" text-anchor="end">88</text>
+        <text class="t" x="180" y="244" text-anchor="end">ServiceError</text><rect x="190" y="232" width="214" height="16" rx="3" fill="#122654"/><text class="tw" x="396" y="244" text-anchor="end">71</text>
+      </g>
+      <rect x="190" y="268" width="12" height="10" fill="#122654"/><text class="ts" x="206" y="277">request plumbing</text>
+      <rect x="310" y="268" width="12" height="10" fill="#FF7A66"/><text class="ts" x="326" y="277">state</text>
+      <rect x="380" y="268" width="12" height="10" fill="#1D4E89"/><text class="ts" x="396" y="277">money</text>
+    </svg>
+    <figcaption><b>Figure 14.1</b> The "god nodes". Request plumbing, the workspace and money handling hold the codebase together. A change to any of these touches nearly every route, so test widely.</figcaption>
+  </figure>
+  <h3>Main communities</h3>
+  <p>
+    <span class="pill">Xero integration</span><span class="pill">Workspace DB &amp; client pages</span><span class="pill">Balance sheet analysis</span><span class="pill">Shared UI kit</span><span class="pill">Engagement &amp; TB screens</span><span class="pill">Workpaper screen &amp; sign-off</span><span class="pill">Chart of accounts</span><span class="pill">Client profile &amp; templates</span><span class="pill">Analytical review &amp; debtors</span><span class="pill">Invoice platform</span><span class="pill">Management accounts</span><span class="pill">Authentication core</span><span class="pill">Workflow editor</span><span class="pill">Confidence gate</span><span class="pill">QuickBooks</span><span class="pill">Journal entries</span><span class="pill">Credentials, invites &amp; resets</span><span class="pill">Loans</span><span class="pill">Firm isolation &amp; state guard</span><span class="pill">Fixed assets &amp; money</span><span class="pill">Roll-forward</span><span class="pill">Statement reader</span><span class="pill">AI mapping confidence &amp; rules</span><span class="pill">Workspace sync</span>
+  </p>
+  <div class="tip"><b>Refreshing the graph</b>The report says which commit it was built from. Compare that with <code>git rev-parse HEAD</code>, and run <code>graphify update .</code> after code changes (no API cost). The graph above predates the November 15–16 work (sidebar, Learning library, tax pull), so rebuild it before relying on the exact numbers.</div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section class="section">
+  <span class="kicker">Section 15</span>
+  <h2><span class="n">15</span>Testing and local development</h2>
+  <div class="bar"></div>
+  <table>
+    <tr><th style="width:36%">Command</th><th>What it does</th></tr>
+    <tr><td><code>npm run dev</code></td><td>Next dev server. Without <code>DATABASE_URL</code>, state lives in <code>.workspace_state.json</code>.</td></tr>
+    <tr><td><code>npm test</code> (<code>vitest run</code>)</td><td>The full suite: 81 files covering services, guard rules, papers, Xero, AI and screens.</td></tr>
+    <tr><td><code>npx tsc --noEmit -p .</code></td><td>Type check.</td></tr>
+    <tr><td><code>npm run lint</code></td><td>oxlint over <code>src</code>.</td></tr>
+    <tr><td><code>npm run reset-workspace</code></td><td>Clears the local workspace back to the demo seed.</td></tr>
+    <tr><td><code>npm run view-data</code></td><td>Prints the stored workspace for inspection.</td></tr>
+  </table>
+  <div class="warn"><b>Windows</b>Run Vitest from <code>D:\Project\WP</code> in PowerShell. Under Git Bash the lowercase <code>d:</code> path breaks it ("failed to find the runner").</div>
+  <h3>Test conventions</h3>
+  <ul>
+    <li>Server tests drive the real <code>db</code> and services in memory. Reset the collections a test depends on (for example clear <code>account_mappings</code> before seeding).</li>
+    <li>External calls (Xero, providers, GOV.UK) are passed in as <code>fetchFn</code> or mocked. <code>LIVE_AI</code> enables the few live AI tests.</li>
+    <li>Screen tests use Testing Library and query by role and label (<code>aria-label</code>s are part of the contract).</li>
+    <li>Money assertions compare <code>bigint</code> pence, never formatted strings.</li>
+  </ul>
+  <h3>Sign-in for test users</h3>
+  <p>The demo seed creates <code>preparer@</code>, <code>reviewer@</code>, <code>partner@</code> and <code>admin@test.local</code>, with the password from <code>TEST_USER_PASSWORD</code>. A live workspace starts empty, without them.</p>
+  <div class="code full">
+    <div class="file">src/lib/money.ts <span>the money rule</span></div>
+<pre><span class="c">// Ground Rule 1: money is integer pence (bigint). Format only for display.</span>
+<span class="f">toPence</span>(<span class="s">"6,000.00"</span>) <span class="c">// → 600000n   ("—", "-", "nil", "n/a" → 0n)</span>
+<span class="f">formatPence</span>(600000n) <span class="c">// → "£6,000.00"</span>
+<span class="f">formatPenceInput</span>(600000n) <span class="c">// → "6000.00" for an input box</span>
+<span class="c">// Stored as strings in JSON ("600000"), turned into bigint with asPence()/BigInt() before any sum.</span></pre>
+  </div>
+</section>
+
+<!-- ============ 16 ============ -->
+<section class="section">
+  <span class="kicker">Section 16</span>
+  <h2><span class="n">16</span>Runbook and how-tos</h2>
+  <div class="bar"></div>
+  <table>
+    <tr><th style="width:30%">Symptom</th><th style="width:34%">Likely cause</th><th>Fix</th></tr>
+    <tr><td>"Could not load the workspace"</td><td>The <code>/api/v1/state</code> response is over the 6 MB Lambda limit, or a server error.</td><td>Check CloudWatch. Keep large data out of <code>publicSlice</code> and serve it from its own route.</td></tr>
+    <tr><td>A merged change isn't live</td><td>A branch or older build finished last.</td><td>Compare the Lambda <code>ImageUri</code> tag with master's sha and re-point with <code>update-function-code</code>.</td></tr>
+    <tr><td>"Workspace was changed by someone else"</td><td>A concurrent save (version conflict).</td><td>Use <code>freshWrite</code> on the server. The browser reloads and re-applies.</td></tr>
+    <tr><td>Nightly sync returns 403</td><td>The scheduler key no longer matches <code>AUTH_SECRET</code>.</td><td>Regenerate the HMAC key in the schedule's input.</td></tr>
+    <tr><td>Send to Xero says no permission</td><td>The connection predates the write scope.</td><td>Reconnect Xero for that client.</td></tr>
+    <tr><td>A paper shows no figures</td><td>Its lead accounts aren't mapped and confirmed.</td><td>Confirm the mappings. Papers read only confirmed <code>account_mappings</code> (<code>engine.ts</code> leads).</td></tr>
+    <tr><td>A new secret is missing at runtime</td><td>It isn't in the buildspec lists.</td><td>Add it to Secrets Manager, then to both buildspec lists (Section 3).</td></tr>
+  </table>
+  <h3>How to add…</h3>
+  <h4>An API route</h4>
+  <p>Create <code>src/app/api/v1/&lt;area&gt;/route.ts</code> following the pattern in Section 5: <code>syncIn</code>, a <code>require…Access</code> check, a role check, the service call, <code>syncOut</code>, and the two response helpers. Put the logic in a service under <code>lib/server</code>, not in the route. Add a test in <code>src/__tests__</code>.</p>
+  <h4>A working paper</h4>
+  <p>Add a template to <code>templates.ts</code> (ref, title, lead codes, procedures), a calculator in <code>lib/workpapers/</code>, a screen in <code>components/workpaper/papers/</code> registered in <code>papers/index.ts</code>, and checks in <code>engine.ts</code>.</p>
+  <h4>A server-managed collection</h4>
+  <p>Add it to the <code>Database</code> class in <code>db.ts</code> and its type to <code>models.ts</code>. If only the server may change it, add it to <code>SERVER_MANAGED</code> in <code>state-guard.ts</code>, and to the server-only list if the browser must never see it.</p>
+  <h4>A scheduled job</h4>
+  <p>Hang it off the auto-sync route (the one pass-through path), as nightly learning and the weekly tax check already do, and keep it idempotent with a "last ran" check, because the schedule fires every 10 minutes in its window.</p>
+</section>
+
+<!-- ============ A ============ -->
+<section class="section">
+  <span class="kicker">Appendix A</span>
+  <h2><span class="n">A</span>API route reference</h2>
+  <div class="bar"></div>
+  <p class="small">All under <code>/api/v1</code> unless shown. Every route is signed-in only, except the public paths in Section 5.</p>
+  <table>
+    <tr><th style="width:20%">Area</th><th>Routes</th></tr>
+    <tr><td>Auth</td><td><code>auth/login</code> <code>auth/logout</code> <code>auth/signup</code> <code>auth/forgot-password</code> <code>auth/reset-password</code> <code>auth/mfa/setup</code> <code>auth/mfa/verify</code> <code>account/backup-codes</code></td></tr>
+    <tr><td>Workspace</td><td><code>state</code> (GET, PUT, POST beacon) <code>view-prefs/[key]</code> <code>client-errors</code> <code>my-work</code></td></tr>
+    <tr><td>Practice</td><td><code>firm/settings</code> <code>firm/onboarding</code> <code>firm/onboarding/complete</code> <code>users</code> <code>users/[id]</code> <code>users/[id]/clients</code> <code>users/[id]/password-reset</code> <code>invites</code> <code>invites/[id]</code> <code>invites/accept</code></td></tr>
+    <tr><td>Clients</td><td><code>clients</code> <code>clients/[id]</code> <code>clients/[id]/archive</code></td></tr>
+    <tr><td>Engagements</td><td><code>engagements</code> <code>engagements/[id]</code> and under it: <code>tb</code> <code>imports</code> <code>mappings</code> <code>transactions</code> <code>adjustments</code> <code>lock</code> <code>unlock</code> <code>roll-forward</code> <code>prior-year-import</code> <code>opening-balance-check</code> <code>blockers</code> <code>export</code> <code>audit-log</code> <code>companies-house</code> <code>learn</code> <code>ai-summary</code> <code>ai-risk</code> <code>ai-provision</code></td></tr>
+    <tr><td>Mapping and rules</td><td><code>mappings/[id]</code> <code>mappings/confirm</code> <code>rules/[id]/approve</code> <code>ai/suggest-mapping</code></td></tr>
+    <tr><td>Working papers</td><td><code>workpapers/[id]</code> and under it: <code>signoffs</code> <code>unreview</code> <code>comments</code> <code>attachments</code> <code>confirm-value</code> <code>change-template</code> <code>template-options</code> <code>roll-forward</code> <code>ai-draft</code> <code>ai-review</code> · <code>schedules/[id]/propose-journals</code> <code>schedules/[id]/capital-revenue-detector</code></td></tr>
+    <tr><td>Journals</td><td><code>adjustments/[id]</code> (accept, reject, approve, reverse, post, delete) <code>adjustments/[id]/approve</code> <code>adjustments/[id]/xero</code> (accounts, send)</td></tr>
+    <tr><td>Comments and files</td><td><code>comments/[id]/replies</code> <code>comments/[id]/resolve</code> <code>attachments/[id]</code> <code>files</code> <code>files/[key]</code> <code>files/[key]/read-statement</code> <code>documents</code> <code>documents/[id]</code> <code>documents/[id]/extract</code> <code>documents/[id]/fill-schedule</code> <code>documents/link-evidence</code></td></tr>
+    <tr><td>Xero</td><td><code>integrations/xero/connect</code> <code>callback</code> <code>connection</code> <code>sync</code> <code>bank-payments</code> <code>auto-sync</code> (scheduler, HMAC key)</td></tr>
+    <tr><td>QuickBooks</td><td><code>integrations/quickbooks/connect</code> <code>callback</code> <code>connection</code> <code>sync</code></td></tr>
+    <tr><td>Invoice platform</td><td><code>integrations/invoice-platform/push-invoice</code> <code>bank-feed</code></td></tr>
+    <tr><td>Tax library</td><td><code>tax-library</code> (POST add, DELETE remove) <code>tax-library/pull</code> <code>tax-library/watch</code></td></tr>
+    <tr><td>AI</td><td><code>ai/admin</code> <code>ai/admin/test</code> <code>ai/admin/export</code> <code>ai/accuracy</code> <code>ai/research</code></td></tr>
+    <tr><td>MCP / OAuth</td><td><code>/api/mcp</code> <code>/api/oauth/register</code> <code>/api/oauth/authorize</code> <code>/api/oauth/token</code> <code>/api/oauth/revoke</code> <code>/.well-known/oauth-authorization-server</code> <code>/.well-known/oauth-protected-resource</code></td></tr>
+  </table>
+</section>
+
+<!-- ============ B ============ -->
+<section class="section">
+  <span class="kicker">Appendix B</span>
+  <h2><span class="n">B</span>Screen reference</h2>
+  <div class="bar"></div>
+  <table>
+    <tr><th style="width:36%">Path</th><th>Screen</th></tr>
+    <tr><td><code>/login</code> <code>/login/mfa</code> <code>/signup</code> <code>/forgot-password</code> <code>/reset-password</code> <code>/invite/[token]</code> <code>/onboarding</code></td><td>Sign-in, two-factor, practice sign-up, resets, invite acceptance, first-run set-up</td></tr>
+    <tr><td><code>/</code></td><td>Practice dashboard: banner, client list, progress charts, practice updates</td></tr>
+    <tr><td><code>/clients</code> <code>/clients/[id]</code></td><td>Client list. A client's profile and its working papers as one box per area.</td></tr>
+    <tr><td><code>/engagements/new</code></td><td>New engagement wizard with a running summary</td></tr>
+    <tr><td><code>/engagements/[id]</code></td><td>Engagement overview</td></tr>
+    <tr><td><code>…/workflow</code> <code>…/workflows/[wfId]</code></td><td>Year workflow: next-step card, step timeline, grouped papers with sign-off trackers</td></tr>
+    <tr><td><code>…/import</code> <code>…/trial-balance</code> <code>…/mapping</code></td><td>Import a TB, the TB grid with Xero panel, mapping with Learn now</td></tr>
+    <tr><td><code>…/workpapers</code> <code>…/workpapers/[wpId]</code></td><td>The paper list and a single working paper (schedule, checks, conclusion, sign-off)</td></tr>
+    <tr><td><code>…/journals</code> <code>…/adjustments</code></td><td>Journals: propose, approve, reverse, send to Xero</td></tr>
+    <tr><td><code>…/documents</code></td><td>Evidence uploads and AI extraction</td></tr>
+    <tr><td><code>…/analysis</code> <code>…/disclosures</code> <code>…/reports</code></td><td>Analytical review, notes and disclosure checklist, accounts and export packs</td></tr>
+    <tr><td><code>…/review</code> <code>…/sign-off</code> <code>…/history</code></td><td>Review notes and sign-off checks, lock, audit history</td></tr>
+    <tr><td><code>/review</code> <code>/my-work</code></td><td>Practice-wide review queue. My work: assigned items, ledger-changed and reconnect notices.</td></tr>
+    <tr><td><code>/library/standards</code> <code>/library/tax</code> <code>/library/templates</code> <code>/library/chart-of-accounts</code> <code>/library/mapping-lists</code> <code>/templates</code></td><td>Learning library, tax library, template guide, Blynt chart, mapping lists</td></tr>
+    <tr><td><code>/settings</code> <code>/settings/ai</code> <code>/logs</code></td><td>Practice settings (team, staff, defaults, self-approval), AI Control Centre, logs</td></tr>
+    <tr><td><code>/oauth/authorize</code></td><td>Consent screen for outside assistants (MCP)</td></tr>
+  </table>
+  <div style="margin-top:14mm;padding-top:5mm;border-top:3px solid var(--coral);display:flex;justify-content:space-between;align-items:center">
+    <img src="../../public/brand/blynt-horizontal-navy.svg" alt="Blynt" style="width:30mm">
+    <span class="small">Blynt Workpaper · Technical Guide · built from master c8dd400 · 16 November 2026</span>
+  </div>
+</section>
+
+</body>
+</html>
