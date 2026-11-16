@@ -1,4 +1,3 @@
-import { BlyntLogo } from '@/components/ui/BlyntLogo';
 
 const GHERKIN = 'M84 402 C62 330 50 262 54 200 C58 118 84 34 120 28 C156 34 182 118 186 200 C190 262 178 330 156 402 Z';
 
@@ -45,9 +44,15 @@ const POINTS = [
 export function AuthBrandPanel() {
   return (
     <div className="lg:col-span-6 xl:col-span-5 bg-[#0B1A3B] text-white p-8 sm:p-12 lg:px-14 lg:py-10 flex flex-col justify-between gap-8">
-      <BlyntLogo variant="full" theme="dark" size="lg" />
+      {/* One white lockup: the logo keeps its brand-kit clear space (X = 32% of 32 px), the product name sits past a rule */}
+      <div className="self-start inline-flex items-center bg-white rounded-[4px] p-2.5 pr-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/blynt-horizontal.svg" alt="Blynt" width={90} height={32} />
+        <span className="w-px h-6 bg-[#D3DCEE] ml-2.5 mr-3.5" aria-hidden="true" />
+        <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#122654]">Workpapers</span>
+      </div>
 
-      <div className="flex items-end gap-8">
+      <div className="flex items-end gap-8 border-b border-[#24396B]">
         <div className="flex-1 min-w-0 max-w-[420px]">
           <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF7A66] mb-4">
             <span className="w-6 h-px bg-[#FF7A66]" aria-hidden="true" />
@@ -64,7 +69,7 @@ export function AuthBrandPanel() {
 
           <ol className="border-t border-[#24396B]">
             {POINTS.map((p, i) => (
-              <li key={p.title} className="flex gap-4 py-3 border-b border-[#24396B]">
+              <li key={p.title} className="flex gap-4 py-3 border-b border-[#24396B] last:border-b-0">
                 <span className="font-mono text-[11px] text-[#FF7A66] pt-0.5">{String(i + 1).padStart(2, '0')}</span>
                 <span className="text-xs text-[#A6B4D0] leading-relaxed">
                   <strong className="block text-sm text-white font-bold mb-0.5">{p.title}</strong>
@@ -76,9 +81,10 @@ export function AuthBrandPanel() {
         </div>
 
         {/* Its own column from xl up, so the drawing never sits behind the copy */}
-        <figure className="hidden xl:flex flex-col items-center shrink-0 w-[130px] 2xl:w-[160px]">
-          <GherkinLineArt className="w-full h-auto text-[#A6B4D0]/55" />
-          <figcaption className="pt-2 w-full border-t border-[#24396B] text-center font-mono text-[10px] uppercase tracking-wider text-[#7E8DA6]">
+        <figure className="relative hidden xl:block shrink-0 w-[130px] 2xl:w-[160px]">
+          {/* Stands on the rule under the list */}
+          <GherkinLineArt className="block w-full h-auto text-[#A6B4D0]/55" />
+          <figcaption className="absolute top-full inset-x-0 pt-2 text-center font-mono text-[10px] uppercase tracking-wider text-[#7E8DA6]">
             30 St Mary Axe
           </figcaption>
         </figure>
