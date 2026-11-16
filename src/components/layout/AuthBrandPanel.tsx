@@ -45,7 +45,7 @@ const POINTS = [
 export function AuthBrandPanel() {
   return (
     <div className="lg:col-span-6 xl:col-span-5 bg-[#0B1A3B] text-white p-8 sm:p-12 lg:p-14 flex flex-col justify-between gap-12">
-      <BlyntLogo variant="full" theme="dark" size="lg" />
+      <BlyntLogo variant="full" theme="dark" size="xl" />
 
       <div className="flex items-end gap-8">
         <div className="flex-1 min-w-0 max-w-[420px]">
