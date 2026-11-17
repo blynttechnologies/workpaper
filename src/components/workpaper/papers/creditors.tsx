@@ -349,7 +349,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
             </button>
             <button type="button" onClick={checkBank} disabled={checking || !views.length} className={btnAdd} title={views.length ? `Look in the Xero bank for payments to these suppliers in the ${windowDays} days after ${peLabel}` : 'Add or refresh suppliers first'}>
-              <Landmark className="w-3.5 h-3.5" /> {checking ? 'Checking Xero bank…' : 'Check Xero bank'}
+              <Landmark className="w-3.5 h-3.5" /> {checking ? 'Checking bank…' : 'Check bank'}
             </button>
             <button type="button" onClick={addSupplier} className={btnAdd}>
               + Add supplier
@@ -547,12 +547,12 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       {s.bank_check &&
                         (s.bank_check.matches.length ? (
                           <div className="text-[10px] text-[#0B6B52]">
-                            In Xero bank{s.bank_check.matches[0].bank ? ` (${s.bank_check.matches[0].bank})` : ''}: {formatPence(asPence(s.bank_check.matches[0].amount_p))} on {ukDate(s.bank_check.matches[0].date)}
+                            From bank account{s.bank_check.matches[0].bank ? ` (${s.bank_check.matches[0].bank})` : ''}: {formatPence(asPence(s.bank_check.matches[0].amount_p))} on {ukDate(s.bank_check.matches[0].date)}
                             {s.bank_check.matches[0].reconciled ? '' : ' (not reconciled)'}
                             {s.bank_check.matches.length > 1 ? ` +${s.bank_check.matches.length - 1} more` : ''}
                           </div>
                         ) : (
-                          <div className="text-[10px] text-[#B42318]">Not in any Xero bank to {ukDate(s.bank_check.to)}</div>
+                          <div className="text-[10px] text-[#B42318]">Not from any bank account to {ukDate(s.bank_check.to)}</div>
                         ))}
                     </td>
                     <td className="p-2 align-top text-right">{status(v)}</td>
