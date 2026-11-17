@@ -20,7 +20,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       { ...attachment },
       body?.overrideCategory
     );
-    return jsonResponse(await freshWrite(() => services.applyExtraction(actor.firmId, actor, id, result)));
+    return jsonResponse(await freshWrite(() => services.applyExtraction(actor.firmId, actor, id, result)), 200, { 'x-ledger-unchanged': '1' });
   } catch (err) {
     return errorResponse(err);
   }

@@ -653,7 +653,10 @@ export async function bankPaymentsAfter(actor: Actor, engagementId: string, days
   if (!conn) throw new ServiceError('This client is not connected to Xero yet.', 409, 'XERO_NOT_CONNECTED');
   const day = (n: number) => new Date(Date.parse(eng.period_end) + n * 86_400_000).toISOString().slice(0, 10);
   const from = day(1);
-  const to = day(Math.min(Math.max(Math.round(days) || 60, 1), 366));
+  // Never past today: "not in the bank to" a date still to come would read as if those days had been checked
+  const today = new Date().toISOString().slice(0, 10);
+  const end = day(Math.min(Math.max(Math.round(days) || 60, 1), 366));
+  const to = end > today && today >= from ? today : end;
   requirePullable(from, 'Xero');
   const token = await accessTokenFor(conn);
   const deadline = Date.now() + 200_000;

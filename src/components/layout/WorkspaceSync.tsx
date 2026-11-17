@@ -110,6 +110,8 @@ function installFetchHook() {
     if (method === 'GET') return nativeFetch(input, init);
     const res = await nativeFetch(input, init);
     await serial(load).catch(() => undefined);
+    // Routes that never touch the ledger say so, and the wait for it to download again is skipped
+    if (res.headers.get('x-ledger-unchanged')) return res;
     // A write on the server (a Xero pull, say, even from the client page) may have changed any engagement's
     // ledger: the open one is fetched again now, the rest when they are next opened
     ledgerLoaded.clear();

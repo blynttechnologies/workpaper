@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     try {
       const out = await bankPaymentsAfter(actor, engagementId, Number(days));
       await syncOut(); // keeps a refreshed token
-      return jsonResponse(out, 200);
+      return jsonResponse(out, 200, { 'x-ledger-unchanged': '1' });
     } catch (err) {
       if (err instanceof XeroReconnectError) await syncOut();
       throw err;
