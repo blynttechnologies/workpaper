@@ -19,7 +19,7 @@ const AGED = [
   ['d60_p', '31–60 overdue'],
   ['d90_p', 'Over 60 overdue'],
 ] as const;
-import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, th, Tiles, useOpen } from '../kit';
+import { btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, th, Tiles, useOpen } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
 import { bankMatches, creditorsJournal, sameSupplier, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
 
@@ -756,28 +756,17 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <JournalPanel
-          engagementId={result.engagementId}
-          date={pe}
-          lines={lines}
-          sent={data.journal}
-          narrative="Trade creditors: missing invoices, accruals found after the period end and debit balances"
-          source="K-10"
-          locked={locked}
-          save={save}
-          title="Year-end journals"
-        />
-        <AccountsPreview
-          rows={[
-            { label: 'Trade creditors per ledger', amount: tot('control') },
-            { label: 'Missing invoices and bills added', amount: lines.filter((l) => l.code === '7500').reduce((a, l) => a + l.credit, 0n) },
-            { label: 'Debit balances moved to debtors', amount: lines.filter((l) => l.code === '7500').reduce((a, l) => a + l.debit, 0n) },
-            { label: 'Trade creditors due within one year', amount: tot('after_adjustments'), strong: true },
-            { label: 'Accruals (on the Accruals paper)', amount: lines.filter((l) => l.code === '7600').reduce((a, l) => a + l.credit, 0n) },
-          ]}
-        />
-      </div>
+      <JournalPanel
+        engagementId={result.engagementId}
+        date={pe}
+        lines={lines}
+        sent={data.journal}
+        narrative="Trade creditors: missing invoices, accruals found after the period end and debit balances"
+        source="K-10"
+        locked={locked}
+        save={save}
+        title="Year-end journals"
+      />
     </div>
   );
 }
