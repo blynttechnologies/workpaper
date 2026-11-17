@@ -106,3 +106,19 @@ describe('trade creditors drag and drop', () => {
     expect(dropped).toEqual([['ea.pdf', 'sup_ea']]);
   });
 });
+
+describe('trade creditors AI statement reading', () => {
+  it('says whose statement the AI read and how the balance compares with the ledger', () => {
+    setup([
+      { id: 'sup_rml', name: 'Raymond Martin Langley', ledger_p: '20833', statement_p: '', paid_after_p: '0', ai_statement: { file: 'att_1', balance_p: '499253', date: '2025-12-31', page: 1, supplier: 'Protran Services Limited' } },
+      { id: 'sup_bg', name: 'British Gas', ledger_p: '25376', statement_p: '25376', paid_after_p: '0', ai_statement: { file: 'att_2', balance_p: '25376', supplier: 'British Gas Ltd' } },
+    ]);
+    const wrong = screen.getByText('Raymond Martin Langley').closest('tr')!;
+    expect(within(wrong).getByText(/This statement is from Protran Services Limited, not Raymond Martin Langley/)).toBeTruthy();
+    expect(within(wrong).getByText(/4,784\.20 more than the ledger/)).toBeTruthy();
+    expect(within(wrong).getByText('Use this balance')).toBeTruthy();
+    const right = screen.getByText('British Gas').closest('tr')!;
+    expect(within(right).getByText('Statement from British Gas Ltd')).toBeTruthy();
+    expect(within(right).getByText('Agrees to the ledger')).toBeTruthy();
+  });
+});
