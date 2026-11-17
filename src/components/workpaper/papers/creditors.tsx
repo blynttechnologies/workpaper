@@ -21,7 +21,7 @@ const AGED = [
 ] as const;
 import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, th, Tiles, useOpen } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
-import { bankMatches, creditorsJournal, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
+import { bankMatches, creditorsJournal, sameSupplier, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
 
 const STATUS: Record<ReturnType<typeof supplierView>['status'], [string, 'good' | 'bad' | 'warn' | 'plain' | 'info']> = {
   none: ['No statement', 'plain'],
@@ -147,7 +147,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         const local = db.attachments.find((a) => a.id === att.id);
         if (local) Object.assign(local, { category: body.attachment.category, ai_summary: body.attachment.ai_summary, extracted_data: body.attachment.extracted_data });
         const bal = body.data?.closing_balance_p;
-        if (body.ai && bal?.value) ai = { file: att.id, balance_p: String(bal.value), date: body.data?.statement_date?.value || undefined, page: bal.page, confidence: bal.confidence };
+        if (body.ai && bal?.value) ai = { file: att.id, balance_p: String(bal.value), date: body.data?.statement_date?.value || undefined, page: bal.page, confidence: bal.confidence, supplier: body.data?.supplier?.value || undefined };
         else problem = body.note || `The AI could not read a balance from ${att.filename}. Enter it from the statement.`;
       } else problem = body.error || 'Could not read the statement.';
     } catch {
@@ -189,7 +189,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
   const owedCount = views.filter((v) => v.ledger > 0n).length;
   const control = result.checks.find((c) => c.id === 'control_tb');
   const lines = creditorsJournal(data);
-  const cols = agedCols ? 11 : 8;
+  const cols = agedCols ? 12 : 8;
 
   // The right-hand column: the suggestion and its buttons, or the decision made and its reason, as on Trade debtors
   const status = (v: ReturnType<typeof supplierView>) => {
@@ -373,8 +373,9 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <th className={`${th} text-right`}>Ledger</th>
               <th className={`${th} text-right w-[140px]`}>Statement balance</th>
               <th className={`${th} text-right`}>Difference</th>
-              <th className={`${th} text-right`}>Paid after</th>
               {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} text-right whitespace-normal! leading-tight`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
+              {agedCols && <th className={`${th} text-right`}>Total</th>}
+              <th className={`${th} text-right`}>Paid after</th>
               <th className={`${th} text-right`}>Status</th>
             </tr>
           </thead>
@@ -452,20 +453,38 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                             <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#4A5878]">
                               <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Reading statement…
                             </div>
-                          ) : aiBalance !== null && aiBalance !== v.statement ? (
-                            <div className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[10px] text-[#4A5878]">
-                              <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" />
-                              AI read {formatPence(aiBalance)}
-                              {ai?.date ? ` at ${ukDate(ai.date)}` : ''}
-                              {!locked && (
-                                <button type="button" className={link} onClick={() => setSupplier(s.id, { statement_p: ai!.balance_p })}>
-                                  Use
-                                </button>
-                              )}
-                            </div>
                           ) : aiBalance !== null ? (
-                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#4A5878]">
-                              <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Read by AI from the statement. Check it.
+                            // What the AI read, whose statement it is, and how it compares with the ledger
+                            <div className="mt-1 text-right text-[10px] leading-snug text-[#4A5878]">
+                              <div>
+                                <Sparkles className="inline w-3 h-3 text-[#B8432F]" aria-hidden="true" /> AI read <span className="font-mono font-bold text-[#122654]">{formatPence(aiBalance)}</span> owed
+                                {ai?.date ? ` at ${ukDate(ai.date)}` : ''}
+                                {ai?.page ? ` (page ${ai.page})` : ''}
+                              </div>
+                              {ai?.supplier &&
+                                (sameSupplier(ai.supplier, name) ? (
+                                  <div>Statement from {ai.supplier}</div>
+                                ) : (
+                                  <div className="font-bold text-[#B42318]">
+                                    This statement is from {ai.supplier}, not {name}. Check it is attached to the right supplier.
+                                  </div>
+                                ))}
+                              {aiBalance === v.ledger ? (
+                                <div className="text-[#0B6B52]">Agrees to the ledger</div>
+                              ) : (
+                                <div className="text-[#B8432F]">
+                                  {formatPence(aiBalance > v.ledger ? aiBalance - v.ledger : v.ledger - aiBalance)} {aiBalance > v.ledger ? 'more' : 'less'} than the ledger ({formatPence(v.ledger)})
+                                </div>
+                              )}
+                              {aiBalance === v.statement ? (
+                                <div>Filled in above as the statement balance. Check it against the statement.</div>
+                              ) : (
+                                !locked && (
+                                  <button type="button" className={link} onClick={() => setSupplier(s.id, { statement_p: ai!.balance_p })}>
+                                    Use this balance
+                                  </button>
+                                )
+                              )}
                             </div>
                           ) : (
                             file &&
@@ -487,6 +506,21 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       )}
                     </td>
                     <td className={`p-2 align-top text-right font-mono ${v.diff ? 'text-[#B8432F] font-bold' : ''}`}>{v.diff === null ? '–' : money(v.diff)}</td>
+                    {agedCols ? (
+                      AGED.map(([key]) => {
+                        const p = asPence(s.aged?.[key] ?? '0');
+                        return (
+                          <td key={key} className="p-2 align-top text-right font-mono">
+                            <span className={key === 'd90_p' && p > 0n ? 'px-1 rounded bg-[#FFF4DB] font-bold text-[#B8432F]' : ''}>{p === 0n ? '–' : money(p)}</span>
+                          </td>
+                        );
+                      })
+                    ) : (
+                      <td className="p-2 align-top text-right">
+                        {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
+                      </td>
+                    )}
+                    {agedCols && <td className="p-2 align-top text-right font-mono font-bold">{money(s.aged ? AGED.reduce((t, [key]) => t + asPence(s.aged![key]), 0n) : v.ledger)}</td>}
                     <td className="p-2 align-top text-right">
                       <div className={`font-mono font-bold ${v.ledger > 0n && v.paid === 0n ? 'text-[#B42318]' : v.paid >= v.ledger && v.ledger > 0n ? 'text-[#0B6B52]' : ''}`}>{v.ledger > 0n && v.paid === 0n ? 'Nil' : money(v.paid)}</div>
                       {s.payments_after?.length ? (
@@ -505,20 +539,6 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                           <div className="text-[10px] text-[#B42318]">Not in Xero bank to {ukDate(s.bank_check.to)}</div>
                         ))}
                     </td>
-                    {agedCols ? (
-                      AGED.map(([key]) => {
-                        const p = asPence(s.aged?.[key] ?? '0');
-                        return (
-                          <td key={key} className="p-2 align-top text-right font-mono">
-                            <span className={key === 'd90_p' && p > 0n ? 'px-1 rounded bg-[#FFF4DB] font-bold text-[#B8432F]' : ''}>{p === 0n ? '–' : money(p)}</span>
-                          </td>
-                        );
-                      })
-                    ) : (
-                      <td className="p-2 align-top text-right">
-                        {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
-                      </td>
-                    )}
                     <td className="p-2 align-top text-right">{status(v)}</td>
                   </tr>
                   {isOpen(s.id) && (
@@ -633,9 +653,10 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                 <td className="p-2 text-right font-mono">{money(tot('aged'))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.statement ?? 0n), 0n))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.diff ?? 0n), 0n))}</td>
-                <td className="p-2 text-right font-mono">{money(tot('paid_after'))}</td>
                 {agedCols && AGED.map(([key]) => <td key={key} className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + asPence(v.s.aged?.[key] ?? '0'), 0n))}</td>)}
-                <td colSpan={agedCols ? 1 : 2} />
+                {agedCols ? <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.s.aged ? AGED.reduce((t, [key]) => t + asPence(v.s.aged![key]), 0n) : v.ledger), 0n))}</td> : <td />}
+                <td className="p-2 text-right font-mono">{money(tot('paid_after'))}</td>
+                <td />
               </tr>
             </tfoot>
           )}

@@ -31,10 +31,16 @@ export interface Supplier {
   dispute_reason?: string;
   bank_check?: { to: string; matches: BankPayment[] }; // Xero bank payments after the period end that look like this supplier's
   // What the AI read off the attached statement (file: attachment id). balance_p '' when it could not read one. It fills an empty statement balance; a typed one is kept.
-  ai_statement?: { file: string; balance_p: string; date?: string; page?: number; confidence?: number };
+  ai_statement?: { file: string; balance_p: string; date?: string; page?: number; confidence?: number; supplier?: string }; // supplier: the name printed on the statement
 }
 
 const plainName = (n: string) => n.toLowerCase().replace(/\b(ltd|limited|plc|llp)\b/g, '').replace(/[^a-z0-9]/g, '');
+
+/** Whether the name printed on a statement is this supplier's, ignoring Ltd, case and punctuation. */
+export function sameSupplier(a: string, b: string): boolean {
+  const [x, y] = [plainName(a), plainName(b)];
+  return !!x && !!y && (x.includes(y) || y.includes(x));
+}
 
 /** Bank payments that are to this supplier by name, or are for exactly an open invoice or the balance owed. */
 export function bankMatches(s: Supplier, payments: BankPayment[]): BankPayment[] {
