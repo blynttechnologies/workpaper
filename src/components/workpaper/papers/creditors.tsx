@@ -44,6 +44,10 @@ const btnSmall = 'px-2 py-0.5 text-[10px] font-semibold rounded-[5px] border bor
 type BankChecked = { from: string; to: string; banks: { name: string; payments: number }[] };
 const bankList = (banks: BankChecked['banks']) => banks.map((b) => `${b.name} (${b.payments ? `${b.payments} payment${b.payments === 1 ? '' : 's'}` : 'none'})`).join(', ');
 
+/** The bank a bill's payment left from: the bank payment of the same amount on the same day, else any on that day. */
+const bankOf = (matches: { date: string; amount_p: string; bank?: string }[], p: { date: string; amount_p: string }) =>
+  (matches.find((m) => m.date === p.date && m.amount_p === p.amount_p) ?? matches.find((m) => m.date === p.date))?.bank;
+
 export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const { isOpen, toggle, show } = useOpen();
   const [filter, setFilter] = useState<'all' | 'attention' | 'done'>('all');
@@ -547,11 +551,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       ) : null}
                       {s.bank_check &&
                         (s.bank_check.matches.length ? (
-                          <div className="text-[10px] text-[#0B6B52]">
-                            From bank account{s.bank_check.matches[0].bank ? ` (${s.bank_check.matches[0].bank})` : ''}: {formatPence(asPence(s.bank_check.matches[0].amount_p))} on {ukDate(s.bank_check.matches[0].date)}
-                            {s.bank_check.matches[0].reconciled ? '' : ' (not reconciled)'}
-                            {s.bank_check.matches.length > 1 ? ` +${s.bank_check.matches.length - 1} more` : ''}
-                          </div>
+                          // With bills listed, the bank shows against each bill; otherwise name the banks here
+                          !s.invoices?.length && <div className="text-[10px] text-[#0B6B52]">{[...new Set(s.bank_check.matches.map((m) => m.bank).filter(Boolean))].join(', ') || 'Found in the bank'}</div>
                         ) : (
                           <div className="text-[10px] text-[#B42318]">Not from any bank account to {ukDate(s.bank_check.to)}</div>
                         ))}
@@ -586,7 +587,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                           {s.invoices && (
                             <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
                               {s.invoices.length ? (
-                                <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} refLabel="Bill #" byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} />
+                                <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} refLabel="Bill #" byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} bankFor={s.bank_check ? (p) => bankOf(s.bank_check!.matches, p) : undefined} />
                               ) : (
                                 <>
                                   <div className="font-bold mb-1">Open bills at {peLabel}</div>

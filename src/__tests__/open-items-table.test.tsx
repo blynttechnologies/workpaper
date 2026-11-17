@@ -54,3 +54,11 @@ describe('open invoices, laid out like the working spreadsheet', () => {
     expect(screen.getByText(/next pull from Xero/)).toBeTruthy();
   });
 });
+
+describe('open bills with the bank each payment left from', () => {
+  it('adds a Bank column with the bank name only when the caller knows the bank', () => {
+    render(<OpenItemsTable items={rows} peLabel="31 Dec 2025" title="Open bills" byDue warnAfter={60} bankFor={(p) => (p.date === '2026-07-31' ? 'Patcham' : undefined)} />);
+    expect(screen.getByRole('columnheader', { name: 'Bank' })).toBeTruthy();
+    expect(within(screen.getByText('12508').closest('tr')!).getByText('Patcham')).toBeTruthy();
+  });
+});

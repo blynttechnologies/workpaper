@@ -22,11 +22,13 @@ const money = (p: string | bigint) => formatPence(asPence(p), { symbol: '' });
  * date), amount, paid date and paid amount (several payments fold into one row that opens), what was open
  * at the period end and how overdue or old it was.
  */
-export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLabel = 'Inv #' }: { items: OpenItemRow[]; peLabel: string; title: string; byDue: boolean; warnAfter: number; refLabel?: string }) {
+export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLabel = 'Inv #', bankFor }: { items: OpenItemRow[]; bankFor?: (p: DebtorPayment) => string | undefined; peLabel: string; title: string; byDue: boolean; warnAfter: number; refLabel?: string }) {
   const [opened, setOpened] = useState<Set<number>>(new Set());
   const toggle = (i: number) => setOpened((s) => (s.has(i) ? new Set([...s].filter((x) => x !== i)) : new Set(s).add(i)));
   const cell = 'py-1 pr-3';
   const how = (p: DebtorPayment) => (p.how !== 'payment' ? ` (${p.how})` : '');
+  // The bank each payment left from, when the caller knows it: names only
+  const banks = (pays: DebtorPayment[]) => [...new Set(pays.map((p) => bankFor!(p)).filter(Boolean))].join(', ') || '–';
   return (
     <div className="flex flex-col gap-1">
       <table className="w-full text-[11px]">
@@ -37,6 +39,7 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
             <th scope="col" className={`${cell} font-semibold`}>Date</th>
             <th scope="col" className={`${cell} font-semibold text-right`}>Amount</th>
             <th scope="col" className={`${cell} font-semibold`}>Paid date</th>
+            {bankFor && <th scope="col" className={`${cell} font-semibold`}>Bank</th>}
             <th scope="col" className={`${cell} font-semibold text-right`}>Paid amount</th>
             <th scope="col" className={`${cell} font-semibold text-right`}>Open at {peLabel}</th>
             <th scope="col" className="py-1 font-semibold text-right">Overdue</th>
@@ -86,6 +89,7 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
                       '–'
                     )}
                   </td>
+                  {bankFor && <td className={cell}>{banks(pays)}</td>}
                   <td className={`${cell} text-right font-mono`}>{pays.length ? money(paid) : '–'}</td>
                   <td className={`${cell} text-right font-mono`}>{money(inv.amount_p)}</td>
                   <td className={`py-1 text-right font-mono ${unpaid && unpaid > 0n ? 'text-[#B42318] font-bold' : ''}`}>{unpaid ? money(unpaid) : '–'}</td>
@@ -96,6 +100,7 @@ export function OpenItemsTable({ items, peLabel, title, byDue, warnAfter, refLab
                     <tr key={k} className="text-[#4A5878]">
                       <td colSpan={3} />
                       <td className={`${cell} pl-4`}>{ukDate(p.date)}{how(p)}</td>
+                      {bankFor && <td className={cell}>{banks([p])}</td>}
                       <td className={`${cell} text-right font-mono`}>{money(p.amount_p)}</td>
                       <td colSpan={2} />
                     </tr>
