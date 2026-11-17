@@ -68,6 +68,10 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     setSupplier(s.id, { dispute: 'ask' });
   };
   const refresh = () => {
+    // A Xero client is only ever listed from Xero's open bills, never from the ledger balances, which miss bills from earlier years
+    const snapshot = db.engagements.find((e) => e.id === result.engagementId)?.creditor_open_items?.as_at === pe;
+    if (!snapshot && db.transactions.some((t) => t.engagement_id === result.engagementId && t.source === 'Xero'))
+      return setNote({ ok: false, text: `Xero's open bills at ${peLabel} have not been read for this client yet. Pull from Xero again, then refresh.` });
     const s = suppliersFromLedger(result.engagementId, pe, windowDays, live().suppliers ?? []);
     if (!s) return setNote({ ok: false, text: 'Nothing to read yet: no ledger has been pulled from Xero or imported for this client’s trade creditors. Pull the ledger first, or add suppliers by hand.' });
     save({ suppliers: s, refreshed_at: new Date().toISOString() });

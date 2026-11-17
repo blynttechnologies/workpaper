@@ -122,3 +122,15 @@ describe('trade creditors AI statement reading', () => {
     expect(within(right).getByText('Agrees to the ledger')).toBeTruthy();
   });
 });
+
+describe('trade creditors refresh for a Xero client', () => {
+  it('does not list suppliers from the ledger when the open bills in Xero have not been read', () => {
+    const { saved, wp } = setup([]);
+    const eng = db.engagements.find((e) => e.id === wp.engagement_id)!;
+    delete eng.creditor_open_items;
+    db.transactions.push({ ...(db.transactions[0] ?? {}), id: 'tx_xero_test', engagement_id: eng.id, source: 'Xero' } as any);
+    fireEvent.click(screen.getByText('Refresh from ledger'));
+    expect(screen.getByText(/open bills at .* have not been read for this client yet/)).toBeTruthy();
+    expect(saved.some((p) => p.suppliers)).toBe(false);
+  });
+});
