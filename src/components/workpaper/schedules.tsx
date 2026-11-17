@@ -1776,8 +1776,18 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
             )}
             {accrued.map((i) => (
               <tr key={i.id} className="bg-[#F5F8FD]/70">
-                <td className="p-2 font-semibold">{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="underline">{i.contact || i.desc}</a> : i.contact || i.desc}</td>
-                <td className="p-2">Paid {ukDate(i.date)}</td>
+                <td className="p-2">
+                  <div className="font-semibold">{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="underline">{i.contact || i.desc}</a> : i.contact || i.desc}</div>
+                  {i.ai?.summary && (
+                    <div className="text-[10px] text-[#4A5878] flex items-start gap-1">
+                      <Sparkles className="w-3 h-3 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" /> {i.ai.summary}
+                    </div>
+                  )}
+                </td>
+                <td className="p-2">
+                  Paid {ukDate(i.date)}
+                  {i.ai?.from && i.ai.to && <div className="text-[10px] text-[#4A5878]">Covers {i.ai.from === i.ai.to ? ukDate(i.ai.from) : `${ukDate(i.ai.from)} to ${ukDate(i.ai.to)}`}</div>}
+                </td>
                 {cols.map((c) => (
                   <td key={c.key} className="p-2 text-right font-mono">
                     {c.key === amountKey ? formatPence(asPence(i.amount_p), { symbol: '' }) : c.key === 'item' ? `${i.desc} · ${i.code}` : c.key === 'supplier' ? i.contact : ''}

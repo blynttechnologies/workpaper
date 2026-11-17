@@ -1,0 +1,72 @@
+// @vitest-environment node
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('@/lib/server/store', () => ({ syncIn: async () => {}, syncOut: async () => {}, freshWrite: async (f: () => unknown) => f(), currentVersion: () => 1, hasDatabase: () => false }));
+const run = vi.fn();
+vi.mock('../lib/server/ai/gateway', () => ({ run: (...a: unknown[]) => run(...a), aiAvailable: () => true }));
+
+import { db } from '../lib/server/db';
+import { searchAfterDate } from '../lib/workpapers/creditors';
+import { reviewAfterDateCosts } from '../lib/server/ai/services';
+
+const actor = { id: 'usr_admin', name: 'Admin', role: 'admin' as const, firmId: 'firm_blynt_uk' };
+let engId = '';
+let pe = '';
+const day = (n: number) => new Date(Date.parse(pe) + n * 86_400_000).toISOString().slice(0, 10);
+const tx = (id: string, contact: string, date: string, amount_p: string, description: string) =>
+  db.transactions.push({ id, engagement_id: engId, account_code: 'PUR', account_name: 'Purchases', date, contact, description, amount_p, vat_p: '0', gross_p: amount_p, source: 'Xero' } as any);
+
+beforeEach(() => {
+  db.seed(true);
+  run.mockReset();
+  engId = db.engagements[0].id;
+  pe = db.engagements[0].period_end;
+  db.transactions = db.transactions.filter((t) => t.engagement_id !== engId);
+  db.account_mappings.push({ id: 'm_pur', engagement_id: engId, source_code: 'PUR', source_name: 'Purchases', source_type: 'Direct Costs', balance_p: '0', blynt_code: '2000', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
+  tx('tx_a_0', 'Booker', day(3), '752673', '1666 wk 32');
+  tx('tx_b_1', 'Booker', day(7), '258085', '1666 wk 32');
+  tx('tx_old', 'Booker', day(-4), '700000', '1666 wk 31');
+});
+
+describe('search for unrecorded liabilities', () => {
+  it('keeps a decision and the AI reading when a new pull from Xero renumbers the ledger rows', () => {
+    const first = searchAfterDate(engId, pe, 60, 10000n);
+    expect(first.map((i) => i.id)).toEqual(['srch_tx_a_0', 'srch_tx_b_1']);
+    const decided = [{ ...first[0], decision: 'accrue' as const, code: '4810', ai: { from: '', to: '', summary: 'Looks like this year.' } }, first[1]];
+    // The same costs come back from Xero under new row numbers
+    db.transactions.find((t) => t.id === 'tx_a_0')!.id = 'tx_a_5';
+    db.transactions.find((t) => t.id === 'tx_b_1')!.id = 'tx_b_6';
+    const again = searchAfterDate(engId, pe, 60, 10000n, decided);
+    expect(again[0]).toMatchObject({ id: 'srch_tx_a_5', decision: 'accrue', code: '4810', ai: { summary: 'Looks like this year.' } });
+    expect(again[1].decision).toBeUndefined();
+  });
+});
+
+describe("the AI's reading of costs posted after the period end", () => {
+  it('reads the costs from the ledger with each supplier’s history, and drops dates that are not a range', async () => {
+    run.mockResolvedValue({
+      output: {
+        items: [
+          { id: 'srch_tx_a_0', covers_from: day(-6), covers_to: day(0), summary: 'Week 32 ends on the period end, so this looks like this year.' },
+          { id: 'srch_tx_b_1', covers_from: 'early November', covers_to: '', summary: 'Cannot be told; check the delivery date on the bill.' },
+          { id: 'srch_not_asked', covers_from: '', covers_to: '', summary: 'x' },
+        ],
+      },
+      provider: 'anthropic',
+      model: 'm',
+    });
+    const out = await reviewAfterDateCosts(actor, engId, { days: 60, min_p: '10000' });
+    expect(out.items).toEqual([
+      { id: 'srch_tx_a_0', from: day(-6), to: day(0), summary: 'Week 32 ends on the period end, so this looks like this year.' },
+      { id: 'srch_tx_b_1', from: '', to: '', summary: 'Cannot be told; check the delivery date on the bill.' },
+    ]);
+    const input = run.mock.calls[0][1];
+    expect(input.costs).toHaveLength(2);
+    expect(input.supplier_history).toEqual([{ supplier: 'Booker', posted: day(-4), description: '1666 wk 31', amount_p: '700000' }]);
+  });
+
+  it('does not ask the AI when there is nothing to read', async () => {
+    expect(await reviewAfterDateCosts(actor, engId, { days: 60, min_p: '99999999' })).toEqual({ items: [] });
+    expect(run).not.toHaveBeenCalled();
+  });
+});

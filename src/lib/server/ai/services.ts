@@ -16,11 +16,15 @@ import {
   summariseEngagementTask,
   riskReviewTask,
   suggestProvisionTask,
+  reviewAfterDateCostsTask,
   researchTask,
   type PaperInput,
 } from './tasks/accounting';
 import type { UserRole } from '../../types/models';
 import { debtorView, type DebtorLine } from '../../workpapers/debtors';
+import { searchAfterDate } from '../../workpapers/creditors';
+import { chartName, ledgerFor } from '../../workpapers/common';
+import { asPence } from '../../money';
 import { mappingExamples } from '../learning';
 import { vatFactsFor } from '../../tax';
 
@@ -277,6 +281,55 @@ export async function suggestProvision(actor: Actor, engagementId: string, ref: 
   );
   const percent = Math.min(100, Math.max(0, Math.round(Number(r.output.percent) || 0)));
   return { percent, amount_p: ((v.stillDue * BigInt(percent)) / 100n).toString(), reason: r.output.reason, provider: r.provider, model: r.model };
+}
+
+// ------------------------------------------------------------ Creditors: costs posted after the period end
+
+const AFTER_DATE_BATCH = 60;
+const isoDate = (s: unknown) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '');
+
+/**
+ * The AI's reading of the costs found by the search for unrecorded liabilities: the period each covers when
+ * it can be told, and a line on whether it looks like this year's. Read from the ledger here, not from the
+ * browser. Nothing is saved: the paper keeps the reading beside each cost and the person still decides.
+ * shortcut: reads the first 60 costs asked for, ask again for the rest.
+ */
+export async function reviewAfterDateCosts(actor: Actor, engagementId: string, opts: { days: number; min_p: string; ids?: string[] }, channel?: RunCtx['channel']) {
+  const eng = engagementOf(engagementId);
+  const days = Math.min(366, Math.max(1, Math.round(Number(opts.days) || 60)));
+  const found = searchAfterDate(engagementId, eng.period_end, days, asPence(opts.min_p || '0'));
+  const costs = (opts.ids?.length ? found.filter((i) => opts.ids!.includes(i.id)) : found).slice(0, AFTER_DATE_BATCH);
+  if (!costs.length) return { items: [] };
+  const suppliers = new Set(costs.map((i) => i.contact).filter(Boolean));
+  const history = ledgerFor(engagementId, ['2', '3', '4'])
+    .filter((t) => t.date <= eng.period_end && suppliers.has(t.contact))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const seen = new Map<string, number>();
+  const r = await run(
+    reviewAfterDateCostsTask,
+    {
+      period_end: eng.period_end,
+      costs: costs.map((i) => ({ id: i.id, posted: i.date, supplier: i.contact, description: i.desc, amount_p: i.amount_p, account: `${i.code} ${chartName(i.code)}` })),
+      // The last six from each supplier are enough to show weekly, monthly or quarterly billing
+      supplier_history: history
+        .filter((t) => (seen.set(t.contact, (seen.get(t.contact) ?? 0) + 1), seen.get(t.contact)! <= 6))
+        .map((t) => ({ supplier: t.contact, posted: t.date, description: t.description, amount_p: t.amount_p })),
+    },
+    ctxOf(actor, engagementId, channel)
+  );
+  const asked = new Set(costs.map((i) => i.id));
+  return {
+    items: (r.output.items ?? [])
+      .filter((x) => asked.has(x.id))
+      .map((x) => {
+        const [from, to] = [isoDate(x.covers_from), isoDate(x.covers_to)];
+        // Half a range, or one that runs backwards, is not a range
+        const ok = from && to && from <= to;
+        return { id: x.id, from: ok ? from : '', to: ok ? to : '', summary: String(x.summary ?? '').trim().slice(0, 300) };
+      }),
+    provider: r.provider,
+    model: r.model,
+  };
 }
 
 // ------------------------------------------------------------ Research intelligence (internal sources)

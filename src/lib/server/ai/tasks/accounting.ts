@@ -287,6 +287,56 @@ export const suggestProvisionTask: TaskDef<ProvisionInput, ProvisionOutput> = {
   effort: 'low',
 };
 
+// ---------------------------------------------------------------- creditors: costs posted after the period end
+
+export interface AfterDateCostsInput {
+  period_end: string;
+  costs: { id: string; posted: string; supplier: string; description: string; amount_p: string; account: string }[];
+  /** What the same suppliers charged up to the period end, newest first, to show how often they bill. */
+  supplier_history: { supplier: string; posted: string; description: string; amount_p: string }[];
+}
+export interface AfterDateCostsOutput {
+  items: { id: string; covers_from: string; covers_to: string; summary: string }[];
+}
+
+export const reviewAfterDateCostsTask: TaskDef<AfterDateCostsInput, AfterDateCostsOutput> = {
+  id: 'review_after_date_costs',
+  module: 'creditors',
+  version: '2026-11-17',
+  system: BASE,
+  build: (d) => [
+    json('costs_posted_after_period_end', d),
+    {
+      type: 'text',
+      text:
+        'These costs were posted to the ledger after the period end. An accountant must decide whether each is a liability of the ' +
+        'year just ended (goods or services received on or before period_end) or a cost of the next year. For every cost, return its ' +
+        'id with: covers_from and covers_to, the period the goods or services cover as YYYY-MM-DD, only when the description or the ' +
+        "supplier's billing pattern in supplier_history shows it (for example a week number, a month, a quarter or a date range); " +
+        'leave both as empty strings when it cannot be told. And summary: one short sentence, at most 25 words, saying whether it ' +
+        'looks like this year, next year or cannot be told, naming the evidence, and what to check on the bill when unsure. Do not guess dates.',
+    },
+  ],
+  schema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string' }, covers_from: { type: 'string' }, covers_to: { type: 'string' }, summary: { type: 'string' } },
+          required: ['id', 'covers_from', 'covers_to', 'summary'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['items'],
+    additionalProperties: false,
+  },
+  maxTokens: 8000,
+  effort: 'low',
+};
+
 // ---------------------------------------------------------------- research (internal sources only)
 
 export interface ResearchOutput {
