@@ -38,10 +38,10 @@ describe("creditors open at the period end, as Xero's Aged Payables shows them",
   });
 
   it('gives one row per supplier with what was owed, paid in the window and days overdue', () => {
-    const rows = suppliersFromOpenItems(items, 'eng_none', PE, 60, [{ id: 'keep', name: 'Fuel Direct', ledger_p: '0', statement_p: '95000', paid_after_p: '0', decision: 'leave', reason: 'agreed' }]);
+    const rows = suppliersFromOpenItems(items, 'eng_none', PE, 60, [{ id: 'keep', name: 'Fuel Direct', ledger_p: '0', statement_p: '95000', paid_after_p: '0', decision: 'leave', reason: 'agreed', dispute: 'not_disputed', dispute_reason: 'client confirmed', ai_statement: { file: 'att_1', balance_p: '95000' } }]);
     const fuel = rows.find((r) => r.name === 'Fuel Direct')!;
     // 400 + 600 + 250 - 50 owed; only the January payment falls inside 60 days
-    expect(fuel).toMatchObject({ id: 'keep', ledger_p: String(40000 + 60000 + 25000 - 5000), paid_after_p: '60000', statement_p: '95000', decision: 'leave', overdue: true });
+    expect(fuel).toMatchObject({ id: 'keep', ledger_p: String(40000 + 60000 + 25000 - 5000), paid_after_p: '60000', statement_p: '95000', decision: 'leave', overdue: true, dispute_reason: 'client confirmed', ai_statement: { file: 'att_1', balance_p: '95000' } }); // a refresh keeps the work done
     // B-100 was due 31 Oct 2024: 427 days overdue counting the due date; B-200, due on the period end, is 1 day
     expect(fuel.oldest_days).toBe(427);
     expect(fuel.invoices?.find((i) => i.ref === 'B-200')).toMatchObject({ days: 1, due: '2025-12-31' });
