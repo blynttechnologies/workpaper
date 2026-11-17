@@ -82,4 +82,12 @@ describe('trade creditors next steps', () => {
     fireEvent.click(within(row).getByLabelText('Attach the statement for Environment Agency'));
     expect(attached).toEqual(['sup_ea', 'sup_ea']);
   });
+  it('says the client is not connected to Xero, with the way to put it right', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'This client is not connected to Xero yet.', code: 'XERO_NOT_CONNECTED' }) })));
+    setup([{ id: 'sup_bg', name: 'British Gas', ledger_p: '25376', statement_p: '100', paid_after_p: '0' }]);
+    fireEvent.click(screen.getByText('Check Xero bank'));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toMatch(/not connected to Xero/);
+    expect(within(alert).getByText('Open the client’s page').getAttribute('href')).toMatch(/^\/clients\//);
+  });
 });
