@@ -198,6 +198,8 @@ async function xeroGet<T>(url: string, accessToken: string, tenantId?: string, d
         'XERO_RATE_LIMIT'
       );
     }
+    // Connected before Blynt asked Xero for this kind of record: only connecting again grants it
+    if (res.status === 403) throw new ServiceError("Xero hasn't given Blynt permission to read this for this client. Disconnect and reconnect Xero on the client's page, then try again.", 409, 'XERO_NO_ACCESS');
     if (!res.ok) throw new ServiceError(`Xero returned an error (${res.status}).`, 502, 'XERO_ERROR');
     return (await res.json()) as T;
   }

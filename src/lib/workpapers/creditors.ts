@@ -108,7 +108,7 @@ export function suppliersFromLedger(engagementId: string, periodEnd: string, win
       invoices: open.map((o) => ({ ref: o.tx.description, date: o.tx.date, days: o.days, amount_p: o.amount.toString(), ...(o.tx.external_url ? { url: o.tx.external_url } : {}) })),
       payments_after: payments.map((t) => ({ date: t.date, desc: t.description, amount_p: t.amount_p, ...(t.external_url ? { url: t.external_url } : {}) })),
       expense_code: prev?.expense_code ?? usualExpenseCode(engagementId, name) ?? undefined,
-      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, bank_check: prev.bank_check } : {}),
+      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, dispute_reason: prev.dispute_reason, bank_check: prev.bank_check, ai_statement: prev.ai_statement } : {}),
     });
   }
   return out;
@@ -157,7 +157,7 @@ export function suppliersFromOpenItems(items: DebtorOpenItem[], engagementId: st
       })),
       payments_after: payments,
       expense_code: prev?.expense_code ?? usualExpenseCode(engagementId, name) ?? undefined,
-      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, bank_check: prev.bank_check } : {}),
+      ...(prev ? { vat_p: prev.vat_p, decision: prev.decision, reason: prev.reason, dispute: prev.dispute, dispute_reason: prev.dispute_reason, bank_check: prev.bank_check, ai_statement: prev.ai_statement } : {}),
     });
   }
   return out;
