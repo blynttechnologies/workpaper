@@ -421,6 +421,17 @@ describe('Pulling the trial balance from Xero', () => {
     expect(db.transactions.some((x) => x.external_id === 'inv-1')).toBe(true);
   });
 
+  it('reads transactions for 90 days after the period end, for the search for unrecorded liabilities', async () => {
+    await connected();
+    const { calls } = fakeXero();
+    await sync(post('/api/v1/integrations/xero/sync', { engagementId: ENG }));
+    const eng = db.engagements.find((e) => e.id === ENG)!;
+    const until = new Date(Date.parse(eng.period_end) + 90 * 86_400_000).toISOString().slice(0, 10).replaceAll('-', ', ');
+    for (const endpoint of ['Invoices', 'BankTransactions', 'ManualJournals', 'Payments']) {
+      expect(calls.some((c) => c.url.includes(`/${endpoint}?`) && decodeURIComponent(c.url).includes(`Date <= DateTime(${until})`))).toBe(true);
+    }
+  });
+
   it('keeps the sales and purchase documents open at the period end, for the debtors and creditors', async () => {
     await connected();
     const { calls } = fakeXero();

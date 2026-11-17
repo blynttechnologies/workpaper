@@ -752,6 +752,9 @@ export async function xeroTbChanged(conn: XeroConnection, engagementId: string, 
 }
 
 /** Pulls the trial balance at the engagement's period end and imports it (DAT-01, DAT-06). */
+/** How far past the period end the pull reads transactions. */
+export const AFTER_DAYS = 90;
+
 export async function pullTrialBalance(actor: Actor, engagementId: string): Promise<ImportResult> {
   const eng = db.engagements.find((e) => e.id === engagementId);
   if (!eng) throw new ServiceError('Engagement not found', 404, 'NOT_FOUND');
@@ -777,7 +780,10 @@ export async function pullTrialBalance(actor: Actor, engagementId: string): Prom
 
   conn.last_synced_at = new Date().toISOString();
 
-  const page = (endpoint: string) => allPages(endpoint, endpoint, token, conn.tenant_id, eng.period_start, eng.period_end, deadline);
+  // Read past the period end too: the search for unrecorded liabilities and receipts after date need what was posted after it.
+  // shortcut: 90 days after the period end, raise AFTER_DAYS if a search window longer than that is needed
+  const after = new Date(Date.parse(eng.period_end) + AFTER_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const page = (endpoint: string) => allPages(endpoint, endpoint, token, conn.tenant_id, eng.period_start, after, deadline);
   // The trial balance is in; Xero's limit stopping the transactions keeps it, and the last transactions pulled stay
   const rateLimited = (err: unknown) => {
     if (!(err instanceof ServiceError) || err.code !== 'XERO_RATE_LIMIT') throw err;

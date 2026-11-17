@@ -20,7 +20,7 @@ const AGED = [
   ['d90_p', 'Over 60 overdue'],
 ] as const;
 import { btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, th, Tiles, useOpen } from '../kit';
-import { expenseCodes } from '@/lib/workpapers/common';
+import { afterDateKnown, expenseCodes } from '@/lib/workpapers/common';
 import { bankMatches, creditorsJournal, sameSupplier, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
 
 const STATUS: Record<ReturnType<typeof supplierView>['status'], [string, 'good' | 'bad' | 'warn' | 'plain' | 'info']> = {
@@ -699,7 +699,13 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
             </div>
           )}
         </div>
-        {data.search?.searched_at && items.length === 0 && <div className="text-[11px] text-[#4A5878]">Nothing over the minimum was posted in the window.</div>}
+        {data.search?.searched_at && items.length === 0 && (
+          <div className="text-[11px] text-[#4A5878]">
+            {afterDateKnown(result.engagementId, pe)
+              ? 'Nothing over the minimum was posted in the window.'
+              : `The ledger has nothing after ${peLabel} yet, so there was nothing to search. Pull from Xero again or import the later transactions, then search again.`}
+          </div>
+        )}
         {items.length > 0 && (
           <table className="w-full text-[11px]">
             <thead>
