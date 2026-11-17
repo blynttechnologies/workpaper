@@ -279,19 +279,10 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     }
     if (!blocks.length) {
       if (v.status === 'none') {
-        // The next step, not just the state: attach the statement (or type its balance)
-        blocks.push(
-          <div key="status" className="flex flex-col items-end gap-1">
-            {locked ? (
-              <Pill tone="plain">No statement</Pill>
-            ) : (
-              <button type="button" onClick={() => attachTo(s.id)} className={`${btnSecondary} inline-flex items-center gap-1`}>
-                <Paperclip className="w-3 h-3" aria-hidden="true" /> Attach statement
-              </button>
-            )}
-            {v.ledger > 0n && v.paid >= v.ledger && <span className="text-[10px] text-[#0B6B52]">Paid in full after the year end</span>}
-          </div>
-        );
+        // The paperclip by the balance attaches the statement; here we only say if it was paid off
+        if (v.ledger > 0n && v.paid >= v.ledger) {
+          blocks.push(<span key="status" className="text-[10px] text-[#0B6B52]">Paid in full after the year end</span>);
+        }
       } else {
         const [label, tone] = STATUS[v.status];
         blocks.push(<Pill key="status" tone={tone}>{label}</Pill>);

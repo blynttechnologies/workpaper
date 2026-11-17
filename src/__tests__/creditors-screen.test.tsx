@@ -73,14 +73,14 @@ describe('trade creditors screen', () => {
 });
 
 describe('trade creditors next steps', () => {
-  it('offers to attach the statement, and says when the supplier was paid in full after the year end', () => {
+  it('attaches the statement from the paperclip only, and says when the supplier was paid in full after the year end', () => {
     const attached: string[] = [];
     setup([{ id: 'sup_ea', name: 'Environment Agency', ledger_p: '9898', statement_p: '', paid_after_p: '9898' }], {}, (id) => attached.push(id));
     const row = screen.getByText('Environment Agency').closest('tr')!;
     expect(within(row).getByText('Paid in full after the year end')).toBeTruthy();
-    fireEvent.click(within(row).getByText('Attach statement'));
+    expect(within(row).queryByText('Attach statement')).toBeNull();
     fireEvent.click(within(row).getByLabelText('Attach the statement for Environment Agency'));
-    expect(attached).toEqual(['sup_ea', 'sup_ea']);
+    expect(attached).toEqual(['sup_ea']);
   });
   it('says the client is not connected to Xero, with the way to put it right', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'This client is not connected to Xero yet.', code: 'XERO_NOT_CONNECTED' }) })));
