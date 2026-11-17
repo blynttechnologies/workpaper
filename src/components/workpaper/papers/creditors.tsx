@@ -38,6 +38,7 @@ const DECIDED: Record<SupplierDecision, string> = {
   leave: 'Left in creditors',
 };
 const link = 'text-[10px] text-[#1D4E89] underline';
+const btnSmall = 'px-2 py-0.5 text-[10px] font-semibold rounded-[5px] border border-[#D3DCEE] bg-white text-[#122654] hover:border-[#122654]';
 
 /** The last Xero bank check: the dates read and each bank account with the payments that left it. */
 type BankChecked = { from: string; to: string; banks: { name: string; payments: number }[] };
@@ -271,11 +272,11 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           <div key="dispute" className="flex flex-col items-end gap-1">
             <Pill tone="warn">Check for dispute</Pill>
             {!locked && (
-              <div className="flex gap-1">
-                <button type="button" className={btnPrimary} onClick={() => askClient(s)}>
-                  Ask the client
+              <div className="flex gap-1 whitespace-nowrap">
+                <button type="button" className={btnSmall} title="Adds a question for the client in Comments" onClick={() => askClient(s)}>
+                  Ask client
                 </button>
-                <button type="button" className={btnSecondary} onClick={() => setSupplier(s.id, { dispute: 'not_disputed' })}>
+                <button type="button" className={btnSmall} title="Mark as owed; you'll be asked for a reason" onClick={() => setSupplier(s.id, { dispute: 'not_disputed' })}>
                   Not disputed
                 </button>
               </div>
