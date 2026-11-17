@@ -557,6 +557,7 @@ export type AttachmentCategory =
   | 'Stock count'
   | 'Prior-year accounts'
   | 'Loan agreement'
+  | 'Supplier statement'
   | 'Other';
 
 export interface DocumentBullet {

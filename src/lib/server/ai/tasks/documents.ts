@@ -112,6 +112,11 @@ export const DOCUMENT_FIELDS: Record<string, FieldSpec[]> = {
     f('suggested_class', 'text', 'Asset class if capital: Computer equipment, Fixtures & fittings, Plant & machinery or Motor vehicles; "" if not capital'),
     f('useful_life_years', 'int', 'Expected useful life in years if capital'),
   ],
+  'Supplier statement': [
+    f('supplier', 'text', 'Supplier who issued the statement'),
+    f('statement_date', 'date', 'Statement date, or the date the balance is at'),
+    f('closing_balance_p', 'money', 'Balance the customer owes the supplier at that date; negative if it is a credit in the customer\'s favour'),
+  ],
 };
 // Other names the app uses for the same documents
 DOCUMENT_FIELDS['Signed accounts'] = DOCUMENT_FIELDS['Prior-year accounts'];
@@ -125,6 +130,7 @@ export const DOCUMENT_CATEGORIES = [
   'Stock count',
   'Prior-year accounts',
   'Invoice',
+  'Supplier statement',
   'Board minute',
   'Other',
 ] as const;
@@ -214,7 +220,7 @@ export const classifyDocumentTask: TaskDef<{ file: Part; filename: string }, Cla
   system: UNTRUSTED,
   build: ({ file, filename }) => [
     file,
-    { type: 'text', text: `File name: ${filename}\nWhich kind of accounting document is this? "Statement" means a bank or credit card statement. Give a 0-100 confidence and a one-line reason.` },
+    { type: 'text', text: `File name: ${filename}\nWhich kind of accounting document is this? "Statement" means a bank or credit card statement; a supplier's statement of account is "Supplier statement". Give a 0-100 confidence and a one-line reason.` },
   ],
   schema: {
     type: 'object',
