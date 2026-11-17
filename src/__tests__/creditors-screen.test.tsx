@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}) {
+function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}, dropFiles?: (files: File[], rowId: string | null) => void) {
   db.seed(true);
   const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
   const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'K-10') ?? db.addWorkpaper(eng.id, 'K-10')!;
@@ -31,6 +31,7 @@ function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attac
       preview={() => {}}
       tickFor={() => null}
       live={() => wp.data_json}
+      dropFiles={dropFiles}
     />
   );
   return { saved, wp };
@@ -89,5 +90,19 @@ describe('trade creditors next steps', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toMatch(/not connected to Xero/);
     expect(within(alert).getByText('Open the client’s page').getAttribute('href')).toMatch(/^\/clients\//);
+  });
+});
+
+describe('trade creditors drag and drop', () => {
+  it('highlights the row a statement is dragged over and attaches it to that supplier', () => {
+    const dropped: [string, string | null][] = [];
+    setup([{ id: 'sup_ea', name: 'Environment Agency', ledger_p: '9898', statement_p: '', paid_after_p: '0' }], {}, () => {}, (f, id) => dropped.push([f[0].name, id]));
+    const row = screen.getByText('Environment Agency').closest('tr')!;
+    const file = new File(['%PDF'], 'ea.pdf', { type: 'application/pdf' });
+    fireEvent.dragOver(row, { dataTransfer: { files: [file] } });
+    expect(row.className).toContain('outline-dashed');
+    fireEvent.drop(row, { dataTransfer: { files: [file] } });
+    expect(row.className).not.toContain('outline-dashed');
+    expect(dropped).toEqual([['ea.pdf', 'sup_ea']]);
   });
 });
