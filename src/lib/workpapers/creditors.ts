@@ -30,7 +30,7 @@ export interface Supplier {
   dispute?: 'ask' | 'not_disputed';
   dispute_reason?: string;
   bank_check?: { to: string; matches: BankPayment[] }; // Xero bank payments after the period end that look like this supplier's
-  // What the AI read off the attached statement (file: attachment id). balance_p '' when it could not read one. Nothing is filled in until someone uses it.
+  // What the AI read off the attached statement (file: attachment id). balance_p '' when it could not read one. It fills an empty statement balance; a typed one is kept.
   ai_statement?: { file: string; balance_p: string; date?: string; page?: number; confidence?: number };
 }
 

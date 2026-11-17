@@ -128,7 +128,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       }),
     });
 
-  // The AI reads the balance off a supplier statement attached to a row; it is offered, never filled in by itself
+  // The AI reads the balance off a supplier statement attached to a row and fills it in when none has been typed; the row says the AI filled it
   const [reading, setReading] = useState<Record<string, boolean>>({});
   const [dropOn, setDropOn] = useState<string | null>(null);
   const readStatement = async (id: string, att: Attachment, show: boolean) => {
@@ -153,7 +153,9 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     } catch {
       problem = 'Could not reach the server to read the statement. Try again.';
     }
-    setSupplier(id, { ai_statement: ai });
+    // A balance someone typed is never overwritten
+    const blank = !(live().suppliers ?? []).find((s: Supplier) => s.id === id)?.statement_p;
+    setSupplier(id, { ai_statement: ai, ...(ai.balance_p && blank ? { statement_p: ai.balance_p } : {}) });
     if (show && problem) setNote({ ok: false, text: problem });
     setReading((r) => {
       const next = { ...r };
@@ -455,10 +457,13 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                                 </button>
                               )}
                             </div>
+                          ) : aiBalance !== null ? (
+                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#4A5878]">
+                              <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Read by AI from the statement. Check it.
+                            </div>
                           ) : (
                             file &&
-                            !locked &&
-                            aiBalance === null && (
+                            !locked && (
                               <div className="mt-1 text-right">
                                 <button type="button" className={`${link} inline-flex items-center gap-1`} onClick={() => readStatement(s.id, file, true)}>
                                   <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> {ai ? 'Read again with AI' : 'Read with AI'}
