@@ -354,7 +354,7 @@ interface XeroDoc {
   Contact?: { Name?: string };
   Reference?: string;
   Narration?: string;
-  BankAccount?: { Code?: string };
+  BankAccount?: { Code?: string; AccountID?: string; Name?: string };
   LineItems?: XeroLine[];
   JournalLines?: XeroLine[];
   LineAmountTypes?: string; // 'Inclusive' means LineAmount already contains the tax
@@ -362,7 +362,7 @@ interface XeroDoc {
   PaymentID?: string;
   PaymentType?: string;
   Amount?: number;
-  Account?: { Code?: string };
+  Account?: { Code?: string; AccountID?: string };
   Invoice?: { InvoiceID?: string; Contact?: { Name?: string } };
   BankTransferID?: string;
   FromBankAccount?: { Code?: string };
@@ -627,26 +627,44 @@ export interface BankPayment {
   ref: string;
   amount_p: string;
   reconciled: boolean; // true when Xero has matched it to a bank statement line
+  bank?: string; // the Xero account it was paid from
   url?: string;
 }
 
-/** Bill payments and spend-money lines, i.e. what left the bank. Drafts, voids and deletions are skipped. */
-export function parseBankPayments(shortCode: string | null, docs: { payments: XeroDoc[]; bank: XeroDoc[] }): BankPayment[] {
+/**
+ * Bill payments and money spent, from every account in Xero, i.e. what left the banks. Payments on account to
+ * suppliers count; transfers between the client's own accounts, drafts, voids and deletions are skipped.
+ */
+export function parseBankPayments(shortCode: string | null, docs: { payments: XeroDoc[]; bank: XeroDoc[] }, accounts: XeroAccount[] = []): BankPayment[] {
+  // Bank accounts need no code in Xero, so the account is found by its id first
+  const paidFrom = (a?: { AccountID?: string; Code?: string; Name?: string }) => {
+    const name = accounts.find((x) => (a?.AccountID && x.AccountID === a.AccountID) || (a?.Code && x.Code === a.Code))?.Name ?? a?.Name;
+    return name ? { bank: name } : {};
+  };
   const out: BankPayment[] = [];
   for (const p of docs.payments) {
     if (p.Status !== 'AUTHORISED' || p.PaymentType !== 'ACCPAYPAYMENT') continue;
     const id = p.Invoice?.InvoiceID;
-    out.push({ date: docDate(p), contact: p.Invoice?.Contact?.Name ?? '', ref: p.Reference || 'Payment', amount_p: pence(p.Amount).toString(), reconciled: !!p.IsReconciled, ...(id ? { url: xeroDeepLink(shortCode, `/AccountsPayable/View.aspx?InvoiceID=${id}`) } : {}) });
+    out.push({ date: docDate(p), contact: p.Invoice?.Contact?.Name ?? '', ref: p.Reference || 'Payment', amount_p: pence(p.Amount).toString(), reconciled: !!p.IsReconciled, ...paidFrom(p.Account), ...(id ? { url: xeroDeepLink(shortCode, `/AccountsPayable/View.aspx?InvoiceID=${id}`) } : {}) });
   }
   for (const b of docs.bank) {
-    if (!['AUTHORISED', 'PAID'].includes(b.Status ?? '') || b.Type !== 'SPEND' || !b.BankTransactionID) continue;
-    out.push({ date: docDate(b), contact: b.Contact?.Name ?? '', ref: b.Reference || 'Spend money', amount_p: pence(b.Total).toString(), reconciled: !!b.IsReconciled, url: xeroDeepLink(shortCode, `/Bank/ViewTransaction.aspx?bankTransactionID=${b.BankTransactionID}`) });
+    if (!['AUTHORISED', 'PAID'].includes(b.Status ?? '') || !b.Type?.startsWith('SPEND') || b.Type === 'SPEND-TRANSFER' || !b.BankTransactionID) continue;
+    out.push({ date: docDate(b), contact: b.Contact?.Name ?? '', ref: b.Reference || 'Spend money', amount_p: pence(b.Total).toString(), reconciled: !!b.IsReconciled, ...paidFrom(b.BankAccount), url: xeroDeepLink(shortCode, `/Bank/ViewTransaction.aspx?bankTransactionID=${b.BankTransactionID}`) });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** What was paid out of the bank in the `days` after the engagement's period end. */
-export async function bankPaymentsAfter(actor: Actor, engagementId: string, days: number): Promise<{ from: string; to: string; payments: BankPayment[] }> {
+/** Each bank account in Xero and how many payments left it; an archived one is listed only when something was paid from it. */
+export function banksChecked(accounts: XeroAccount[], payments: BankPayment[]): { name: string; payments: number }[] {
+  const count = (name: string) => payments.filter((p) => p.bank === name).length;
+  const banks = accounts.filter((a) => a.Type === 'BANK' && (a.Status !== 'ARCHIVED' || count(a.Name))).map((a) => a.Name);
+  // A bill can be paid from an account that is not a bank, e.g. a director's loan
+  const others = payments.map((p) => p.bank).filter((n): n is string => !!n && !banks.includes(n));
+  return Array.from(new Set([...banks, ...others])).map((name) => ({ name, payments: count(name) }));
+}
+
+/** What was paid out of every bank account in the `days` after the engagement's period end. */
+export async function bankPaymentsAfter(actor: Actor, engagementId: string, days: number): Promise<{ from: string; to: string; payments: BankPayment[]; banks: { name: string; payments: number }[] }> {
   const eng = db.engagements.find((e) => e.id === engagementId);
   if (!eng) throw new ServiceError('Engagement not found', 404, 'NOT_FOUND');
   const conn = db.xero_connections.find((c) => c.firm_id === actor.firmId && c.client_id === eng.client_id);
@@ -660,8 +678,13 @@ export async function bankPaymentsAfter(actor: Actor, engagementId: string, days
   requirePullable(from, 'Xero');
   const token = await accessTokenFor(conn);
   const deadline = Date.now() + 200_000;
-  const [payments, bank] = await Promise.all([allPages('Payments', 'Payments', token, conn.tenant_id, from, to, deadline), allPages('BankTransactions', 'BankTransactions', token, conn.tenant_id, from, to, deadline)]);
-  return { from, to, payments: parseBankPayments(conn.short_code, { payments, bank }) };
+  const [payments, bank, accounts] = await Promise.all([
+    allPages('Payments', 'Payments', token, conn.tenant_id, from, to, deadline),
+    allPages('BankTransactions', 'BankTransactions', token, conn.tenant_id, from, to, deadline),
+    xeroGet<{ Accounts?: XeroAccount[] }>(`${API}/Accounts`, token, conn.tenant_id, deadline),
+  ]);
+  const paid = parseBankPayments(conn.short_code, { payments, bank }, accounts.Accounts ?? []);
+  return { from, to, payments: paid, banks: banksChecked(accounts.Accounts ?? [], paid) };
 }
 
 // ── Connections ──

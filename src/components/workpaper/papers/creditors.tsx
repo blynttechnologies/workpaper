@@ -39,6 +39,10 @@ const DECIDED: Record<SupplierDecision, string> = {
 };
 const link = 'text-[10px] text-[#1D4E89] underline';
 
+/** The last Xero bank check: the dates read and each bank account with the payments that left it. */
+type BankChecked = { from: string; to: string; banks: { name: string; payments: number }[] };
+const bankList = (banks: BankChecked['banks']) => banks.map((b) => `${b.name} (${b.payments ? `${b.payments} payment${b.payments === 1 ? '' : 's'}` : 'none'})`).join(', ');
+
 export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const { isOpen, toggle, show } = useOpen();
   const [filter, setFilter] = useState<'all' | 'attention' | 'done'>('all');
@@ -99,14 +103,16 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         });
       }
       const suppliers = (live().suppliers ?? []).map((s: Supplier) => ({ ...s, bank_check: { to: body.to, matches: bankMatches(s, body.payments ?? []) } }));
-      save({ suppliers });
+      const banks: BankChecked['banks'] = body.banks ?? [];
+      save({ suppliers, bank_checked: { from: body.from, to: body.to, banks } });
       const found = suppliers.filter((s: Supplier) => s.bank_check!.matches.length).length;
       const n = body.payments?.length ?? 0;
+      const read = banks.length ? `Read ${banks.length} Xero bank account${banks.length === 1 ? '' : 's'} from ${ukDate(body.from)} to ${ukDate(body.to)}: ${bankList(banks)}.` : '';
       setNote({
         ok: true,
         text: n
-          ? `${n} payment${n === 1 ? '' : 's'} left the Xero bank from ${ukDate(body.from)} to ${ukDate(body.to)}; ${found} of ${suppliers.length} suppliers have a matching payment. See the Paid after column.`
-          : `Xero shows no payments out of the bank from ${ukDate(body.from)} to ${ukDate(body.to)}. If that looks wrong, check the bank is up to date in Xero.`,
+          ? `${read || `${n} payment${n === 1 ? '' : 's'} left the Xero bank from ${ukDate(body.from)} to ${ukDate(body.to)}.`} ${found} of ${suppliers.length} suppliers have a matching payment. See the Paid after column.`
+          : `${read || `Xero shows no payments out of the bank from ${ukDate(body.from)} to ${ukDate(body.to)}.`} Nothing was paid out. If that looks wrong, check the banks are up to date in Xero.`,
       });
     } catch {
       setNote({ ok: false, text: 'Could not reach the server to check the Xero bank. Check your internet connection and try again.' });
@@ -352,6 +358,12 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         )}
       </div>
       {data.refreshed_at && <div className="-mt-2 text-[10px] text-[#4A5878]">Read from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
+      {!!(data.bank_checked as BankChecked | undefined)?.banks?.length && (
+        <div className="-mt-2 text-[10px] text-[#4A5878] flex items-start gap-1">
+          <Sparkles className="w-3 h-3 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" />
+          Xero bank read from {ukDate(data.bank_checked.from)} to {ukDate(data.bank_checked.to)}: {bankList(data.bank_checked.banks)}. Only what is entered in Xero is seen; a bank that is not in Xero is not checked.
+        </div>
+      )}
       {note && (
         <div role={note.ok ? 'status' : 'alert'} className={`flex items-start gap-2 px-3 py-2 rounded-[8px] border text-xs ${note.ok ? 'border-[#B7E4D4] bg-[#F0FAF6] text-[#0B6B52]' : 'border-[#F3C2BC] bg-[#FEF3F2] text-[#B42318]'}`}>
           <span className="flex-1">
@@ -535,12 +547,12 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       {s.bank_check &&
                         (s.bank_check.matches.length ? (
                           <div className="text-[10px] text-[#0B6B52]">
-                            In Xero bank: {formatPence(asPence(s.bank_check.matches[0].amount_p))} on {ukDate(s.bank_check.matches[0].date)}
+                            In Xero bank{s.bank_check.matches[0].bank ? ` (${s.bank_check.matches[0].bank})` : ''}: {formatPence(asPence(s.bank_check.matches[0].amount_p))} on {ukDate(s.bank_check.matches[0].date)}
                             {s.bank_check.matches[0].reconciled ? '' : ' (not reconciled)'}
                             {s.bank_check.matches.length > 1 ? ` +${s.bank_check.matches.length - 1} more` : ''}
                           </div>
                         ) : (
-                          <div className="text-[10px] text-[#B42318]">Not in Xero bank to {ukDate(s.bank_check.to)}</div>
+                          <div className="text-[10px] text-[#B42318]">Not in any Xero bank to {ukDate(s.bank_check.to)}</div>
                         ))}
                     </td>
                     <td className="p-2 align-top text-right">{status(v)}</td>

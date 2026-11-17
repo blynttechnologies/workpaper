@@ -552,6 +552,35 @@ describe('Xero bank payments after the period end (creditors check)', () => {
     expect(bankMatches(supplier('Jefferson Gas', '34500'), payments).map((p) => p.amount_p)).toEqual(['34500']); // by amount
     expect(bankMatches(supplier('Nobody', '1'), payments)).toEqual([]);
   });
+
+  it('reads every bank account, names the one each payment left, and counts payments on account but not transfers', async () => {
+    const { parseBankPayments, banksChecked } = await import('../lib/server/xero');
+    const accounts = [
+      { AccountID: 'a1', Code: '090', Name: 'Current account', Type: 'BANK', Status: 'ACTIVE' },
+      { AccountID: 'a2', Name: 'Credit card', Type: 'BANK', Status: 'ACTIVE' }, // no code, as Xero allows for a bank
+      { AccountID: 'a3', Code: '092', Name: 'Savings', Type: 'BANK', Status: 'ACTIVE' },
+      { AccountID: 'a4', Code: '093', Name: 'Old account', Type: 'BANK', Status: 'ARCHIVED' },
+      { AccountID: 'a5', Code: '835', Name: 'Directors loan', Type: 'CURRLIAB', Status: 'ACTIVE' },
+    ];
+    const payments = parseBankPayments('!abc', {
+      payments: [
+        { PaymentID: 'p1', PaymentType: 'ACCPAYPAYMENT', Status: 'AUTHORISED', DateString: '2026-11-05T00:00:00', Amount: 100, Account: { AccountID: 'a1', Code: '090' }, Invoice: { InvoiceID: 'i1', Contact: { Name: 'Booker' } } },
+        { PaymentID: 'p2', PaymentType: 'ACCPAYPAYMENT', Status: 'AUTHORISED', DateString: '2026-11-06T00:00:00', Amount: 50, Account: { AccountID: 'a5', Code: '835' }, Invoice: { InvoiceID: 'i2', Contact: { Name: 'Booker' } } },
+      ],
+      bank: [
+        { BankTransactionID: 'b1', Type: 'SPEND', Status: 'AUTHORISED', DateString: '2026-11-02T00:00:00', Total: 20, BankAccount: { AccountID: 'a2' } },
+        { BankTransactionID: 'b2', Type: 'SPEND-PREPAYMENT', Status: 'AUTHORISED', DateString: '2026-11-03T00:00:00', Total: 30, BankAccount: { AccountID: 'a2' } },
+        { BankTransactionID: 'b3', Type: 'SPEND-TRANSFER', Status: 'AUTHORISED', DateString: '2026-11-04T00:00:00', Total: 999, BankAccount: { AccountID: 'a1' } },
+      ],
+    }, accounts);
+    expect(payments.map((p) => [p.amount_p, p.bank])).toEqual([['2000', 'Credit card'], ['3000', 'Credit card'], ['10000', 'Current account'], ['5000', 'Directors loan']]);
+    expect(banksChecked(accounts, payments)).toEqual([
+      { name: 'Current account', payments: 1 },
+      { name: 'Credit card', payments: 2 },
+      { name: 'Savings', payments: 0 },
+      { name: 'Directors loan', payments: 1 },
+    ]);
+  });
 });
 
 describe('Ledger transactions stay on the server, out of the workspace download', () => {
