@@ -125,9 +125,30 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       setChecking(false);
     }
   };
+  // The AI reads each cost found: the period it covers when the description says, and whether it looks like this year's. It never decides.
+  const [aiReading, setAiReading] = useState(false);
+  const [aiNote, setAiNote] = useState('');
+  const readCosts = async (ids: string[]) => {
+    if (!ids.length) return;
+    setAiReading(true);
+    setAiNote('');
+    try {
+      const res = await fetch(`/api/v1/engagements/${encodeURIComponent(result.engagementId)}/ai-after-date-costs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days: windowDays, min_p: minimum.toString(), ids }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'The AI could not read these costs. Try again.');
+      const read = new Map<string, NonNullable<SearchItem['ai']>>((body.items ?? []).map((x: { id: string; from: string; to: string; summary: string }) => [x.id, { from: x.from, to: x.to, summary: x.summary }]));
+      save({ search: { ...(live().search ?? {}), items: (live().search?.items ?? []).map((i: SearchItem) => (read.has(i.id) ? { ...i, ai: read.get(i.id) } : i)) } });
+    } catch (e) {
+      setAiNote((e as Error).message);
+    } finally {
+      setAiReading(false);
+    }
+  };
   const runSearch = () => {
     const found = searchAfterDate(result.engagementId, pe, windowDays, minimum, live().search?.items ?? []);
     save({ search: { ...(live().search ?? {}), window_days: windowDays, min_p: minimum.toString(), items: found, searched_at: new Date().toISOString() } });
+    // Costs already read, and their decisions, are kept; only the new ones go to the AI
+    void readCosts(found.filter((i) => !i.ai).map((i) => i.id));
   };
   const addSupplier = () => {
     const id = `sup_${Date.now()}`;
@@ -686,12 +707,25 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               : `The ledger has nothing after ${peLabel} yet, so there was nothing to search. Pull from Xero again or import the later transactions, then search again.`}
           </div>
         )}
+        {aiNote && (
+          <div role="alert" className="mb-2 text-[11px] text-[#B42318]">
+            {aiNote}
+          </div>
+        )}
+        {!locked && !aiReading && items.some((i) => !i.ai) && (
+          <button type="button" className={`${link} mb-2 inline-flex items-center gap-1`} onClick={() => readCosts(items.filter((i) => !i.ai).map((i) => i.id))}>
+            <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Read with AI
+          </button>
+        )}
         {items.length > 0 && (
+          <div className="overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr>
                 <th className={`${th} text-left`}>Posted</th>
                 <th className={`${th} text-left`}>Item</th>
+                <th className={`${th} text-left`}>AI summary</th>
+                <th className={`${th} text-left`}>Period covered</th>
                 <th className={`${th} text-left`}>Account</th>
                 <th className={`${th} text-right`}>Amount</th>
                 <th className={`${th} text-left`}>Decision</th>
@@ -705,6 +739,18 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                     <div className="font-semibold">{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="underline">{i.contact || i.desc}</a> : i.contact || i.desc}</div>
                     {i.contact && <div className="text-[10px] text-[#4A5878]">{i.desc}</div>}
                   </td>
+                  <td className="p-2 max-w-[220px] text-[10px] leading-snug text-[#4A5878]">
+                    {i.ai?.summary ? (
+                      <span className="flex items-start gap-1">
+                        <Sparkles className="w-3 h-3 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" /> {i.ai.summary}
+                      </span>
+                    ) : aiReading ? (
+                      'Reading…'
+                    ) : (
+                      '–'
+                    )}
+                  </td>
+                  <td className="p-2 whitespace-nowrap">{i.ai?.from && i.ai.to ? (i.ai.from === i.ai.to ? ukDate(i.ai.from) : `${ukDate(i.ai.from)} to ${ukDate(i.ai.to)}`) : i.ai ? 'Not stated' : '–'}</td>
                   <td className="p-2">
                     <CodePicker label={`Account for ${i.contact || i.desc}`} value={i.code} codes={codes} disabled={locked || !!i.decision} onChange={(c) => setItem(i.id, { code: c })} />
                   </td>
@@ -739,6 +785,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

@@ -63,6 +63,8 @@ export interface SearchItem {
   code: string;
   url?: string;
   decision?: SearchDecision;
+  // The AI's reading of the cost: the period it covers when the description says ('' when it does not), and whether it looks like this year's
+  ai?: { from: string; to: string; summary: string };
 }
 
 export function supplierView(s: Supplier) {
@@ -175,14 +177,25 @@ export function suppliersFromOpenItems(items: DebtorOpenItem[], engagementId: st
  */
 export function searchAfterDate(engagementId: string, periodEnd: string, windowDays: number, minimum: bigint, existing: SearchItem[] = []): SearchItem[] {
   const until = addDays(periodEnd, windowDays);
-  return ledgerFor(engagementId, ['2', '3', '4'])
+  const found = ledgerFor(engagementId, ['2', '3', '4'])
     .filter((t) => t.date > periodEnd && t.date <= until && asPence(t.amount_p) >= minimum)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((t) => {
-      const id = `srch_${t.id}`;
-      const prev = existing.find((x) => x.id === id);
-      return { id, date: t.date, contact: t.contact, desc: t.description, amount_p: t.amount_p, code: chartCodeOf(engagementId, t.account_code) ?? '4990', ...(t.external_url ? { url: t.external_url } : {}), ...(prev?.decision ? { decision: prev.decision } : {}) };
-    });
+    .sort((a, b) => a.date.localeCompare(b.date));
+  // A new pull from Xero renumbers the ledger rows, so a cost whose id has gone is matched by date, supplier, description and amount
+  const ids = new Set(found.map((t) => `srch_${t.id}`));
+  const moved = existing.filter((x) => !ids.has(x.id));
+  return found.map((t) => {
+    const id = `srch_${t.id}`;
+    const at = moved.findIndex((x) => x.date === t.date && x.contact === t.contact && x.desc === t.description && x.amount_p === t.amount_p);
+    const prev = existing.find((x) => x.id === id) ?? (at < 0 ? undefined : moved.splice(at, 1)[0]);
+    return {
+      id, date: t.date, contact: t.contact, desc: t.description, amount_p: t.amount_p,
+      // A decided cost keeps the account it was decided with
+      code: (prev?.decision && prev.code) || (chartCodeOf(engagementId, t.account_code) ?? '4990'),
+      ...(t.external_url ? { url: t.external_url } : {}),
+      ...(prev?.decision ? { decision: prev.decision } : {}),
+      ...(prev?.ai ? { ai: prev.ai } : {}),
+    };
+  });
 }
 
 /** Costs accrued on the Trade creditors search. They show on the Accruals paper (K-20) and count in its total. */
