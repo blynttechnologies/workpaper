@@ -549,10 +549,11 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                           {s.payments_after.length} payment{s.payments_after.length === 1 ? '' : 's'}
                         </button>
                       ) : null}
+                      {/* With bills listed, the bank shows against each bill; only a supplier with no bill list says it here */}
                       {s.bank_check &&
+                        !s.invoices?.length &&
                         (s.bank_check.matches.length ? (
-                          // With bills listed, the bank shows against each bill; otherwise name the banks here
-                          !s.invoices?.length && <div className="text-[10px] text-[#0B6B52]">{[...new Set(s.bank_check.matches.map((m) => m.bank).filter(Boolean))].join(', ') || 'Found in the bank'}</div>
+                          <div className="text-[10px] text-[#0B6B52]">{[...new Set(s.bank_check.matches.map((m) => m.bank).filter(Boolean))].join(', ') || 'Found in the bank'}</div>
                         ) : (
                           <div className="text-[10px] text-[#B42318]">Not from any bank account to {ukDate(s.bank_check.to)}</div>
                         ))}
