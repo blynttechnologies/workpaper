@@ -95,13 +95,11 @@ body {
   }
 }
 
-/* Scrollbars hidden on the page and the sidebar; both still scroll by wheel, touch and keyboard,
-   and the Blynt Bot button takes you back to the top */
-html,
+/* Sidebar scrollbar hidden (it still scrolls by wheel, touch and keyboard). The page keeps its
+   scrollbar so people without a wheel or touchpad can click and drag it. */
 .dark-sidebar-scroll {
   scrollbar-width: none;
 }
-html::-webkit-scrollbar,
 .dark-sidebar-scroll::-webkit-scrollbar {
   display: none;
 }
