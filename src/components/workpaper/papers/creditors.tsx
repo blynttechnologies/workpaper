@@ -130,6 +130,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
 
   // The AI reads the balance off a supplier statement attached to a row; it is offered, never filled in by itself
   const [reading, setReading] = useState<Record<string, boolean>>({});
+  const [dropOn, setDropOn] = useState<string | null>(null);
   const readStatement = async (id: string, att: Attachment, show: boolean) => {
     setReading((r) => ({ ...r, [id]: true }));
     let ai: NonNullable<Supplier['ai_statement']> = { file: att.id, balance_p: '' };
@@ -393,9 +394,16 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               return (
                 <React.Fragment key={s.id}>
                   <tr
-                    onDragOver={(e) => !locked && dropFiles && e.preventDefault()}
+                    className={dropOn === s.id ? 'bg-[#EEF3FF] outline-2 outline-dashed -outline-offset-2 outline-[#122654]' : undefined}
+                    onDragOver={(e) => {
+                      if (locked || !dropFiles) return;
+                      e.preventDefault();
+                      if (dropOn !== s.id) setDropOn(s.id);
+                    }}
+                    onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setDropOn(null)}
                     onDrop={(e) => {
                       e.preventDefault();
+                      setDropOn(null);
                       const f = Array.from(e.dataTransfer.files ?? []);
                       if (f.length && !locked && dropFiles) dropFiles(f, s.id);
                     }}
@@ -622,7 +630,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           )}
         </table>
       </div>
-      <p className="-mt-2 text-[10px] text-[#4A5878]">Amounts owed are positive; debit balances are in brackets. Enter the statement balance from the supplier's statement and attach it to the row.</p>
+      <p className="-mt-2 text-[10px] text-[#4A5878]">Amounts owed are positive; debit balances are in brackets. Enter the statement balance from the supplier's statement, or drag the statement onto the supplier's row to attach it and have the AI read the balance.</p>
 
       <div className={card}>
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
