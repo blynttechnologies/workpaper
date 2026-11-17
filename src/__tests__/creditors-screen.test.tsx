@@ -56,7 +56,7 @@ describe('trade creditors screen', () => {
     expect(screen.getByText(/may be disputed or not owed/)).toBeTruthy();
   });
 
-  it('reads an attached statement with AI and offers the balance', async () => {
+  it('reads an attached statement with AI and fills in the balance', async () => {
     const att = { id: 'att_stmt', filename: 'british-gas.pdf' } as Attachment;
     const fetchMock = vi.fn(() =>
       Promise.resolve({
@@ -68,8 +68,8 @@ describe('trade creditors screen', () => {
     const { saved } = setup([{ id: 'sup_bg', name: 'British Gas', ledger_p: '25376', statement_p: '', paid_after_p: '0' }], { sup_bg: [att] });
     await waitFor(() => expect(saved.some((p) => p.suppliers?.[0]?.ai_statement?.balance_p === '25376')).toBe(true));
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/att_stmt/extract', expect.objectContaining({ body: JSON.stringify({ overrideCategory: 'Supplier statement' }) }));
-    // Nothing is filled in until someone uses it
-    expect(saved.at(-1)!.suppliers[0].statement_p).toBe('');
+    // An empty balance is filled in from the statement, and the row says the AI read it
+    expect(saved.at(-1)!.suppliers[0].statement_p).toBe('25376');
   });
 });
 
