@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { BackToTopBot } from './BackToTopBot';
+import { useEngagementTimer } from './useEngagementTimer';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -11,13 +13,16 @@ interface DashboardShellProps {
 
 export const DashboardShell: React.FC<DashboardShellProps> = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Timed here, once, because the sidebar is mounted twice (desktop and mobile drawer)
+  const match = usePathname()?.match(/\/engagements\/([^/]+)/);
+  const timerSeconds = useEngagementTimer(match && match[1] !== 'new' ? match[1] : null);
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[#F5F8FD] text-[#122654]">
       {/* Sidebar for Desktop */}
       <div className="hidden lg:block shrink-0 w-[232px] bg-[#0B1A3B] border-r border-[#122654]">
         <div className="sticky top-0 h-screen overflow-y-auto dark-sidebar-scroll">
-          <AppSidebar />
+          <AppSidebar timerSeconds={timerSeconds} />
         </div>
       </div>
 
@@ -29,7 +34,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({ children }) => {
           className="lg:hidden fixed inset-0 z-50 bg-[#0B1A3B]/50 backdrop-blur-xs flex"
         >
           <div className="w-[232px] bg-[#0B1A3B] h-full shadow-2xl flex flex-col overflow-y-auto dark-sidebar-scroll">
-            <AppSidebar onMobileClose={() => setMobileMenuOpen(false)} />
+            <AppSidebar timerSeconds={timerSeconds} onMobileClose={() => setMobileMenuOpen(false)} />
           </div>
           <div
             className="flex-1"

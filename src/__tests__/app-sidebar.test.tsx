@@ -40,4 +40,13 @@ describe('sidebar', () => {
     expect(review.getAttribute('aria-current')).toBe('page');
     expect(within(review).getByLabelText('1 open review note')).toBeTruthy();
   });
+
+  it('shows the client timer only after five minutes', () => {
+    db.seed(true);
+    path = `/engagements/${ENG}/workpapers`;
+    const { rerender } = render(<AppSidebar timerSeconds={299} />);
+    expect(screen.queryByRole('timer')).toBeNull();
+    rerender(<AppSidebar timerSeconds={312} />);
+    expect(screen.getByRole('timer').textContent).toBe('0:05:12');
+  });
 });

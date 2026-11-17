@@ -82,6 +82,17 @@ export async function query<T = Record<string, unknown>>(text: string, params: u
            data jsonb NOT NULL
          );
          CREATE INDEX IF NOT EXISTS ai_requests_firm_time ON ai_requests (firm_id, created_at);
+         CREATE TABLE IF NOT EXISTS time_entries (
+           id text PRIMARY KEY,
+           firm_id text NOT NULL,
+           engagement_id text NOT NULL,
+           client_name text NOT NULL,
+           user_id text NOT NULL,
+           user_name text NOT NULL,
+           started_at timestamptz NOT NULL,
+           ended_at timestamptz NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS time_entries_engagement ON time_entries (engagement_id, started_at);
          CREATE TABLE IF NOT EXISTS oauth_records (
            id text PRIMARY KEY,
            kind text NOT NULL,
