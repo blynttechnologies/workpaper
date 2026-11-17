@@ -578,45 +578,6 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                               )}
                             </div>
                           )}
-                          <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
-                            <div className="font-bold mb-1">Paid after {peLabel}</div>
-                            {!s.payments_after?.length && <div className="text-[11px] text-[#7E8DA6]">No payment to this supplier in the {windowDays} days after the period end.</div>}
-                            {!!s.payments_after?.length && (
-                              <table className="w-full max-w-3xl text-[11px]">
-                                <tbody>
-                                  {s.payments_after.map((p, k) => (
-                                    <tr key={k} className="border-t border-[#EEF1F6]">
-                                      <td className="py-1 pr-3 whitespace-nowrap">{ukDate(p.date)}</td>
-                                      <td className="py-1 pr-3">{p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{p.desc}</a> : p.desc}</td>
-                                      <td className="py-1 text-right font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            )}
-                            {s.bank_check && (
-                              <>
-                                <div className="font-bold mt-3 mb-1">Xero bank to {ukDate(s.bank_check.to)}</div>
-                                {!s.bank_check.matches.length && <div className="text-[11px] text-[#7E8DA6]">No payment by this name, or for an open invoice amount, left the bank.</div>}
-                                {!!s.bank_check.matches.length && (
-                                  <table className="w-full max-w-3xl text-[11px]">
-                                    <tbody>
-                                      {s.bank_check.matches.map((p, k) => (
-                                        <tr key={k} className="border-t border-[#EEF1F6]">
-                                          <td className="py-1 pr-3 whitespace-nowrap">{ukDate(p.date)}</td>
-                                          <td className="py-1 pr-3">
-                                            {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{p.contact || p.ref}</a> : p.contact || p.ref}
-                                            {p.reconciled ? '' : ' · not reconciled'}
-                                          </td>
-                                          <td className="py-1 text-right font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </>
-                            )}
-                          </div>
                           {ai?.balance_p && (
                             <div className="text-[10px] text-[#4A5878] flex items-center gap-1">
                               <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" />
