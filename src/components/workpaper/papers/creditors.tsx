@@ -163,6 +163,12 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       return next;
     });
   };
+  // One read at a time: each read reloads the workspace when it ends, which would wipe the result of a read that ended just before it
+  const reads = useRef<Promise<void>>(Promise.resolve());
+  const queueRead = (id: string, att: Attachment) => {
+    setReading((r) => ({ ...r, [id]: true }));
+    reads.current = reads.current.then(() => readStatement(id, att, true));
+  };
   // A statement attached to a supplier with no balance entered is read once, as the bank paper does
   const tried = useRef(new Set<string>());
   useEffect(() => {
@@ -171,7 +177,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       const att = filesFor(v.s.id).at(-1);
       if (!att || v.debit || v.entered || v.s.ai_statement?.file === att.id || tried.current.has(att.id)) continue;
       tried.current.add(att.id);
-      void readStatement(v.s.id, att, false);
+      queueRead(v.s.id, att);
     }
   });
 
@@ -465,7 +471,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                             file &&
                             !locked && (
                               <div className="mt-1 text-right">
-                                <button type="button" className={`${link} inline-flex items-center gap-1`} onClick={() => readStatement(s.id, file, true)}>
+                                <button type="button" className={`${link} inline-flex items-center gap-1`} onClick={() => queueRead(s.id, file)}>
                                   <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> {ai ? 'Read again with AI' : 'Read with AI'}
                                 </button>
                               </div>

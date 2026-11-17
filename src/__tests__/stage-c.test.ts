@@ -115,14 +115,18 @@ describe('Stage C - Documents and All Schedules (Steps 8–12)', () => {
           lessor: { value: 'Grosvenor Estates PLC', page: 2, clause: 'Cl. 1.1' },
           rent_per_annum_p: { value: '£10,200.00', page: 5, clause: 'Cl. 3.1' },
           term_years: { value: '5', page: 4, clause: 'Cl. 2.1' },
-          start_date: { value: '1 April 2025', page: 4, clause: 'Cl. 2.1' }, // not ISO: refused, left blank
+          start_date: { value: '1 April 2025', page: 4, clause: 'Cl. 2.1' }, // as printed, month named: taken
+          end_date: { value: '04/05/2030', page: 4, clause: 'Cl. 2.1' }, // day and month could be either way round: left blank
+          break_date: { value: '31 June 2027', page: 4, clause: 'Cl. 2.2' }, // no such day: left blank
         },
         summary: [{ text: 'Annual rent £10,200 payable quarterly', page: 5, clause: 'Cl. 3.1' }],
       });
       expect(read.data.lessor).toMatchObject({ value: 'Grosvenor Estates PLC', confidence: 96, page: 2, clause: 'Cl. 1.1', gate: 'ready' });
       expect(read.data.rent_per_annum_p.value).toBe('1020000');
       expect(read.data.term_years.value).toBe(5);
-      expect(read.data.start_date).toMatchObject({ value: '', gate: 'check' });
+      expect(read.data.start_date.value).toBe('2025-04-01');
+      expect(read.data.end_date).toMatchObject({ value: '', gate: 'check' });
+      expect(read.data.break_date).toMatchObject({ value: '', gate: 'check' });
       expect(read.summary.bullets[0]).toMatchObject({ clause: 'Cl. 3.1', page: 5 });
     });
 

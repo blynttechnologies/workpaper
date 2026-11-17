@@ -10,6 +10,21 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 // Summary bullets show Ready or Check; an Exception reads as Check
 const asBulletGate = (g: 'ready' | 'check' | 'exception'): 'ready' | 'check' => (g === 'ready' ? 'ready' : 'check');
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+/**
+ * A date as ISO. Models sometimes copy it as printed (30 September 2026, 30-Sep-2026) despite being asked for ISO.
+ * Only a named month is taken: 04/05/2026 could be either way round, so it stays blank for a person.
+ */
+function isoDate(raw: string): string | null {
+  if (ISO.test(raw)) return raw;
+  const m = /^(\d{1,2})(?:st|nd|rd|th)?[\s-]+([A-Za-z]{3,9})[\s,-]+(\d{4})$/.exec(raw.trim());
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase());
+  const d = new Date(Date.UTC(Number(m[3]), month, day));
+  return month >= 0 && d.getUTCDate() === day ? d.toISOString().slice(0, 10) : null;
+}
+
 /** A value as the model printed it, in the form the schedules hold: pence strings, ISO dates, numbers. '' or null when absent or unreadable. */
 function convert(kind: FieldKind, raw: string): string | number | boolean | null {
   if (!raw) return null;
@@ -19,7 +34,7 @@ function convert(kind: FieldKind, raw: string): string | number | boolean | null
       return DECIMAL.test(clean) ? toPence(clean).toString() : null;
     }
     case 'date':
-      return ISO.test(raw) ? raw : null;
+      return isoDate(raw);
     case 'int':
       return /^-?\d+$/.test(raw.replace(/,/g, '')) ? parseInt(raw.replace(/,/g, ''), 10) : null;
     case 'number':
