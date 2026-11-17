@@ -13,10 +13,22 @@ export function BackToTopBot() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > SHOW_AFTER);
-    onScroll();
+    const root = document.documentElement;
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      setShow(window.scrollY > SHOW_AFTER);
+      // The page scrollbar turns navy while the page moves and fades back once it stops (globals.css)
+      root.classList.add('is-scrolling');
+      clearTimeout(idle);
+      idle = setTimeout(() => root.classList.remove('is-scrolling'), 700);
+    };
+    setShow(window.scrollY > SHOW_AFTER);
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      clearTimeout(idle);
+      root.classList.remove('is-scrolling');
+    };
   }, []);
 
   const toTop = () => {
