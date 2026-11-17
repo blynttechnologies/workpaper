@@ -48,5 +48,8 @@ describe('sidebar', () => {
     expect(screen.queryByRole('timer')).toBeNull();
     rerender(<AppSidebar timerSeconds={312} />);
     expect(screen.getByRole('timer').textContent).toBe('0:05:12');
+    expect(screen.queryByText('Paused, no activity')).toBeNull();
+    rerender(<AppSidebar timerSeconds={312} timerPaused />);
+    expect(screen.getByText('Paused, no activity')).toBeTruthy();
   });
 });
