@@ -10,6 +10,7 @@ import { db } from '@/lib/server/db';
 import { services } from '@/lib/server/services';
 import { reconAccounts, leadSources, rowCode, accountLedger, accountKind, accountName, statementEntered, debtorsJournal, type PaperResult, type ReconAccount, type ReconItem } from '@/lib/workpapers/engine';
 import { agedDebtorsFromLedger, debtorView, type DebtorDecision, type DebtorLine } from '@/lib/workpapers/debtors';
+import { accruedLiabilities } from '@/lib/workpapers/creditors';
 import { MoneyInput, TextInput, RowFiles, AddOption, fmtTb } from './parts';
 import { Tiles, type Tone } from './kit';
 import { ukDate } from '@/lib/dates';
@@ -1629,9 +1630,12 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
     cols.forEach((c) => (blank[c.money === false ? c.key : `${c.key}_p`] = c.money === false ? '' : '0'));
     save({ lines: [...(live().lines ?? []), blank] });
   };
-  const colTotal = (key: string) => lines.reduce<bigint>((acc, l) => acc + asPence(l[`${key}_p`]), 0n);
-  const totalCheck = result.checks.find((c) => c.id === 'total_tb');
   const isAccruals = t.ref === 'K-20';
+  // Costs accrued on the Trade creditors search show here, read only; undo them on that paper
+  const accrued = isAccruals ? accruedLiabilities(result.engagementId) : [];
+  const amountKey = cols.find((c) => c.money !== false && c.inTotal !== false)?.key;
+  const colTotal = (key: string) => lines.reduce<bigint>((acc, l) => acc + asPence(l[`${key}_p`]), 0n) + (key === amountKey ? (result.totals.from_search ?? 0n) : 0n);
+  const totalCheck = result.checks.find((c) => c.id === 'total_tb');
   const isCorpTax = t.ref === 'T-10';
   const isRelatedParties = t.ref === 'R-10';
   const isSuspense = t.ref === 'S-10';
@@ -1643,7 +1647,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
           { label: 'Schedule total', value: formatPence(result.totals.total ?? 0n) },
           { label: 'Trial balance tie', value: formatPence(result.totals.tb ?? 0n), tone: totalCheck?.passed ? 'good' : 'bad', sub: totalCheck?.passed ? 'Agrees to ledger' : 'Differs from ledger' },
           { label: 'Difference', value: formatPence(result.totals.difference ?? 0n), tone: (result.totals.difference ?? 0n) === 0n ? 'good' : 'bad' },
-          { label: 'Schedule lines', value: `${lines.length} line${lines.length === 1 ? '' : 's'}` },
+          { label: 'Schedule lines', value: `${lines.length + accrued.length} line${lines.length + accrued.length === 1 ? '' : 's'}`, ...(accrued.length ? { sub: `${accrued.length} from Trade creditors` } : {}) },
         ]}
       />
       {/* S-10 Suspense / Clearing must-be-zero alert (REC-16) */}
@@ -1763,13 +1767,27 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF]">
-            {lines.length === 0 && (
+            {lines.length === 0 && accrued.length === 0 && (
               <tr>
                 <td colSpan={cols.length + 4} className="p-3 text-[11px] text-[#7E8DA6]">
                   No lines yet. Add the balances that make up this area.
                 </td>
               </tr>
             )}
+            {accrued.map((i) => (
+              <tr key={i.id} className="bg-[#F5F8FD]/70">
+                <td className="p-2 font-semibold">{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="underline">{i.contact || i.desc}</a> : i.contact || i.desc}</td>
+                <td className="p-2">Paid {ukDate(i.date)}</td>
+                {cols.map((c) => (
+                  <td key={c.key} className="p-2 text-right font-mono">
+                    {c.key === amountKey ? formatPence(asPence(i.amount_p), { symbol: '' }) : c.key === 'item' ? `${i.desc} · ${i.code}` : c.key === 'supplier' ? i.contact : ''}
+                  </td>
+                ))}
+                <td className="p-2 text-[10px] text-[#4A5878]" colSpan={2}>
+                  Accrued on Trade creditors
+                </td>
+              </tr>
+            ))}
             {lines.map((l) => (
               <tr key={l.id}>
                 <td className="p-1.5 min-w-[180px]">

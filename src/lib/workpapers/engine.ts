@@ -4,6 +4,7 @@ import { TemplateDef, blankPaperData, templateFor, templateOf } from './template
 import { JOURNAL_IN_TB, type Workpaper } from '../types/models';
 import { analyticalReview, analyticalRows } from './analytical';
 import { debtorView, type DebtorLine } from './debtors';
+import { accruedLiabilities } from './creditors';
 import { PAPER_REVIEWS } from './reviews';
 import { inLead, journalInLedger, journalWhere, type PaperContext } from './common';
 
@@ -504,6 +505,11 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
       for (const c of cols) total += asPence(line[`${c.key}_p`]);
       anchors.push({ id: line.id, label: line.desc || 'Line' });
     }
+    // Accruals: costs accrued on the Trade creditors search are part of this schedule
+    const fromSearch = t.ref === 'K-20' ? accruedLiabilities(wp.engagement_id) : [];
+    const searched = fromSearch.reduce((a, i) => a + asPence(i.amount_p), 0n);
+    total += searched;
+    totals.from_search = searched;
     totals.total = total;
     totals.difference = total - (tbShown ?? 0n);
 
@@ -529,7 +535,9 @@ export function evaluatePaper(wp: Workpaper): PaperResult | null {
     if (t.ref !== 'C-10') draft =
       tbShown === null
         ? ''
-        : `${t.areaName} of ${formatPence(tbShown)} ${total === tbShown ? 'agree to the supporting schedule' : `differ from the schedule by ${formatPence(total - tbShown)}`}.`;
+        : `${t.areaName} of ${formatPence(tbShown)} ${total === tbShown ? 'agree to the supporting schedule' : `differ from the schedule by ${formatPence(total - tbShown)}`}.${
+            fromSearch.length ? ` The schedule includes ${formatPence(searched)} for ${fromSearch.length} cost(s) accrued from the search for unrecorded liabilities on Trade creditors.` : ''
+          }`;
   }
 
   if (t.kind === 'vat') {

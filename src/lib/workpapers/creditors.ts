@@ -185,6 +185,12 @@ export function searchAfterDate(engagementId: string, periodEnd: string, windowD
     });
 }
 
+/** Costs accrued on the Trade creditors search. They show on the Accruals paper (K-20) and count in its total. */
+export function accruedLiabilities(engagementId: string): SearchItem[] {
+  const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'K-10');
+  return ((wp?.data_json?.search?.items ?? []) as SearchItem[]).filter((i) => i.decision === 'accrue');
+}
+
 export function creditorsJournal(data: Record<string, any>): JLine[] {
   const lines: JLine[] = [];
   for (const v of ((data.suppliers ?? []) as Supplier[]).map(supplierView)) {
