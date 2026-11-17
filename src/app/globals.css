@@ -95,6 +95,17 @@ body {
   }
 }
 
+/* The page scrollbar: soft grey at rest, Blynt navy while the page scrolls (BackToTopBot sets
+   is-scrolling), fading back once it stops. Full width so it can still be clicked and dragged. */
+html {
+  scrollbar-color: #C9D3E6 transparent;
+  transition: scrollbar-color 0.6s ease-out;
+}
+html.is-scrolling {
+  scrollbar-color: #122654 transparent;
+  transition-duration: 0.15s;
+}
+
 /* Sidebar scrollbar hidden (it still scrolls by wheel, touch and keyboard). The page keeps its
    scrollbar so people without a wheel or touchpad can click and drag it. */
 .dark-sidebar-scroll {

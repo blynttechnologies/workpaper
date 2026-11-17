@@ -26,6 +26,25 @@ describe('back to top bot', () => {
     expect(button.tabIndex).toBe(0);
   });
 
+  it('lights up the page scrollbar while scrolling and lets it fade once scrolling stops', () => {
+    vi.useFakeTimers();
+    try {
+      render(<BackToTopBot />);
+      const root = document.documentElement;
+      expect(root.classList.contains('is-scrolling')).toBe(false);
+      scrollTo(300);
+      expect(root.classList.contains('is-scrolling')).toBe(true);
+      act(() => vi.advanceTimersByTime(500));
+      scrollTo(320); // still moving: stays lit
+      act(() => vi.advanceTimersByTime(500));
+      expect(root.classList.contains('is-scrolling')).toBe(true);
+      act(() => vi.advanceTimersByTime(300));
+      expect(root.classList.contains('is-scrolling')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('takes you back to the top', () => {
     const spy = vi.fn();
     window.scrollTo = spy as unknown as typeof window.scrollTo;
