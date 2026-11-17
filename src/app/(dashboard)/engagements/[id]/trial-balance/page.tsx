@@ -375,6 +375,8 @@ export default function TrialBalancePage() {
     let list = db.transactions.filter(
       (t) =>
         t.engagement_id === engagementId &&
+        // The ledger holds postings after the period end too; only the year's make up the balance
+        (!periodEnd || t.date <= periodEnd) &&
         (t.account_code === drillAccount.code ||
           drillAccount.code === 'TOTAL' ||
           !drillAccount.code)
@@ -394,7 +396,7 @@ export default function TrialBalancePage() {
       if (drillSort === 'amount_desc') return Number(BigInt(b.amount_p) - BigInt(a.amount_p));
       return Number(BigInt(a.amount_p) - BigInt(b.amount_p));
     });
-  }, [drillAccount, drillSearch, drillSort, engagementId]);
+  }, [drillAccount, drillSearch, drillSort, engagementId, periodEnd]);
 
   const handleExportDrillDown = () => {
     if (!drillAccount) return;
