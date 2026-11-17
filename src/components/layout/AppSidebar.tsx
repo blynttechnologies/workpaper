@@ -21,7 +21,9 @@ import {
   Globe,
   ListChecks,
   LineChart,
+  Timer,
 } from 'lucide-react';
+import { formatDuration } from './useEngagementTimer';
 import { BlyntLogo } from '@/components/ui/BlyntLogo';
 import { db } from '@/lib/server/db';
 import { workflowsOf } from '@/lib/workflows';
@@ -85,9 +87,13 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 interface AppSidebarProps {
   currentEngagementId?: string;
   onMobileClose?: () => void;
+  /** Seconds this engagement has been open; shown once it reaches five minutes */
+  timerSeconds?: number;
 }
 
-export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: currentEngagementIdProp, onMobileClose }) => {
+const TIMER_SHOW_AFTER = 5 * 60;
+
+export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: currentEngagementIdProp, onMobileClose, timerSeconds = 0 }) => {
   const { activeCompany, activeEngagement: contextEngagement } = useCompany();
   const pathname = usePathname();
   const router = useRouter();
@@ -135,6 +141,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: cur
   const practice: Item[] = [
     { href: '/', label: 'Dashboard', icon: Home, exact: true },
     { href: '/clients', label: 'Clients', icon: Building2 },
+    { href: '/time', label: 'Time log', icon: Timer },
     { href: '/settings', label: 'Practice settings', icon: Sliders },
   ];
   const prepare: Item[] = [
@@ -179,6 +186,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: cur
                 {activeClient?.name ?? 'Client'}
               </Link>
               <p className="text-[11px] text-[#C5CFE3]">Year ended {ukDate(activeEngagement.period_end)}</p>
+              {timerSeconds >= TIMER_SHOW_AFTER && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-white" title="Time on this client, recorded against you">
+                  <Timer className="w-3.5 h-3.5 text-[#FF7A66]" aria-hidden="true" />
+                  <span className="font-mono tabular-nums" role="timer" aria-label="Time on this client">{formatDuration(timerSeconds)}</span>
+                </p>
+              )}
             </div>
 
             <Group label="Prepare">{links(prepare)}</Group>
