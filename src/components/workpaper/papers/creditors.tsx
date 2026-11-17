@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Landmark, RefreshCw, Search } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Landmark, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
+import type { Attachment } from '@/lib/types/models';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
@@ -17,7 +18,7 @@ const AGED = [
   ['d60_p', '31–60 overdue'],
   ['d90_p', 'Over 60 overdue'],
 ] as const;
-import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, SuggestionRow, th, Tiles, useOpen } from '../kit';
+import { AccountsPreview, btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, th, Tiles, useOpen } from '../kit';
 import { expenseCodes } from '@/lib/workpapers/common';
 import { bankMatches, creditorsJournal, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
 
@@ -26,8 +27,16 @@ const STATUS: Record<ReturnType<typeof supplierView>['status'], [string, 'good' 
   difference: ['Difference', 'warn'],
   debit: ['Debit balance', 'bad'],
   dispute: ['Check for dispute', 'warn'],
-  done: ['Done', 'good'],
+  done: ['✓ Agrees to statement', 'good'],
 };
+const DECIDED: Record<SupplierDecision, string> = {
+  missing_invoice: 'Missing invoice added',
+  timing: 'Payment in transit',
+  not_ours: 'Not ours',
+  debtors: 'Moved to other debtors',
+  leave: 'Left in creditors',
+};
+const link = 'text-[10px] text-[#1D4E89] underline';
 
 export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const { isOpen, toggle, show } = useOpen();
@@ -104,6 +113,50 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       }),
     });
 
+  // The AI reads the balance off a supplier statement attached to a row; it is offered, never filled in by itself
+  const [reading, setReading] = useState<Record<string, boolean>>({});
+  const readStatement = async (id: string, att: Attachment, show: boolean) => {
+    setReading((r) => ({ ...r, [id]: true }));
+    let ai: NonNullable<Supplier['ai_statement']> = { file: att.id, balance_p: '' };
+    let problem = '';
+    try {
+      const res = await fetch(`/api/v1/documents/${encodeURIComponent(att.id)}/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overrideCategory: 'Supplier statement' }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.attachment) {
+        // Keep this browser's copy of the file in step with what the server saved
+        const local = db.attachments.find((a) => a.id === att.id);
+        if (local) Object.assign(local, { category: body.attachment.category, ai_summary: body.attachment.ai_summary, extracted_data: body.attachment.extracted_data });
+        const bal = body.data?.closing_balance_p;
+        if (body.ai && bal?.value) ai = { file: att.id, balance_p: String(bal.value), date: body.data?.statement_date?.value || undefined, page: bal.page, confidence: bal.confidence };
+        else problem = body.note || `The AI could not read a balance from ${att.filename}. Enter it from the statement.`;
+      } else problem = body.error || 'Could not read the statement.';
+    } catch {
+      problem = 'Could not reach the server to read the statement. Try again.';
+    }
+    setSupplier(id, { ai_statement: ai });
+    if (show && problem) setNote({ ok: false, text: problem });
+    setReading((r) => {
+      const next = { ...r };
+      delete next[id];
+      return next;
+    });
+  };
+  // A statement attached to a supplier with no balance entered is read once, as the bank paper does
+  const tried = useRef(new Set<string>());
+  useEffect(() => {
+    if (locked) return;
+    for (const v of views) {
+      const att = filesFor(v.s.id).at(-1);
+      if (!att || v.debit || v.entered || v.s.ai_statement?.file === att.id || tried.current.has(att.id)) continue;
+      tried.current.add(att.id);
+      void readStatement(v.s.id, att, false);
+    }
+  });
+
   const attention = (v: ReturnType<typeof supplierView>) => v.status !== 'done';
   // Suppliers read from Xero's open bills carry an ageing by due date; the ledger fallback only has the oldest bill's age
   const agedCols = views.some((v) => v.s.aged);
@@ -112,12 +165,115 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
   const owedCount = views.filter((v) => v.ledger > 0n).length;
   const control = result.checks.find((c) => c.id === 'control_tb');
   const lines = creditorsJournal(data);
+  const cols = agedCols ? 11 : 8;
+
+  // The right-hand column: the suggestion and its buttons, or the decision made and its reason, as on Trade debtors
+  const status = (v: ReturnType<typeof supplierView>) => {
+    const s = v.s;
+    const name = s.name || 'New supplier';
+    const blocks: React.ReactNode[] = [];
+    if (v.suggestion && !s.decision) {
+      const k = v.suggestion.kind;
+      blocks.push(
+        <div key="suggest" className="flex flex-col items-end gap-1">
+          <Pill tone="warn">Suggested: {k === 'debtors' ? 'move to debtors' : k === 'timing' ? 'payment in transit' : `add ${formatPence(v.diff!)}`}</Pill>
+          {!locked && (
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              {k === 'missing_invoice' && (
+                <span className="inline-block w-[170px] [&>select]:w-full">
+                  <CodePicker label={`Expense account for ${name}`} value={s.expense_code} codes={codes} disabled={locked} onChange={(c) => setSupplier(s.id, { expense_code: c })} />
+                </span>
+              )}
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={k === 'missing_invoice' && !s.expense_code}
+                title={k === 'missing_invoice' && !s.expense_code ? 'Pick the expense account first' : undefined}
+                onClick={() => decide(s.id, k)}
+              >
+                {k === 'debtors' ? 'Move to debtors' : k === 'timing' ? 'Accept as timing' : 'Add to creditors'}
+              </button>
+              <button type="button" className={btnSecondary} onClick={() => decide(s.id, k === 'debtors' ? 'leave' : 'not_ours')}>
+                {k === 'debtors' ? 'Leave' : k === 'timing' ? 'Other reason' : 'Not ours'}
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    } else if (s.decision) {
+      blocks.push(
+        <div key="decided" className="flex flex-col items-end gap-1 min-w-[190px]">
+          <Pill tone="info">
+            {DECIDED[s.decision]}
+            {s.decision === 'missing_invoice' && s.expense_code ? ` to ${s.expense_code}` : ''}
+          </Pill>
+          {s.decision === 'missing_invoice' && (
+            <label className="flex items-center gap-1 text-[10px] text-[#4A5878]">
+              VAT included
+              <span className="w-24">
+                <MoneyInput label={`VAT in the missing invoice for ${name}`} value={s.vat_p} disabled={locked} allowNegative={false} onCommit={(p) => setSupplier(s.id, { vat_p: p })} />
+              </span>
+              {!locked && v.diff && (
+                <button type="button" className={link} onClick={() => setSupplier(s.id, { vat_p: ((v.diff! + 3n) / 6n).toString() })}>
+                  20%
+                </button>
+              )}
+            </label>
+          )}
+          {(s.decision === 'not_ours' || s.decision === 'leave') && (
+            <TextInput label={`Reason for ${name}`} value={s.reason} disabled={locked} placeholder="Reason (required)" onCommit={(r) => setSupplier(s.id, { reason: r })} />
+          )}
+          {!locked && (
+            <button type="button" className={link} onClick={() => decide(s.id, undefined)}>
+              Undo
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (v.needsDispute || s.dispute) {
+      blocks.push(
+        !s.dispute ? (
+          <div key="dispute" className="flex flex-col items-end gap-1">
+            <Pill tone="warn">Check for dispute</Pill>
+            {!locked && (
+              <div className="flex gap-1">
+                <button type="button" className={btnPrimary} onClick={() => askClient(s)}>
+                  Ask the client
+                </button>
+                <button type="button" className={btnSecondary} onClick={() => setSupplier(s.id, { dispute: 'not_disputed' })}>
+                  Not disputed
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div key="dispute" className="flex flex-col items-end gap-1 min-w-[190px]">
+            <Pill tone="plain">{s.dispute === 'ask' ? 'Asked the client (in Comments)' : 'Not disputed'}</Pill>
+            {s.dispute === 'not_disputed' && (
+              <TextInput label={`Why ${name} is not disputed`} value={s.dispute_reason} disabled={locked} placeholder="Reason (required), e.g. client confirmed" onCommit={(r) => setSupplier(s.id, { dispute_reason: r })} />
+            )}
+            {!locked && (
+              <button type="button" className={link} onClick={() => setSupplier(s.id, { dispute: undefined })}>
+                Undo
+              </button>
+            )}
+          </div>
+        )
+      );
+    }
+    if (!blocks.length) {
+      const [label, tone] = STATUS[v.status];
+      blocks.push(<Pill key="status" tone={tone}>{label}</Pill>);
+    }
+    return <div className="ml-auto flex flex-col items-end gap-2 max-w-[200px]">{blocks}</div>;
+  };
 
   return (
     <div className="flex flex-col gap-4">
       <Tiles
         items={[
-          { label: 'Aged creditors vs TB 7500', value: control?.passed ? 'Agrees' : 'Differs', tone: control?.passed ? 'good' : 'bad', sub: `${formatPence(tot('aged'))} · ${views.length} suppliers` },
+          { label: 'Aged creditors vs TB 7500', value: control?.passed ? 'Agrees' : 'Differs', tone: control?.passed ? 'good' : 'bad', sub: control?.passed ? `${formatPence(tot('control'))} both` : `Difference ${formatPence(tot('difference'))} · ${views.length} suppliers` },
           { label: 'Statements on file', value: `${withStatement.length} of ${owedCount}`, sub: 'suppliers owed money' },
           { label: 'Unrecorded liabilities found', value: formatPence(tot('found')), tone: tot('found') ? 'warn' : 'plain', sub: `${items.filter((i) => !i.decision).length} to decide · ${items.length} items` },
           { label: 'Paid after period end', value: tot('owed') ? `${Number((tot('paid_after') * 100n) / tot('owed'))}%` : '–', sub: `${formatPence(tot('paid_after'))} of ${formatPence(tot('owed'))} within ${windowDays} days` },
@@ -155,6 +311,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           </div>
         )}
       </div>
+      {data.refreshed_at && <div className="-mt-2 text-[10px] text-[#4A5878]">Read from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
       {note && <div className={`-mt-2 text-[11px] ${note.ok ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
 
       <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
@@ -164,26 +321,34 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <th className="w-8" />
               <th className={`${th} text-left`}>Supplier</th>
               <th className={`${th} text-right`}>Ledger</th>
-              <th className={`${th} text-right w-[130px]`}>Statement</th>
+              <th className={`${th} text-right w-[120px]`}>Statement</th>
               <th className={`${th} text-right`}>Difference</th>
               <th className={`${th} text-right`}>Paid after</th>
               {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} text-right`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
-              <th className={`${th} text-left`}>Status</th>
-              <th className={`${th} text-left`}>Statement on file</th>
+              <th className={`${th} text-right`}>Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF]">
             {views.length === 0 && (
               <tr>
-                <td colSpan={agedCols ? 12 : 9} className="p-3 text-[11px] text-[#7E8DA6]">
+                <td colSpan={cols} className="p-3 text-[11px] text-[#7E8DA6]">
                   No suppliers yet. Refresh from the ledger, or add suppliers by hand.
+                </td>
+              </tr>
+            )}
+            {views.length > 0 && shown.length === 0 && (
+              <tr>
+                <td colSpan={cols} className="p-3 text-[11px] text-[#7E8DA6]">
+                  No suppliers match this filter.
                 </td>
               </tr>
             )}
             {shown.map((v) => {
               const s = v.s;
               const name = s.name || 'New supplier';
-              const [label, tone] = STATUS[v.status];
+              const file = filesFor(s.id).at(-1);
+              const ai = s.ai_statement;
+              const aiBalance = ai?.balance_p ? asPence(ai.balance_p) : null;
               return (
                 <React.Fragment key={s.id}>
                   <tr
@@ -197,22 +362,62 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                     <td className="p-1.5 align-top">
                       <ExpandButton open={isOpen(s.id)} label={`details for ${name}`} onClick={() => toggle(s.id)} />
                     </td>
-                    <td className="p-2 align-top">
+                    <td className="p-2 align-top min-w-[190px]">
                       <div className="font-bold">{name}</div>
-                      <div className="text-[10px] text-[#4A5878]">{s.invoices?.length ? `${s.invoices.length} open invoice${s.invoices.length === 1 ? '' : 's'}` : v.debit ? 'debit balance' : ''}</div>
+                      <div className="text-[10px] text-[#4A5878]">
+                        {s.invoices?.length ? `${s.invoices.length} open bill${s.invoices.length === 1 ? '' : 's'}` : v.debit ? 'debit balance' : ''}
+                        {s.oldest_days ? ` · ${s.overdue ? `most overdue ${s.oldest_days} days` : `oldest ${s.oldest_days} days`}` : ''}
+                      </div>
                     </td>
                     <td className="p-2 align-top text-right font-mono font-bold">{money(v.ledger)}</td>
                     <td className="p-1.5 align-top">
                       {v.debit ? (
                         <div className="text-right text-[10px] text-[#7E8DA6] pt-1.5">Not needed</div>
                       ) : (
-                        <MoneyInput label={`Statement balance for ${name}`} value={s.statement_p} placeholder="Enter or attach" disabled={locked} onCommit={(p) => setSupplier(s.id, { statement_p: p })} />
+                        <>
+                          <MoneyInput label={`Statement balance for ${name}`} value={s.statement_p} placeholder="Enter or attach" disabled={locked} onCommit={(p) => setSupplier(s.id, { statement_p: p })} />
+                          {reading[s.id] ? (
+                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#4A5878]">
+                              <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Reading statement…
+                            </div>
+                          ) : aiBalance !== null && aiBalance !== v.statement ? (
+                            <div className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[10px] text-[#4A5878]">
+                              <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" />
+                              AI read {formatPence(aiBalance)}
+                              {ai?.date ? ` at ${ukDate(ai.date)}` : ''}
+                              {!locked && (
+                                <button type="button" className={link} onClick={() => setSupplier(s.id, { statement_p: ai!.balance_p })}>
+                                  Use
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            file &&
+                            !locked &&
+                            aiBalance === null && (
+                              <div className="mt-1 text-right">
+                                <button type="button" className={`${link} inline-flex items-center gap-1`} onClick={() => readStatement(s.id, file, true)}>
+                                  <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> {ai ? 'Read again with AI' : 'Read with AI'}
+                                </button>
+                              </div>
+                            )
+                          )}
+                        </>
                       )}
+                      {/* The statement itself and the tick, kept with the balance it supports */}
+                      <div className="mt-1 flex items-center justify-end gap-1.5 flex-wrap">
+                        {tickFor(s.id, name)}
+                        <RowFiles files={filesFor(s.id)} onPreview={preview} onAttach={() => attachTo(s.id)} disabled={locked} label={`the statement for ${name}`} />
+                      </div>
                     </td>
                     <td className={`p-2 align-top text-right font-mono ${v.diff ? 'text-[#B8432F] font-bold' : ''}`}>{v.diff === null ? '–' : money(v.diff)}</td>
                     <td className="p-2 align-top text-right">
-                      <div className={`font-mono ${v.ledger > 0n && v.paid === 0n ? 'text-[#B42318]' : v.paid >= v.ledger && v.ledger > 0n ? 'text-[#0B6B52]' : ''}`}>{v.ledger > 0n && v.paid === 0n ? 'Nil' : money(v.paid)}</div>
-                      {s.payments_after?.length ? <div className="text-[10px] text-[#4A5878]">{ukDate(s.payments_after[0].date)}</div> : null}
+                      <div className={`font-mono font-bold ${v.ledger > 0n && v.paid === 0n ? 'text-[#B42318]' : v.paid >= v.ledger && v.ledger > 0n ? 'text-[#0B6B52]' : ''}`}>{v.ledger > 0n && v.paid === 0n ? 'Nil' : money(v.paid)}</div>
+                      {s.payments_after?.length ? (
+                        <button type="button" onClick={() => show(s.id)} className={link}>
+                          {s.payments_after.length} payment{s.payments_after.length === 1 ? '' : 's'}
+                        </button>
+                      ) : null}
                       {s.bank_check &&
                         (s.bank_check.matches.length ? (
                           <div className="text-[10px] text-[#0B6B52]">
@@ -228,8 +433,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       AGED.map(([key]) => {
                         const p = asPence(s.aged?.[key] ?? '0');
                         return (
-                          <td key={key} className={`p-2 align-top text-right font-mono ${key === 'd90_p' && p > 0n ? 'text-[#B8432F] font-bold' : ''}`}>
-                            {p === 0n ? '–' : money(p)}
+                          <td key={key} className="p-2 align-top text-right font-mono">
+                            <span className={key === 'd90_p' && p > 0n ? 'px-1 rounded bg-[#FFF4DB] font-bold text-[#B8432F]' : ''}>{p === 0n ? '–' : money(p)}</span>
                           </td>
                         );
                       })
@@ -238,174 +443,103 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                         {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
                       </td>
                     )}
-                    <td className="p-2 align-top">
-                      <Pill tone={tone}>{label}</Pill>
-                    </td>
-                    <td className="p-2 align-top">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {tickFor(s.id, name)}
-                        <RowFiles files={filesFor(s.id)} onPreview={preview} onAttach={() => attachTo(s.id)} disabled={locked} label={`the statement for ${name}`} />
-                      </div>
-                    </td>
+                    <td className="p-2 align-top text-right">{status(v)}</td>
                   </tr>
-                  {(isOpen(s.id) || (v.suggestion && !s.decision) || (v.needsDispute && !s.dispute)) && (
+                  {isOpen(s.id) && (
                     <tr className="bg-[#FAFBFD]">
                       <td />
-                      <td colSpan={agedCols ? 11 : 8} className="p-3 flex flex-col gap-2">
-                        {v.suggestion && !s.decision && (
-                          <SuggestionRow
-                            actions={
-                              !locked &&
-                              (v.suggestion.kind === 'debtors' ? (
-                                <>
-                                  <button type="button" className={btnPrimary} onClick={() => decide(s.id, 'debtors')}>
-                                    Move to debtors
-                                  </button>
-                                  <button type="button" className={btnSecondary} onClick={() => decide(s.id, 'leave')}>
-                                    Leave
-                                  </button>
-                                </>
-                              ) : v.suggestion.kind === 'missing_invoice' ? (
-                                <>
-                                  <CodePicker label={`Expense account for ${name}`} value={s.expense_code} codes={codes} disabled={locked} onChange={(c) => setSupplier(s.id, { expense_code: c })} />
-                                  <button type="button" className={btnPrimary} disabled={!s.expense_code} onClick={() => decide(s.id, 'missing_invoice')}>
-                                    Add to creditors
-                                  </button>
-                                  <button type="button" className={btnSecondary} onClick={() => decide(s.id, 'not_ours')}>
-                                    Not ours
-                                  </button>
-                                </>
+                      <td colSpan={cols - 1} className="p-3">
+                        {[v.suggestion?.why, v.needsDispute ? `Nothing paid since the period end and the oldest ${s.overdue ? `bill is ${s.oldest_days} days overdue` : `invoice is ${s.oldest_days} days old`}. It may be disputed or not owed.` : '']
+                          .filter(Boolean)
+                          .map((why) => (
+                            <div key={why} className="mb-2 px-3 py-2 rounded-[8px] bg-[#F5F8FD] text-[11px] text-[#122654] flex items-start gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" /> {why}
+                            </div>
+                          ))}
+                        <div className="flex flex-col gap-3">
+                          {!s.invoices && (
+                            <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2 max-w-xl">
+                              <div className="font-bold">Balance at {peLabel}</div>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold text-[#4A5878]">Supplier</span>
+                                <TextInput label="Supplier name" value={s.name} disabled={locked} placeholder="Supplier name" onCommit={(n) => setSupplier(s.id, { name: n })} />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-semibold text-[#4A5878]">Ledger balance</span>
+                                <MoneyInput label={`Ledger balance for ${name}`} value={s.ledger_p} disabled={locked} onCommit={(p) => setSupplier(s.id, { ledger_p: p })} />
+                              </label>
+                            </div>
+                          )}
+                          {s.invoices && (
+                            <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
+                              {s.invoices.length ? (
+                                <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} refLabel="Bill #" byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} />
                               ) : (
                                 <>
-                                  <button type="button" className={btnPrimary} onClick={() => decide(s.id, 'timing')}>
-                                    Accept as timing
-                                  </button>
-                                  <button type="button" className={btnSecondary} onClick={() => decide(s.id, 'not_ours')}>
-                                    Other reason
-                                  </button>
-                                </>
-                              ))
-                            }
-                          >
-                            {v.suggestion.why}
-                          </SuggestionRow>
-                        )}
-                        {v.needsDispute && !s.dispute && (
-                          <SuggestionRow
-                            actions={
-                              !locked && (
-                                <>
-                                  <button type="button" className={btnPrimary} onClick={() => askClient(s)}>
-                                    Ask the client
-                                  </button>
-                                  <button type="button" className={btnSecondary} onClick={() => setSupplier(s.id, { dispute: 'not_disputed' })}>
-                                    Not disputed
-                                  </button>
-                                </>
-                              )
-                            }
-                          >
-                            Nothing paid since the period end and the oldest {s.overdue ? `bill is ${s.oldest_days} days overdue` : `invoice is ${s.oldest_days} days old`}. It may be disputed or not owed.
-                          </SuggestionRow>
-                        )}
-                        {s.decision && (
-                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                            <Pill tone="info">
-                              {
-                                {
-                                  missing_invoice: `Missing invoice added${s.expense_code ? ` to ${s.expense_code}` : ''}`,
-                                  timing: 'Payment in transit',
-                                  not_ours: 'Not ours',
-                                  debtors: 'Moved to other debtors',
-                                  leave: 'Left in creditors',
-                                }[s.decision]
-                              }
-                            </Pill>
-                            {s.decision === 'missing_invoice' && (
-                              <label className="flex items-center gap-1">
-                                VAT included
-                                <span className="w-24">
-                                  <MoneyInput label={`VAT in the missing invoice for ${name}`} value={s.vat_p} disabled={locked} allowNegative={false} onCommit={(p) => setSupplier(s.id, { vat_p: p })} />
-                                </span>
-                                {!locked && v.diff && (
-                                  <button type="button" className="text-[10px] text-[#1D4E89] underline" onClick={() => setSupplier(s.id, { vat_p: ((v.diff! + 3n) / 6n).toString() })}>
-                                    20%
-                                  </button>
-                                )}
-                              </label>
-                            )}
-                            {(s.decision === 'not_ours' || s.decision === 'leave') && (
-                              <span className="w-64">
-                                <TextInput label={`Reason for ${name}`} value={s.reason} disabled={locked} placeholder="Reason (required)" onCommit={(r) => setSupplier(s.id, { reason: r })} />
-                              </span>
-                            )}
-                            {!locked && (
-                              <button type="button" className="text-[10px] text-[#1D4E89] underline" onClick={() => decide(s.id, undefined)}>
-                                Undo
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {s.dispute && (
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#4A5878]">
-                            {s.dispute === 'ask' ? 'Sent to the client as a query in Comments.' : 'Not disputed:'}
-                            {s.dispute === 'not_disputed' && (
-                              <span className="w-72">
-                                <TextInput label={`Why ${name} is not disputed`} value={s.dispute_reason} disabled={locked} placeholder="Reason (required), e.g. client confirmed, paid 3 Jun" onCommit={(r) => setSupplier(s.id, { dispute_reason: r })} />
-                              </span>
-                            )}
-                            {!locked && (
-                              <button type="button" className="text-[#1D4E89] underline" onClick={() => setSupplier(s.id, { dispute: undefined })}>
-                                Undo
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {isOpen(s.id) && (
-                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                            <div className={card}>
-                              {!s.invoices?.length && (
-                                <>
-                                  <div className="font-bold mb-1">Open invoices at {peLabel}</div>
+                                  <div className="font-bold mb-1">Open bills at {peLabel}</div>
                                   <div className="text-[11px] text-[#7E8DA6]">None from the ledger.</div>
                                 </>
                               )}
-                              {!!s.invoices?.length && <OpenItemsTable items={s.invoices} peLabel={peLabel} title={`Open bills at ${peLabel}`} refLabel="Bill #" byDue={!!s.overdue} warnAfter={s.overdue ? 60 : 90} />}
-                              {!s.invoices && (
-                                <label className="flex flex-col gap-1 mt-1">
-                                  <span className="text-[10px] font-semibold text-[#4A5878]">Supplier name and ledger balance</span>
-                                  <TextInput label="Supplier name" value={s.name} disabled={locked} onCommit={(n) => setSupplier(s.id, { name: n })} />
-                                  <MoneyInput label={`Ledger balance for ${name}`} value={s.ledger_p} disabled={locked} onCommit={(p) => setSupplier(s.id, { ledger_p: p })} />
-                                </label>
-                              )}
                             </div>
-                            <div className={card}>
-                              <div className="font-bold mb-1">Paid after {peLabel}</div>
-                              {!s.payments_after?.length && <div className="text-[11px] text-[#7E8DA6]">No payment to this supplier in the {windowDays} days after the period end.</div>}
-                              {s.payments_after?.map((p, k) => (
-                                <div key={k} className="flex justify-between gap-2 text-[11px] border-t border-[#EEF1F6] py-1">
-                                  <span>{ukDate(p.date)}</span>
-                                  <span className="flex-1">{p.desc}</span>
-                                  <span className="font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</span>
-                                </div>
-                              ))}
-                              {s.bank_check && (
-                                <>
-                                  <div className="font-bold mt-2 mb-1">Xero bank to {ukDate(s.bank_check.to)}</div>
-                                  {!s.bank_check.matches.length && <div className="text-[11px] text-[#7E8DA6]">No payment by this name, or for an open invoice amount, left the bank.</div>}
-                                  {s.bank_check.matches.map((p, k) => (
-                                    <div key={k} className="flex justify-between gap-2 text-[11px] border-t border-[#EEF1F6] py-1">
-                                      <span>{ukDate(p.date)}</span>
-                                      <span className="flex-1">
-                                        {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{p.contact || p.ref}</a> : p.contact || p.ref}
-                                        {p.reconciled ? '' : ' · not reconciled'}
-                                      </span>
-                                      <span className="font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</span>
-                                    </div>
+                          )}
+                          <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
+                            <div className="font-bold mb-1">Paid after {peLabel}</div>
+                            {!s.payments_after?.length && <div className="text-[11px] text-[#7E8DA6]">No payment to this supplier in the {windowDays} days after the period end.</div>}
+                            {!!s.payments_after?.length && (
+                              <table className="w-full max-w-3xl text-[11px]">
+                                <tbody>
+                                  {s.payments_after.map((p, k) => (
+                                    <tr key={k} className="border-t border-[#EEF1F6]">
+                                      <td className="py-1 pr-3 whitespace-nowrap">{ukDate(p.date)}</td>
+                                      <td className="py-1 pr-3">{p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{p.desc}</a> : p.desc}</td>
+                                      <td className="py-1 text-right font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</td>
+                                    </tr>
                                   ))}
-                                </>
-                              )}
+                                </tbody>
+                              </table>
+                            )}
+                            {s.bank_check && (
+                              <>
+                                <div className="font-bold mt-3 mb-1">Xero bank to {ukDate(s.bank_check.to)}</div>
+                                {!s.bank_check.matches.length && <div className="text-[11px] text-[#7E8DA6]">No payment by this name, or for an open invoice amount, left the bank.</div>}
+                                {!!s.bank_check.matches.length && (
+                                  <table className="w-full max-w-3xl text-[11px]">
+                                    <tbody>
+                                      {s.bank_check.matches.map((p, k) => (
+                                        <tr key={k} className="border-t border-[#EEF1F6]">
+                                          <td className="py-1 pr-3 whitespace-nowrap">{ukDate(p.date)}</td>
+                                          <td className="py-1 pr-3">
+                                            {p.url ? <a href={p.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">{p.contact || p.ref}</a> : p.contact || p.ref}
+                                            {p.reconciled ? '' : ' · not reconciled'}
+                                          </td>
+                                          <td className="py-1 text-right font-mono">{formatPence(asPence(p.amount_p), { symbol: '' })}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          {ai?.balance_p && (
+                            <div className="text-[10px] text-[#4A5878] flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" />
+                              AI read {formatPence(asPence(ai.balance_p))} from the attached statement{ai.page ? `, page ${ai.page}` : ''}
+                              {ai.confidence !== undefined ? ` · ${ai.confidence}% sure` : ''}. Check it against the statement before using it.
                             </div>
+                          )}
+                        </div>
+                        {!locked && (
+                          <div className="mt-2 text-right">
+                            <button
+                              type="button"
+                              aria-label={`Remove ${name}`}
+                              title={`Remove ${name}`}
+                              onClick={() => confirm(`Remove ${name} from the schedule?`) && save({ suppliers: (live().suppliers ?? []).filter((x: Supplier) => x.id !== s.id) })}
+                              className="p-1 text-[#7E8DA6] hover:text-[#B42318]"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         )}
                       </td>
@@ -425,7 +559,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.diff ?? 0n), 0n))}</td>
                 <td className="p-2 text-right font-mono">{money(tot('paid_after'))}</td>
                 {agedCols && AGED.map(([key]) => <td key={key} className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + asPence(v.s.aged?.[key] ?? '0'), 0n))}</td>)}
-                <td colSpan={agedCols ? 2 : 3} />
+                <td colSpan={agedCols ? 1 : 2} />
               </tr>
             </tfoot>
           )}

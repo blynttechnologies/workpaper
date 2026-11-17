@@ -30,6 +30,8 @@ export interface Supplier {
   dispute?: 'ask' | 'not_disputed';
   dispute_reason?: string;
   bank_check?: { to: string; matches: BankPayment[] }; // Xero bank payments after the period end that look like this supplier's
+  // What the AI read off the attached statement (file: attachment id). balance_p '' when it could not read one. Nothing is filled in until someone uses it.
+  ai_statement?: { file: string; balance_p: string; date?: string; page?: number; confidence?: number };
 }
 
 const plainName = (n: string) => n.toLowerCase().replace(/\b(ltd|limited|plc|llp)\b/g, '').replace(/[^a-z0-9]/g, '');
