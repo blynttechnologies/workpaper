@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Landmark, Paperclip, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
 import type { Attachment } from '@/lib/types/models';
 import { asPence, formatPence } from '@/lib/money';
@@ -41,7 +42,7 @@ const link = 'text-[10px] text-[#1D4E89] underline';
 export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const { isOpen, toggle, show } = useOpen();
   const [filter, setFilter] = useState<'all' | 'attention' | 'done'>('all');
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string; link?: { href: string; label: string } } | null>(null);
   const eng = db.engagements.find((e) => e.id === result.engagementId);
   const pe = eng?.period_end ?? '';
   const peLabel = pe ? ukDate(pe) : 'the period end';
@@ -68,7 +69,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
   };
   const refresh = () => {
     const s = suppliersFromLedger(result.engagementId, pe, windowDays, live().suppliers ?? []);
-    if (!s) return setNote({ ok: false, text: 'The creditors control account has no ledger transactions yet. Import them from the accounting system, or add suppliers by hand.' });
+    if (!s) return setNote({ ok: false, text: 'Nothing to read yet: no ledger has been pulled from Xero or imported for this client’s trade creditors. Pull the ledger first, or add suppliers by hand.' });
     save({ suppliers: s, refreshed_at: new Date().toISOString() });
     const fromXero = s.some((x) => x.overdue);
     setNote({
@@ -84,13 +85,27 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
     try {
       const res = await fetch('/api/v1/integrations/xero/bank-payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ engagementId: result.engagementId, days: windowDays }) });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) return setNote({ ok: false, text: body.error || 'Could not read the Xero bank account.' });
+      if (!res.ok) {
+        // Not connected, expired or missing permission: all are put right on the client's page
+        const connect = ['XERO_NOT_CONNECTED', 'XERO_RECONNECT', 'XERO_NO_ACCESS'].includes(body.code) && eng;
+        return setNote({
+          ok: false,
+          text: body.code === 'XERO_NOT_CONNECTED' ? 'This client is not connected to Xero, so the bank could not be checked. Connect Xero on the client’s page, then check again.' : body.error || 'Could not read the Xero bank account. Nothing was changed. Try again.',
+          ...(connect ? { link: { href: `/clients/${eng.client_id}`, label: 'Open the client’s page' } } : {}),
+        });
+      }
       const suppliers = (live().suppliers ?? []).map((s: Supplier) => ({ ...s, bank_check: { to: body.to, matches: bankMatches(s, body.payments ?? []) } }));
       save({ suppliers });
       const found = suppliers.filter((s: Supplier) => s.bank_check!.matches.length).length;
-      setNote({ ok: true, text: `${body.payments?.length ?? 0} payment${body.payments?.length === 1 ? '' : 's'} out of the Xero bank from ${ukDate(body.from)} to ${ukDate(body.to)}; ${found} of ${suppliers.length} suppliers have a matching payment.` });
+      const n = body.payments?.length ?? 0;
+      setNote({
+        ok: true,
+        text: n
+          ? `${n} payment${n === 1 ? '' : 's'} left the Xero bank from ${ukDate(body.from)} to ${ukDate(body.to)}; ${found} of ${suppliers.length} suppliers have a matching payment. See the Paid after column.`
+          : `Xero shows no payments out of the bank from ${ukDate(body.from)} to ${ukDate(body.to)}. If that looks wrong, check the bank is up to date in Xero.`,
+      });
     } catch {
-      setNote({ ok: false, text: 'Could not reach Xero. Try again.' });
+      setNote({ ok: false, text: 'Could not reach the server to check the Xero bank. Check your internet connection and try again.' });
     } finally {
       setChecking(false);
     }
@@ -320,10 +335,10 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         />
         {!locked && (
           <div className="ml-auto flex gap-2">
-            <button type="button" onClick={refresh} className={btnAdd}>
+            <button type="button" onClick={refresh} className={btnAdd} title="Read the suppliers and open bills again from the ledger last pulled from Xero. Balances and decisions you entered are kept.">
               <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
             </button>
-            <button type="button" onClick={checkBank} disabled={checking || !views.length} className={btnAdd}>
+            <button type="button" onClick={checkBank} disabled={checking || !views.length} className={btnAdd} title={views.length ? `Look in the Xero bank for payments to these suppliers in the ${windowDays} days after ${peLabel}` : 'Add or refresh suppliers first'}>
               <Landmark className="w-3.5 h-3.5" /> {checking ? 'Checking Xero bank…' : 'Check Xero bank'}
             </button>
             <button type="button" onClick={addSupplier} className={btnAdd}>
@@ -333,7 +348,21 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         )}
       </div>
       {data.refreshed_at && <div className="-mt-2 text-[10px] text-[#4A5878]">Read from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
-      {note && <div className={`-mt-2 text-[11px] ${note.ok ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
+      {note && (
+        <div role={note.ok ? 'status' : 'alert'} className={`flex items-start gap-2 px-3 py-2 rounded-[8px] border text-xs ${note.ok ? 'border-[#B7E4D4] bg-[#F0FAF6] text-[#0B6B52]' : 'border-[#F3C2BC] bg-[#FEF3F2] text-[#B42318]'}`}>
+          <span className="flex-1">
+            {note.text}{' '}
+            {note.link && (
+              <Link href={note.link.href} className="font-bold underline">
+                {note.link.label}
+              </Link>
+            )}
+          </span>
+          <button type="button" aria-label="Dismiss message" onClick={() => setNote(null)} className="font-bold leading-none">
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-xs text-[#122654]">
