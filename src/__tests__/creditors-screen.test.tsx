@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(suppliers: any[], files: Record<string, Attachment[]> = {}) {
+function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}) {
   db.seed(true);
   const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
   const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'K-10') ?? db.addWorkpaper(eng.id, 'K-10')!;
@@ -27,7 +27,7 @@ function setup(suppliers: any[], files: Record<string, Attachment[]> = {}) {
       locked={false}
       save={save}
       filesFor={(id) => files[id] ?? []}
-      attachTo={() => {}}
+      attachTo={attachTo}
       preview={() => {}}
       tickFor={() => null}
       live={() => wp.data_json}
@@ -69,5 +69,17 @@ describe('trade creditors screen', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/documents/att_stmt/extract', expect.objectContaining({ body: JSON.stringify({ overrideCategory: 'Supplier statement' }) }));
     // Nothing is filled in until someone uses it
     expect(saved.at(-1)!.suppliers[0].statement_p).toBe('');
+  });
+});
+
+describe('trade creditors next steps', () => {
+  it('offers to attach the statement, and says when the supplier was paid in full after the year end', () => {
+    const attached: string[] = [];
+    setup([{ id: 'sup_ea', name: 'Environment Agency', ledger_p: '9898', statement_p: '', paid_after_p: '9898' }], {}, (id) => attached.push(id));
+    const row = screen.getByText('Environment Agency').closest('tr')!;
+    expect(within(row).getByText('Paid in full after the year end')).toBeTruthy();
+    fireEvent.click(within(row).getByText('Attach statement'));
+    fireEvent.click(within(row).getByLabelText('Attach the statement for Environment Agency'));
+    expect(attached).toEqual(['sup_ea', 'sup_ea']);
   });
 });
