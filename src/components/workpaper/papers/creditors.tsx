@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Landmark, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Landmark, Paperclip, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
 import type { Attachment } from '@/lib/types/models';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
@@ -263,10 +263,31 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       );
     }
     if (!blocks.length) {
-      const [label, tone] = STATUS[v.status];
-      blocks.push(<Pill key="status" tone={tone}>{label}</Pill>);
+      if (v.status === 'none') {
+        // The next step, not just the state: attach the statement (or type its balance)
+        blocks.push(
+          <div key="status" className="flex flex-col items-end gap-1">
+            {locked ? (
+              <Pill tone="plain">No statement</Pill>
+            ) : (
+              <button type="button" onClick={() => attachTo(s.id)} className={`${btnSecondary} inline-flex items-center gap-1`}>
+                <Paperclip className="w-3 h-3" aria-hidden="true" /> Attach statement
+              </button>
+            )}
+            {v.ledger > 0n && v.paid >= v.ledger && <span className="text-[10px] text-[#0B6B52]">Paid in full after the year end</span>}
+          </div>
+        );
+      } else {
+        const [label, tone] = STATUS[v.status];
+        blocks.push(<Pill key="status" tone={tone}>{label}</Pill>);
+      }
     }
-    return <div className="ml-auto flex flex-col items-end gap-2 max-w-[200px]">{blocks}</div>;
+    return (
+      <div className="ml-auto flex flex-col items-end gap-2 max-w-[200px]">
+        {blocks}
+        {tickFor(s.id, name)}
+      </div>
+    );
   };
 
   return (
@@ -321,10 +342,10 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <th className="w-8" />
               <th className={`${th} text-left`}>Supplier</th>
               <th className={`${th} text-right`}>Ledger</th>
-              <th className={`${th} text-right w-[120px]`}>Statement</th>
+              <th className={`${th} text-right w-[140px]`}>Statement balance</th>
               <th className={`${th} text-right`}>Difference</th>
               <th className={`${th} text-right`}>Paid after</th>
-              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} text-right`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
+              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} text-right whitespace-normal! leading-tight`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
               <th className={`${th} text-right`}>Status</th>
             </tr>
           </thead>
@@ -362,7 +383,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                     <td className="p-1.5 align-top">
                       <ExpandButton open={isOpen(s.id)} label={`details for ${name}`} onClick={() => toggle(s.id)} />
                     </td>
-                    <td className="p-2 align-top min-w-[190px]">
+                    <td className="p-2 align-top min-w-[150px]">
                       <div className="font-bold">{name}</div>
                       <div className="text-[10px] text-[#4A5878]">
                         {s.invoices?.length ? `${s.invoices.length} open bill${s.invoices.length === 1 ? '' : 's'}` : v.debit ? 'debit balance' : ''}
@@ -375,7 +396,22 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                         <div className="text-right text-[10px] text-[#7E8DA6] pt-1.5">Not needed</div>
                       ) : (
                         <>
-                          <MoneyInput label={`Statement balance for ${name}`} value={s.statement_p} placeholder="Enter or attach" disabled={locked} onCommit={(p) => setSupplier(s.id, { statement_p: p })} />
+                          <div className="flex items-center gap-1">
+                            <div className="flex-1 min-w-0">
+                              <MoneyInput label={`Statement balance for ${name}`} value={s.statement_p} placeholder="Balance" disabled={locked} onCommit={(p) => setSupplier(s.id, { statement_p: p })} />
+                            </div>
+                            {!locked && (
+                              <button
+                                type="button"
+                                onClick={() => attachTo(s.id)}
+                                aria-label={`Attach the statement for ${name}`}
+                                title="Attach the supplier's statement"
+                                className="shrink-0 p-1.5 rounded-[6px] border border-dashed border-[#D3DCEE] text-[#4A5878] hover:text-[#122654] hover:border-[#122654]"
+                              >
+                                <Paperclip className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                           {reading[s.id] ? (
                             <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-[#4A5878]">
                               <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Reading statement…
@@ -404,11 +440,12 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                           )}
                         </>
                       )}
-                      {/* The statement itself and the tick, kept with the balance it supports */}
-                      <div className="mt-1 flex items-center justify-end gap-1.5 flex-wrap">
-                        {tickFor(s.id, name)}
-                        <RowFiles files={filesFor(s.id)} onPreview={preview} onAttach={() => attachTo(s.id)} disabled={locked} label={`the statement for ${name}`} />
-                      </div>
+                      {/* Statements already attached, kept with the balance they support */}
+                      {!!filesFor(s.id).length && (
+                        <div className="mt-1 flex justify-end">
+                          <RowFiles files={filesFor(s.id)} onPreview={preview} onAttach={() => attachTo(s.id)} disabled label={`the statement for ${name}`} />
+                        </div>
+                      )}
                     </td>
                     <td className={`p-2 align-top text-right font-mono ${v.diff ? 'text-[#B8432F] font-bold' : ''}`}>{v.diff === null ? '–' : money(v.diff)}</td>
                     <td className="p-2 align-top text-right">
