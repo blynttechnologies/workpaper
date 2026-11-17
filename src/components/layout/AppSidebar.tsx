@@ -89,11 +89,13 @@ interface AppSidebarProps {
   onMobileClose?: () => void;
   /** Seconds this engagement has been open; shown once it reaches five minutes */
   timerSeconds?: number;
+  /** No activity for a while: the timer has stopped counting */
+  timerPaused?: boolean;
 }
 
 const TIMER_SHOW_AFTER = 5 * 60;
 
-export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: currentEngagementIdProp, onMobileClose, timerSeconds = 0 }) => {
+export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: currentEngagementIdProp, onMobileClose, timerSeconds = 0, timerPaused = false }) => {
   const { activeCompany, activeEngagement: contextEngagement } = useCompany();
   const pathname = usePathname();
   const router = useRouter();
@@ -190,6 +192,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ currentEngagementId: cur
                 <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-white" title="Time on this client, recorded against you">
                   <Timer className="w-3.5 h-3.5 text-[#FF7A66]" aria-hidden="true" />
                   <span className="font-mono tabular-nums" role="timer" aria-label="Time on this client">{formatDuration(timerSeconds)}</span>
+                  {timerPaused && <span className="text-[#8C9BBA]">Paused, no activity</span>}
                 </p>
               )}
             </div>
