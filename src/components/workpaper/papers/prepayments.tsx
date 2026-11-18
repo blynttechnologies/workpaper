@@ -145,7 +145,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                       {l.method === 'all' ? (
                         <div className="text-[11px]">All after the year end</div>
                       ) : (
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           {date(l.start, `Period start for ${name}`, (d) => setLine(l.id, { start: d }))}–{date(l.end, `Period end for ${name}`, (d) => setLine(l.id, { end: d }))}
                         </div>
                       )}

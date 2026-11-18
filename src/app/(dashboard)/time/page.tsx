@@ -18,6 +18,8 @@ export default function TimeLogPage() {
   const [error, setError] = useState('');
   const [staff, setStaff] = useState('');
   const [client, setClient] = useState('');
+  // Managers and up can switch from the list of sessions to one total per staff member
+  const [byStaff, setByStaff] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/time')
@@ -37,8 +39,21 @@ export default function TimeLogPage() {
   const people = [...new Set((entries ?? []).map((e) => e.user_name))].sort();
   const clients = [...new Set((entries ?? []).map((e) => e.client_name))].sort();
   const total = shown.reduce((s, e) => s + secs(e), 0);
+  // Grouped by user id, not name: two people can share a name
+  const staffTotals = useMemo(() => {
+    const m = new Map<string, { name: string; sessions: number; secs: number; clients: Set<string> }>();
+    for (const e of shown) {
+      const t = m.get(e.user_id) ?? { name: e.user_name, sessions: 0, secs: 0, clients: new Set<string>() };
+      t.sessions += 1;
+      t.secs += secs(e);
+      t.clients.add(e.client_name);
+      m.set(e.user_id, t);
+    }
+    return [...m.entries()].map(([id, t]) => ({ id, ...t })).sort((a, b) => b.secs - a.secs);
+  }, [shown]);
 
   const exportCsv = () =>
+    byStaff ? downloadText('time-by-staff.csv', ['Staff,Clients,Sessions,Hours', ...staffTotals.map((t) => [csvCell(t.name), t.clients.size, t.sessions, (t.secs / 3600).toFixed(2)].join(','))].join('\n')) :
     downloadText(
       'time-log.csv',
       ['Client,Staff,Started,Ended,Minutes', ...shown.map((e) => [csvCell(e.client_name), csvCell(e.user_name), e.started_at, e.ended_at, (secs(e) / 60).toFixed(1)].join(','))].join('\n')
@@ -71,6 +86,15 @@ export default function TimeLogPage() {
           <option value="">All clients</option>
           {clients.map((c) => <option key={c}>{c}</option>)}
         </select>
+        {all && (
+          <div role="group" aria-label="View" className="flex rounded-lg border border-[#E3E7EF] overflow-hidden text-xs font-bold">
+            {([[false, 'Sessions'], [true, 'Total by staff']] as const).map(([v, label]) => (
+              <button key={label} type="button" aria-pressed={byStaff === v} onClick={() => setByStaff(v)} className={`h-9 px-3 cursor-pointer ${byStaff === v ? 'bg-[#122654] text-white' : 'bg-white text-[#122654] hover:bg-[#F5F8FD]'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <span className="ml-auto text-xs text-[#4A5878]">
           Total <span className="font-mono font-bold text-[#122654]">{formatDuration(total)}</span> across {shown.length} {shown.length === 1 ? 'session' : 'sessions'}
         </span>
@@ -78,7 +102,37 @@ export default function TimeLogPage() {
 
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
 
-      <div className="bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto">
+      {byStaff && (
+        <div className="bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#F5F8FD] text-[10px] font-bold uppercase text-[#4A5878]">
+              <tr>
+                <th className="py-3 px-4">Staff</th>
+                <th className="py-3 px-3 text-right">Clients</th>
+                <th className="py-3 px-3 text-right">Sessions</th>
+                <th className="py-3 px-4 text-right">Total time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E3E7EF]">
+              {staffTotals.map((t) => (
+                <tr key={t.id}>
+                  <td className="py-3 px-4 font-bold text-[#122654]">{t.name}</td>
+                  <td className="py-3 px-3 text-right text-[#4A5878]">{t.clients.size}</td>
+                  <td className="py-3 px-3 text-right text-[#4A5878]">{t.sessions}</td>
+                  <td className="py-3 px-4 text-right font-mono">{formatDuration(t.secs)}</td>
+                </tr>
+              ))}
+              {entries && staffTotals.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-[#4A5878]">No time recorded yet. Time is recorded while a client is open.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className={`bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto ${byStaff ? 'hidden' : ''}`}>
         <table className="w-full text-left text-xs">
           <thead className="bg-[#F5F8FD] text-[10px] font-bold uppercase text-[#4A5878]">
             <tr>
