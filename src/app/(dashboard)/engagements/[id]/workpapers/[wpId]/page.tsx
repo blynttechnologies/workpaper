@@ -852,11 +852,11 @@ export default function WorkpaperPage() {
         type="button"
         title={dir === 'prev' ? 'Previous paper ( [ )' : 'Next paper ( ] )'}
         onClick={() => router.push(`/engagements/${engagementId}/workpapers/${p.id}`)}
-        className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 text-sm text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[10px]"
+        className="inline-flex items-center gap-1 min-h-[32px] px-3 text-xs text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[8px]"
       >
-        {dir === 'prev' && <ChevronLeft className="w-4 h-4" />}
+        {dir === 'prev' && <ChevronLeft className="w-3.5 h-3.5" />}
         {templateOf(p)?.title ?? p.ref}
-        {dir === 'next' && <ChevronRight className="w-4 h-4" />}
+        {dir === 'next' && <ChevronRight className="w-3.5 h-3.5" />}
       </button>
     );
 
@@ -981,7 +981,7 @@ export default function WorkpaperPage() {
       {/* Header */}
       {checksOnly ? (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-[#4A5878]">
               <Link href={`/engagements/${engagementId}`} className="underline hover:text-[#122654]">
                 {client?.name ?? 'Engagement'}
@@ -1002,18 +1002,18 @@ export default function WorkpaperPage() {
               {paperLink(nextPaper, 'next')}
             </div>
           </div>
-          <div className="py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="min-w-0 flex items-center gap-4">
-              <span className="flex items-center justify-center w-14 h-14 shrink-0 rounded-[12px] bg-[#FFF1EE] text-[#B8432F]">
-                {t.kind === 'reconciliation' ? <Landmark className="w-7 h-7" /> : t.ref === 'C-10' ? <Layers className="w-7 h-7" /> : <FileText className="w-7 h-7" />}
+          <div className="py-1 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-3">
+              <span className="flex items-center justify-center w-11 h-11 shrink-0 rounded-[10px] bg-[#FFF1EE] text-[#B8432F]">
+                {t.kind === 'reconciliation' ? <Landmark className="w-6 h-6" /> : t.ref === 'C-10' ? <Layers className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
               </span>
               <div className="min-w-0">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl sm:text-[28px] font-bold text-[#122654] tracking-tight">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl font-bold text-[#122654] tracking-tight">
                   {t.title}
                 </h1>
                 {openChecks.length > 0 ? (
-                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-[#FFF4DB] text-[#8A5A00]">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FFF4DB] text-[#8A5A00]">
                     {openChecks.length} check{openChecks.length === 1 ? '' : 's'} to do
                   </span>
                 ) : (
@@ -1021,7 +1021,7 @@ export default function WorkpaperPage() {
                 )}
                 {data.changed_after_review && <span className="px-2 py-0.5 rounded-full bg-[#FFF4DB] text-[#805B00] text-[10px] font-bold">⚠ Changed after review</span>}
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-[#4A5878]">
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#4A5878]">
                 <span>
                   {workpaper.ref} · {savedAt ? '✓ Saved' : `Updated ${fmtDateTime(workpaper.updated_at)}`}
                 </span>
@@ -1051,7 +1051,7 @@ export default function WorkpaperPage() {
               </div>
             </div>
             {/* A blocked button stays clickable so it can say why it cannot be signed yet */}
-            <div role="group" aria-label="Sign-offs" className="flex flex-wrap items-center gap-3">
+            <div role="group" aria-label="Sign-offs" className="flex flex-wrap items-center gap-2">
               {confirmAi}
               {unreviewButton}
               {ROLE_ORDER.slice(0, levelsFor(workpaper)).map((role) => {
@@ -1064,7 +1064,7 @@ export default function WorkpaperPage() {
                     disabled={Boolean(so) || signing}
                     title={so ? `${ROLE_LABEL[role]}: ${so.user_name}, ${fmtDateTime(so.signed_at)}` : (blocked ?? `Sign as ${ROLE_LABEL[role].toLowerCase()}`)}
                     onClick={() => (blocked ? setMessage({ kind: 'error', text: `${ROLE_LABEL[role]}: ${blocked}` }) : sign(role))}
-                    className={`min-h-[44px] px-6 text-sm rounded-[10px] border ${
+                    className={`min-h-[36px] px-4 text-xs whitespace-nowrap rounded-[8px] border ${
                       so ? 'font-bold bg-[#E6F4EF] border-[#0B6B52]/30 text-[#0B6B52]' : blocked ? 'font-medium bg-white border-[#E3E7EF] text-[#4A5878]' : 'font-bold bg-[#EAF5FC] border-[#1D4E89] text-[#122654] hover:bg-[#DCEEFA]'
                     }`}
                   >
@@ -1270,7 +1270,7 @@ export default function WorkpaperPage() {
 
       <div
         className={`grid gap-5 transition-all ${
-          sideFolded ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_52px]' : 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]'
+          sideFolded ? 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_52px]' : 'grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px]'
         }`}
       >
         {/* On smaller screens, where the previous and next buttons are harder to use */}
@@ -2156,7 +2156,7 @@ export default function WorkpaperPage() {
                       setSideTab(tab.id);
                       if (!railOpen) setRail(true);
                     }}
-                    className={`flex items-center gap-1 px-2.5 py-2.5 text-[13px] border-b-2 -mb-px whitespace-nowrap ${activeTab === tab.id ? 'font-bold border-[#FF7A66] text-[#122654]' : 'font-semibold border-transparent text-[#4A5878] hover:text-[#122654]'}`}
+                    className={`flex items-center gap-1 px-2 py-2 text-xs border-b-2 -mb-px whitespace-nowrap ${activeTab === tab.id ? 'font-bold border-[#FF7A66] text-[#122654]' : 'font-semibold border-transparent text-[#4A5878] hover:text-[#122654]'}`}
                   >
                     {!checksOnly && <tab.icon className="w-3.5 h-3.5" />} {tab.label}
                   </button>
@@ -2193,23 +2193,23 @@ export default function WorkpaperPage() {
                   </div>
                 ) : (
                   reviewItems.map((c) => (
-                    <div key={c.id} className={`p-3.5 rounded-[12px] border border-[#E3E7EF] flex gap-3 ${c.explanation ? 'opacity-70' : ''}`}>
+                    <div key={c.id} className={`p-3 rounded-[10px] border border-[#E3E7EF] flex gap-2.5 ${c.explanation ? 'opacity-70' : ''}`}>
                       <span
                         title={c.explanation ? 'Dismissed' : 'Warning'}
-                        className={`flex items-center justify-center w-8 h-8 shrink-0 rounded-[8px] ${c.explanation ? 'bg-[#EEF1F6] text-[#4A5878]' : 'bg-[#FFF4DB] text-[#8A5A00]'}`}
+                        className={`flex items-center justify-center w-7 h-7 shrink-0 rounded-[8px] ${c.explanation ? 'bg-[#EEF1F6] text-[#4A5878]' : 'bg-[#FFF4DB] text-[#8A5A00]'}`}
                       >
-                        {c.explanation ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                        {c.explanation ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
                       </span>
                       <div className="min-w-0 flex flex-col gap-1">
-                        <p className="text-sm font-bold">
+                        <p className="text-[13px] font-bold">
                           {c.label}
                           {c.explanation && <span className="font-normal text-[#4A5878]"> · dismissed</span>}
                         </p>
-                        <p className="text-[13px] leading-relaxed break-words">{c.detail}</p>
+                        <p className="text-xs leading-relaxed break-words">{c.detail}</p>
                         {c.explanation ? (
-                          <p className="text-xs text-[#4A5878]">Reason: {c.explanation}</p>
+                          <p className="text-[11px] text-[#4A5878]">Reason: {c.explanation}</p>
                         ) : (
-                          <div className="flex gap-5 text-[13px] mt-0.5">
+                          <div className="flex gap-4 text-xs mt-0.5">
                             <a href="#schedule" className="underline">
                               Go to line
                             </a>
