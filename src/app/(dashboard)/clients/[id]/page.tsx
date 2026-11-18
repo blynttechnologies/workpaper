@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
@@ -50,11 +51,7 @@ export default function ClientRecordPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-200">
-      {xeroMessage && (
-        <div role="status" className={`px-4 py-3 rounded-[10px] text-xs font-medium border ${xeroMessage.ok ? 'bg-[#E6F4EF] border-[#0B6B52]/20 text-[#0B6B52]' : 'bg-[#FFF4DB] border-[#6B4700]/20 text-[#6B4700]'}`}>
-          {xeroMessage.text}
-        </div>
-      )}
+      {xeroMessage && <Notice tone={xeroMessage.ok ? 'ok' : 'error'}>{xeroMessage.text}</Notice>}
       {/* Top Header */}
       <div className="bg-white border border-[#E3E7EF] rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

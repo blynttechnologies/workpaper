@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -154,8 +155,8 @@ export default function WorkflowDetailPage() {
           )}
         </div>
 
-        {wf.archived_at && <p role="status" className="text-xs px-3 py-2 rounded-lg bg-[#FFF8E6] text-[#8A5A00]">Archived on {ukDate(wf.archived_at)}. It is hidden from the client page and menu until restored.</p>}
-        {error && <p role="alert" className="text-xs text-[#B8432F]">{error}</p>}
+        {wf.archived_at && <Notice tone="warn">Archived on {ukDate(wf.archived_at)}. It is hidden from the client page and menu until restored.</Notice>}
+        {error && <Notice inline>{error}</Notice>}
 
         {confirming && (
           <div role="alertdialog" aria-label="Delete workflow" className="p-4 rounded-xl border border-[#F0C2BA] bg-[#FFF8F6] text-xs text-[#122654] space-y-3">
@@ -218,7 +219,7 @@ export default function WorkflowDetailPage() {
             </div>
           </div>
         )}
-        {signMessage && <p role="status" className="text-xs text-[#122654] bg-[#F5F8FD] border border-[#E3E7EF] rounded-lg px-3 py-2">{signMessage}</p>}
+        {signMessage && <Notice tone="info">{signMessage}</Notice>}
 
         {canEdit && showAdd && (
           <section aria-label="Add more papers" className="bg-white border border-[#E3E7EF] rounded-xl px-4 py-3">

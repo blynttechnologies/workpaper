@@ -1,7 +1,8 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Loader2, Pencil, Search, ShieldCheck, ShieldOff, X } from 'lucide-react';
+import { Loader2, Pencil, Search, ShieldCheck, ShieldOff, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 
 export interface StaffRow {
@@ -95,11 +96,7 @@ export function StaffManager({ currentUserId }: { currentUserId: string }) {
         </select>
       </div>
 
-      {error && (
-        <p role="alert" className="text-xs text-[#B42318] flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5" /> {error}
-        </p>
-      )}
+      {error && <Notice inline>{error}</Notice>}
 
       <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-left text-xs">
@@ -201,7 +198,7 @@ export function StaffEditor({ person, isSelf, onClose, onSaved }: { person: Staf
         setResetEmailed(Boolean(body.emailed));
       } else setError(body.error || 'Could not create a reset link. Try again.');
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -220,7 +217,7 @@ export function StaffEditor({ person, isSelf, onClose, onSaved }: { person: Staf
       if (!res.ok) setError(body.error || 'Could not save. Try again.');
       else onSaved(body);
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -336,11 +333,7 @@ export function StaffEditor({ person, isSelf, onClose, onSaved }: { person: Staf
             )}
           </section>
 
-          {error && (
-            <p role="alert" className="text-[11px] font-medium text-[#B42318] flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-            </p>
-          )}
+          {error && <Notice inline>{error}</Notice>}
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-[#E3E7EF]">

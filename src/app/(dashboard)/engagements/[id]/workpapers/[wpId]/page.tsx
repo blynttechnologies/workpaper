@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -591,10 +592,10 @@ export default function WorkpaperPage() {
         body: JSON.stringify({ role }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || 'Sign-off failed');
+      if (!res.ok) throw new Error(body.error || 'Could not sign off. Try again.');
       setMessage({ kind: 'ok', text: `Signed off as ${ROLE_LABEL[role].toLowerCase()}.` });
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err?.message || 'Sign-off failed' });
+      setMessage({ kind: 'error', text: err?.message || 'Could not sign off. Try again.' });
     } finally {
       setSigning(false);
       refresh();
@@ -645,7 +646,7 @@ export default function WorkpaperPage() {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setMessage({ kind: 'error', text: body.error || 'Could not unreview.' });
+      setMessage({ kind: 'error', text: body.error || 'Could not unreview the schedule. Try again.' });
       return;
     }
     setUnreviewOpen(false);
@@ -825,14 +826,7 @@ export default function WorkpaperPage() {
           ⚠ The paper changed after it was signed. {staleSignoffs.length} earlier sign-off{staleSignoffs.length === 1 ? ' is' : 's are'} stale and must be signed again.
         </div>
       )}
-      {message && (
-        <div
-          role="status"
-          className={`p-3 rounded-[10px] text-xs border ${message.kind === 'ok' ? 'bg-[#E6F4EF] border-[#0B6B52]/30 text-[#0B6B52]' : 'bg-[#FFF1EE] border-[#FF7A66]/40 text-[#A23A27]'}`}
-        >
-          {message.text}
-        </div>
-      )}
+      {message && <Notice tone={message.kind}>{message.text}</Notice>}
     </>
   );
 

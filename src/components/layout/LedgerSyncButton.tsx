@@ -1,9 +1,10 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { canPull } from '@/lib/periods';
 import { useCompany } from '@/context/CompanyContext';
@@ -48,7 +49,7 @@ export function LedgerSyncButton() {
         text: `Synced with ${ledger.name}: ${body.lineCount} accounts, ${changed ? `${changed} changed since the last pull` : 'no changes since the last pull'}.${body.rateLimited ? ` ${body.rateLimited}` : ''}${body.notGathered?.length ? ` Could not gather ${body.notGathered.join(', ')}.` : ''}`,
       });
     } catch {
-      setNote({ ok: false, text: 'Could not reach the server. Try again.' });
+      setNote({ ok: false, text: 'Could not reach Blynt. Check your connection and try again.' });
     } finally {
       setBusy(false);
     }
@@ -67,21 +68,14 @@ export function LedgerSyncButton() {
         <span className="hidden sm:inline">{busy ? 'Syncing…' : `Sync ${ledger.name}`}</span>
       </button>
       {note && (
-        <div role={note.ok ? 'status' : 'alert'} className={`absolute right-0 top-full mt-2 w-80 z-50 p-3 rounded-[10px] shadow-xl border text-[11px] ${note.ok ? 'bg-[#E6F4EF] border-[#0B6B52]/20 text-[#0B6B52]' : 'bg-[#FFF4DB] border-[#6B4700]/20 text-[#6B4700]'}`}>
-          <div className="flex items-start gap-2">
-            <span className="flex-1">
+        <Notice tone={note.ok ? 'ok' : 'error'} onClose={() => setNote(null)} className="absolute right-0 top-full mt-2 w-80 z-50 shadow-xl">
               {note.text}
               {note.reconnect && (
                 <Link href={`/clients/${client.id}`} className="block mt-1 font-semibold underline">
                   Reconnect on the client page
                 </Link>
               )}
-            </span>
-            <button type="button" onClick={() => setNote(null)} aria-label="Close" className="shrink-0 cursor-pointer">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+            </Notice>
       )}
     </div>
   );

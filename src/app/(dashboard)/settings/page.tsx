@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -316,7 +317,7 @@ export default function PracticeSettingsPage() {
       setInviteLink(body.link);
       triggerSaveNotification(`Invitation created for ${body.invite.email}. Send them the link to finish set-up.`);
     } catch {
-      setInviteError('Could not reach the server. Please try again.');
+      setInviteError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setInviteSending(false);
     }
@@ -1241,7 +1242,7 @@ export default function PracticeSettingsPage() {
                 )}
               </div>
 
-              {inviteError && <p className="text-red-600 text-[11px] font-semibold">{inviteError}</p>}
+              {inviteError && <Notice inline>{inviteError}</Notice>}
 
               {inviteLink && (
                 <div className="p-3 rounded-lg bg-[#EAF6F0] border border-[#0B6B52]/20 text-xs text-[#122654] space-y-2">

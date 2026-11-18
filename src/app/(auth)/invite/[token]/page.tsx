@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -34,7 +35,7 @@ export default function AcceptInvitePage() {
         if (r.ok) setInfo(body);
         else setError(body.error || 'This invitation is invalid or has expired.');
       })
-      .catch(() => setError('Could not reach the server. Please try again.'));
+      .catch(() => setError('Could not reach Blynt. Check your connection and try again.'));
   }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,7 +55,7 @@ export default function AcceptInvitePage() {
       if (res.ok) setDone(true);
       else setError(body.error || 'Could not accept the invitation.');
     } catch {
-      setError('Could not reach the server. Please try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -85,7 +86,7 @@ export default function AcceptInvitePage() {
                 {info.name}, you have been invited as <strong className="capitalize">{info.role}</strong> ({info.email}). Choose a password to finish.
               </p>
             </div>
-            {error && <div className="p-3 rounded-[8px] bg-[#FFF4DB] text-[#6B4700] text-xs font-medium">{error}</div>}
+            {error && <Notice>{error}</Notice>}
             <Field label="Password" htmlFor="inv-password" hint="12+ characters with upper and lower case, a number and a symbol">
               <Input id="inv-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
@@ -102,7 +103,7 @@ export default function AcceptInvitePage() {
           </form>
         ) : (
           <div className="text-sm">
-            {error ? <p className="text-[#6B4700]">{error}</p> : <p className="text-[#4A5878]">Checking your invitation...</p>}
+            {error ? <Notice>{error}</Notice> : <p className="text-[#4A5878]">Checking your invitation...</p>}
           </div>
         )}
       </div>

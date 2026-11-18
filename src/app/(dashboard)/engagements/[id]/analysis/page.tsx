@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -117,7 +118,7 @@ export default function AnalysisPage() {
       </div>
 
       {(tab === 'pl' || tab === 'bs') && !pl.hasPrior && (
-        <p role="status" className="p-3 rounded-[10px] bg-[#FFF4DB] text-xs text-[#6B4700]">There are no figures for last year, so movements cannot be shown. Roll forward from last year or import the prior year.</p>
+        <Notice tone="warn">There are no figures for last year, so movements cannot be shown. Roll forward from last year or import the prior year.</Notice>
       )}
 
       {tab === 'pl' && (

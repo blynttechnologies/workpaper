@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AtSign, ClipboardList, FileWarning, MessageSquareWarning, RefreshCw, Scale, Unplug } from 'lucide-react';
@@ -55,7 +56,7 @@ export default function MyWorkPage() {
         <h1 className="text-xl font-bold text-[#122654]">My work</h1>
         <p className="text-xs text-[#4A5878] mt-1">Schedules assigned to you, mentions, review points, schedules changed after your review, journals to approve and what the end-of-day Xero sync found.</p>
       </div>
-      {error && <p role="alert" className="text-xs text-[#B42318]">{error}</p>}
+      {error && <Notice inline>{error}</Notice>}
       {!items && !error && <p className="text-xs text-[#4A5878]">Loading…</p>}
       {items && !items.length && <p className="text-sm text-[#4A5878] bg-white border border-[#E3E7EF] rounded-[12px] p-6">Nothing waiting on you.</p>}
       {items && items.length > 0 && (

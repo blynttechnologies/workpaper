@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
@@ -453,11 +454,7 @@ export default function ImportDataPage() {
           className="hidden"
         />
 
-        {validationError && (
-          <div role="alert" className="p-3 rounded-[10px] text-xs border bg-[#FFF1EE] border-[#FF7A66]/40 text-[#A23A27]">
-            {validationError}
-          </div>
-        )}
+        {validationError && <Notice>{validationError}</Notice>}
 
         {/* Upload Zone */}
         {parsedRows.length === 0 && !isCommitted ? (

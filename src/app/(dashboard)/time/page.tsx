@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -29,7 +30,7 @@ export default function TimeLogPage() {
         setAll(body.all);
         setEntries(body.entries);
       })
-      .catch((e) => setError(e.message || 'Could not reach the server. Try again.'));
+      .catch((e) => setError(e.message || 'Could not reach Blynt. Check your connection and try again.'));
   }, []);
 
   const shown = useMemo(
@@ -100,7 +101,7 @@ export default function TimeLogPage() {
         </span>
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+      {error && <Notice inline>{error}</Notice>}
 
       {byStaff && (
         <div className="bg-white border border-[#E3E7EF] rounded-xl overflow-x-auto">

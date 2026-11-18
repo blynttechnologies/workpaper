@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { Dispatch, SetStateAction, useCallback, useEffect, useState } from 'react';
 import { AlertCircle, Check, Loader2, Mail, Pencil, Trash2, UserPlus, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
@@ -50,7 +51,7 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
       setTeam((t) => t.filter((id) => active.some((s) => s.id === id)));
       setInvited((v) => (v ?? pending.filter((i) => clientId && i.team_client_ids?.includes(clientId)).map((i) => i.id)).filter((id) => pending.some((i) => i.id === id)));
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     }
   }, [clientId, setTeam, setInvited]);
   useEffect(() => {
@@ -76,7 +77,7 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
       setRemoving(null);
       await load();
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -111,11 +112,7 @@ export function TeamManager({ clientId, clientName, team, setTeam, invited, setI
 
   return (
     <div className="mt-6 space-y-3">
-      {error && (
-        <p role="alert" className="text-xs text-[#B42318] flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-        </p>
-      )}
+      {error && <Notice inline>{error}</Notice>}
       {!staff && !error && (
         <p className="text-xs text-[#4A5878]">
           <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading staff…
@@ -249,7 +246,7 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
       setEmailed(Boolean(body.emailed));
       onAdded(body.invite.id);
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -348,11 +345,7 @@ function AddStaff({ clientId, clientName, onClose, onAdded }: { clientId?: strin
             </div>
           )}
 
-          {error && (
-            <p role="alert" className="text-[11px] font-medium text-[#B42318] flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-            </p>
-          )}
+          {error && <Notice inline>{error}</Notice>}
         </div>
 
         <div className="flex justify-end gap-2 px-5 py-4 border-t border-[#E3E7EF]">

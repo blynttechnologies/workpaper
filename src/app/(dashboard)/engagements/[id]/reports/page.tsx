@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import React, { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -98,7 +99,7 @@ export default function ReportsPage() {
       <div className="flex gap-2 border-b border-[#E3E7EF] overflow-x-auto no-print" role="tablist">
         {TABS.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => { setTab(k); setNotice(null); }} className={`px-3 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${tab === k ? 'border-[#FF7A66] text-[#122654]' : 'border-transparent text-[#4A5878]'}`}>{l}</button>)}
       </div>
-      {notice && <p role="status" className="p-3 rounded-[10px] bg-[#F5F8FD] text-xs text-[#122654] no-print">{notice}</p>}
+      {notice && <Notice tone="info" className="no-print">{notice}</Notice>}
 
       {r && (
         <>
@@ -198,7 +199,7 @@ export default function ReportsPage() {
             <button type="button" className={btnSecondary} aria-pressed={!clientView} onClick={() => setClientView(false)}>Statutory view</button>
             <button type="button" className={btnPrimary} disabled={cf.difference !== 0n} onClick={() => print('Cash flow statement')}>Download PDF</button>
           </div>
-          {cf.difference !== 0n && <p role="alert" className="p-3 rounded-[10px] bg-[#FDECEA] text-xs text-[#B42318]">Closing cash is {money(cf.difference)} away from the balance sheet, so this cannot be downloaded. This happens when this year’s or last year’s balance sheet does not balance: finish the mapping for both years.</p>}
+          {cf.difference !== 0n && <Notice>Closing cash is {money(cf.difference)} away from the balance sheet, so this cannot be downloaded. This happens when this year’s or last year’s balance sheet does not balance: finish the mapping for both years.</Notice>}
           <Sheet title="Cash flow statement">
             {(['Operating', 'Investing', 'Financing'] as const).map((g) => (
               <section key={g} className="mb-3">
