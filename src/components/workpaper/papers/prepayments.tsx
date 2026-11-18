@@ -8,7 +8,7 @@ import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
-import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, SuggestionRow, th, Tiles } from '../kit';
+import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, th, Tiles } from '../kit';
 import { addDays, expenseCodes } from '@/lib/workpapers/common';
 import { accruedIncome, findPrepaidCosts, lastYear, prepaymentsJournal, prepView, type PrepLine } from '@/lib/workpapers/prepayments';
 
@@ -187,22 +187,23 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                     }}
                   >
                     <td className="p-1.5 align-top min-w-[200px]">
-                      <TextInput label="Item" value={l.desc} disabled={locked} placeholder="e.g. Business insurance · annual policy" onCommit={(d) => setLine(l.id, { desc: d })} />
+                      {l.found ? (
+                        // A cost from the ledger keeps the ledger's name, which opens it in Xero
+                        <div className="px-0.5 py-1 font-semibold">
+                          {l.url ? (
+                            <a href={l.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
+                              {name}
+                            </a>
+                          ) : (
+                            name
+                          )}
+                        </div>
+                      ) : (
+                        <TextInput label="Item" value={l.desc} disabled={locked} placeholder="e.g. Business insurance · annual policy" onCommit={(d) => setLine(l.id, { desc: d })} />
+                      )}
                       <div className="mt-1 flex items-center gap-1">
                         <CodePicker label={`Cost account for ${name}`} value={l.code} codes={codes} disabled={locked} onChange={(c) => setLine(l.id, { code: c })} />
-                        {l.found && (
-                          <span className="text-[10px] text-[#4A5878]">
-                            found in the ledger
-                            {l.url && (
-                              <>
-                                {' · '}
-                                <a href={l.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
-                                  {l.ref || 'Open in Xero'}
-                                </a>
-                              </>
-                            )}
-                          </span>
-                        )}
+                        {l.found && <span className="text-[10px] text-[#4A5878]">found in the ledger{l.ref ? ` · ${l.ref}` : ''}</span>}
                       </div>
                     </td>
                     <td className="p-1.5 align-top">{date(l.invoice_date, `Invoice date of ${name}`, (d) => setLine(l.id, { invoice_date: d }))}</td>
@@ -249,26 +250,28 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                     <tr>
                       <td colSpan={7} className="px-3 pb-2">
                         {!l.decision ? (
-                          <SuggestionRow
-                            actions={
-                              !locked && (
-                                <>
-                                  <button type="button" className={btnPrimary} onClick={() => setLine(l.id, { decision: 'add' })}>
-                                    Add as prepayment
-                                  </button>
-                                  <button type="button" className={btnSecondary} onClick={() => setLine(l.id, { decision: 'not' })}>
-                                    Not a prepayment
-                                  </button>
-                                </>
-                              )
-                            }
-                          >
-                            {l.ai?.summary
-                              ? `${l.ai.summary}${l.ai.from && l.ai.to ? ` Reads as covering ${ukDate(l.ai.from)} to ${ukDate(l.ai.to)}.` : ''}`
-                              : aiReading
-                                ? 'Reading the description…'
-                                : `Posted ${ukDate(l.invoice_date ?? '')} and reads like it covers time after ${ukDate(pe)}. Check the invoice for the period it covers.`}
-                          </SuggestionRow>
+                          <div className="px-3 py-2 rounded-[8px] bg-[#F5F8FD] text-[11px] text-[#122654] flex flex-col sm:flex-row sm:items-center gap-2">
+                            <div className="flex-1 flex items-start gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" />
+                              <span>
+                                {l.ai?.summary
+                                  ? `${l.ai.summary}${l.ai.from && l.ai.to ? ` Reads as covering ${ukDate(l.ai.from)} to ${ukDate(l.ai.to)}.` : ''}`
+                                  : aiReading
+                                    ? 'Reading the description…'
+                                    : `Posted ${ukDate(l.invoice_date ?? '')} and reads like it covers time after ${ukDate(pe)}. Check the invoice for the period it covers.`}
+                              </span>
+                            </div>
+                            {!locked && (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button type="button" className={btnPrimary} onClick={() => setLine(l.id, { decision: 'add' })}>
+                                  Add as prepayment
+                                </button>
+                                <button type="button" className={btnSecondary} onClick={() => setLine(l.id, { decision: 'not' })}>
+                                  Not a prepayment
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="text-[11px] text-[#4A5878]">
                             {l.decision === 'add' ? 'Added as a prepayment.' : 'Not a prepayment, left in costs.'}{' '}

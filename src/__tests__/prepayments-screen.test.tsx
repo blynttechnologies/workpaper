@@ -108,7 +108,9 @@ describe('prepayments screen', () => {
         live={() => wp.data_json}
       />
     );
-    expect(screen.getByText('INV-0042').getAttribute('href')).toBe('https://go.xero.com/x');
+    // The name is the link; a found cost has no box to retype it in
+    expect(screen.getByText('open').getAttribute('href')).toBe('https://go.xero.com/x');
+    expect(screen.queryAllByLabelText('Item')).toHaveLength(0);
     fireEvent.click(screen.getByText('Read with AI'));
     await waitFor(() => expect(wp.data_json.prepayments[0].ai).toEqual({ from: '2025-01-27', to: '2026-01-26', summary: 'Annual licence, so part runs past the year end.' }));
     expect(fetchMock).toHaveBeenCalledWith(`/api/v1/engagements/${eng.id}/ai-prepaid-costs`, expect.objectContaining({ body: JSON.stringify({ ids: ['open'] }) }));
