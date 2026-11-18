@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}, dropFiles?: (files: File[], rowId: string | null) => void) {
+function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}, dropFiles?: (files: File[], rowId: string | null) => void, swapEvidence?: (a: string, b: string) => void) {
   db.seed(true);
   const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
   const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'K-10') ?? db.addWorkpaper(eng.id, 'K-10')!;
@@ -32,6 +32,7 @@ function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attac
       tickFor={() => null}
       live={() => wp.data_json}
       dropFiles={dropFiles}
+      swapEvidence={swapEvidence}
     />
   );
   return { saved, wp };
@@ -112,7 +113,7 @@ describe('trade creditors AI statement reading', () => {
     setup([
       { id: 'sup_rml', name: 'Raymond Martin Langley', ledger_p: '20833', statement_p: '', paid_after_p: '0', ai_statement: { file: 'att_1', balance_p: '499253', date: '2025-12-31', page: 1, supplier: 'Protran Services Limited' } },
       { id: 'sup_bg', name: 'British Gas', ledger_p: '25376', statement_p: '25376', paid_after_p: '0', ai_statement: { file: 'att_2', balance_p: '25376', supplier: 'British Gas Ltd' } },
-    ]);
+    ], { sup_rml: [{ id: 'att_1', filename: 'protran.pdf' } as Attachment], sup_bg: [{ id: 'att_2', filename: 'bg.pdf' } as Attachment] });
     const wrong = screen.getByText('Raymond Martin Langley').closest('tr')!;
     expect(within(wrong).getByText(/This statement is from Protran Services Limited, not Raymond Martin Langley/)).toBeTruthy();
     expect(within(wrong).getByText(/4,784\.20 more than the ledger/)).toBeTruthy();
@@ -120,6 +121,38 @@ describe('trade creditors AI statement reading', () => {
     const right = screen.getByText('British Gas').closest('tr')!;
     expect(within(right).getByText('Statement from British Gas Ltd')).toBeTruthy();
     expect(within(right).getByText('Agrees to the ledger')).toBeTruthy();
+  });
+
+  it('drops what the AI read when its file is deleted, and the balance only if the AI filled it', () => {
+    const { saved } = setup([
+      // The file att_1 is gone: the AI filled this balance, so both go
+      { id: 'sup_rml', name: 'Raymond Martin Langley', ledger_p: '20833', statement_p: '499250', paid_after_p: '0', ai_statement: { file: 'att_1', balance_p: '499250', supplier: 'Protran Services Limited' } },
+      // Its file is gone too, but someone typed another balance: that stays
+      { id: 'sup_bg', name: 'British Gas', ledger_p: '25376', statement_p: '25000', paid_after_p: '0', ai_statement: { file: 'att_2', balance_p: '25376' } },
+      // Still attached: untouched
+      { id: 'sup_ea', name: 'Environment Agency', ledger_p: '9898', statement_p: '9898', paid_after_p: '0', ai_statement: { file: 'att_3', balance_p: '9898' } },
+    ], { sup_ea: [{ id: 'att_3', filename: 'ea.pdf' } as Attachment] });
+    const [rml, bg, ea] = saved.at(-1)!.suppliers;
+    expect(rml).toMatchObject({ statement_p: '', ai_statement: undefined });
+    expect(bg).toMatchObject({ statement_p: '25000', ai_statement: undefined });
+    expect(ea).toMatchObject({ statement_p: '9898', ai_statement: { file: 'att_3' } });
+  });
+
+  it('offers to move a statement to the supplier it names', () => {
+    const swaps: string[][] = [];
+    const { saved } = setup(
+      [
+        { id: 'sup_pro', name: 'Protran Services Limited', ledger_p: '254983', statement_p: '', paid_after_p: '0' },
+        { id: 'sup_rml', name: 'Raymond Martin Langley', ledger_p: '20833', statement_p: '499250', paid_after_p: '0', ai_statement: { file: 'att_1', balance_p: '499250', supplier: 'Protran Services Limited' } },
+      ],
+      { sup_rml: [{ id: 'att_1', filename: 'protran.pdf' } as Attachment] },
+      () => {},
+      undefined,
+      (a, b) => swaps.push([a, b])
+    );
+    fireEvent.click(screen.getByText('Move it to Protran Services Limited'));
+    expect(swaps).toEqual([['sup_rml', 'sup_pro']]);
+    expect(saved.at(-1)!.suppliers.find((x: any) => x.id === 'sup_rml')).toMatchObject({ statement_p: '', ai_statement: undefined });
   });
 });
 
