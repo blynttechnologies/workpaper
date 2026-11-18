@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import { TEMPLATES } from '@/lib/workpapers/templates';
 import { inLead } from '@/lib/workpapers/common';
@@ -998,12 +999,7 @@ export default function TrialBalancePage() {
           </button>
         </div>
 
-        {approvalError && (
-          <div className="p-3 mb-4 rounded-[10px] bg-[#FDECEA] border border-[#B42318]/40 text-[#B42318] text-xs flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{approvalError}</span>
-          </div>
-        )}
+        {approvalError && <Notice className="mb-4">{approvalError}</Notice>}
 
         <div className="divide-y divide-[#E3E7EF]">
           {adjustments.map((adj) => (
@@ -1065,11 +1061,7 @@ export default function TrialBalancePage() {
               All lines must balance strictly in integer pence before submission.
             </p>
 
-            {proposeError && (
-              <div className="p-2.5 mb-3 bg-[#FDECEA] border border-[#B42318]/30 rounded-[8px] text-xs text-[#B42318]">
-                {proposeError}
-              </div>
-            )}
+            {proposeError && <Notice className="mb-3">{proposeError}</Notice>}
 
             <form onSubmit={handleProposeAdjustment} className="flex flex-col gap-4 text-xs">
               <div>

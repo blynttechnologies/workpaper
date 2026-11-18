@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, AlertCircle, Download, Plug, Sparkles } from 'lucide-react';
@@ -94,7 +95,7 @@ export default function AiControlCentre() {
   const save = async (update: Record<string, unknown>, done = 'Saved') => {
     const r = await fetch('/api/v1/ai/admin', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update) });
     const j = await r.json();
-    if (!r.ok) return setToast(j.error || 'Not saved');
+    if (!r.ok) return setToast(j.error || 'Could not save. Try again.');
     setData(j);
     setToast(done);
     setTimeout(() => setToast(''), 3000);
@@ -108,7 +109,7 @@ export default function AiControlCentre() {
     load();
   };
 
-  if (error) return <div className={`${card} max-w-3xl mx-auto mt-6 text-sm text-[#B42318]`}>{error}</div>;
+  if (error) return <Notice className="max-w-3xl mx-auto mt-6">{error}</Notice>;
   if (!data) return <div className={`${muted} p-6`}>Loading…</div>;
 
   const s = data.settings;
@@ -133,7 +134,7 @@ export default function AiControlCentre() {
         </a>
       </div>
 
-      {toast && <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs px-4 py-3 rounded-xl">{toast}</div>}
+      {toast && <Notice tone="ok">{toast}</Notice>}
 
       {/* Providers */}
       <section className={card}>

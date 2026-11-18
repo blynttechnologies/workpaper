@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -67,7 +68,7 @@ export default function ClientsPage() {
       setTimeout(() => setNotice(''), 4000);
       return true;
     } catch {
-      setArchiveError('Could not reach the server. Try again.');
+      setArchiveError('Could not reach Blynt. Check your connection and try again.');
       return false;
     } finally {
       setArchiveBusy(false);
@@ -161,11 +162,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {notice && (
-        <div role="status" className="px-4 py-3 rounded-[10px] bg-[#E6F4EF] border border-[#0B6B52]/20 text-xs font-medium text-[#0B6B52]">
-          {notice}
-        </div>
-      )}
+      {notice && <Notice tone="ok">{notice}</Notice>}
 
       {/* Client list, in the dashboard's style: progress of the latest year, stage, papers needing attention */}
       {filteredClients.length > 0 && (
@@ -323,7 +320,7 @@ export default function ClientsPage() {
               />
             </div>
 
-            {archiveError && <p role="alert" className="text-[11px] font-medium text-[#B42318]">{archiveError}</p>}
+            {archiveError && <Notice inline>{archiveError}</Notice>}
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
               <button type="button" onClick={() => setArchiveTarget(null)} className="min-h-[38px] px-4 text-xs font-semibold text-[#122654] hover:bg-[#F5F8FD] border border-[#D3DCEE] rounded-xl transition-colors cursor-pointer">

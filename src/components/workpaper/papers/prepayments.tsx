@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
@@ -110,7 +111,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
           </div>
         )}
       </div>
-      {note && <div className="text-[11px] text-[#0B6B52]">{note}</div>}
+      {note && <Notice tone="ok" inline>{note}</Notice>}
 
       {tab === 'prep' && (
       <div className="overflow-x-auto">

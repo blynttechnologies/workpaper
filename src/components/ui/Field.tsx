@@ -1,3 +1,4 @@
+import { Notice } from '@/components/ui/Notice';
 import React from 'react';
 
 interface FieldProps {
@@ -37,11 +38,7 @@ export const Field: React.FC<FieldProps> = ({
         <span className="text-xs text-[#4A5878] mt-0.5">{hint}</span>
       )}
 
-      {error && (
-        <span className="text-xs text-[#6B4700] font-medium mt-0.5 flex items-center gap-1" role="alert">
-          {error}
-        </span>
-      )}
+      {error && <Notice inline className="mt-0.5">{error}</Notice>}
     </div>
   );
 };

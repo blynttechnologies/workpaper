@@ -1,9 +1,9 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import { useMemo, useState } from 'react';
 import {
-  AlertCircle,
   AlertTriangle,
   BadgePercent,
   Check,
@@ -163,11 +163,7 @@ export default function TaxLibraryPage() {
         )}
       </div>
 
-      {error && (
-        <p role="alert" className="text-sm text-[#B42318] flex items-center gap-1.5">
-          <AlertCircle className="w-4 h-4" aria-hidden="true" /> {error}
-        </p>
-      )}
+      {error && <Notice inline>{error}</Notice>}
 
       {/* Pull from GOV.UK: today's figures beside the library's */}
       {pull && (
@@ -458,7 +454,7 @@ function AddEntry({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
         Note (optional)
         <input className={input} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
       </label>
-      {error && <p role="alert" className="sm:col-span-2 text-[#B42318]">{error}</p>}
+      {error && <Notice inline className="sm:col-span-2">{error}</Notice>}
       <div className="sm:col-span-2 flex justify-end gap-2">
         <button type="button" onClick={onClose} className={`min-h-[38px] px-3 border border-[#D3DCEE] rounded-lg font-semibold cursor-pointer ${focus}`}>Cancel</button>
         <button type="button" disabled={busy || !f.key || !f.value || !f.source.trim()} onClick={save} className={`min-h-[38px] px-4 bg-[#122654] text-white rounded-lg font-bold cursor-pointer disabled:opacity-50 ${focus}`}>

@@ -1,8 +1,9 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { AlertCircle, KeyRound } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { AuthBrandPanel } from '@/components/layout/AuthBrandPanel';
 import { BackupCodesList } from '@/components/settings/BackupCodes';
@@ -33,7 +34,7 @@ export default function MfaVerificationPage() {
           else if (body.code === 'MFA_ENROLLED') setStep('verify');
           else setErrorMessage(body.error || 'Could not start MFA set-up. Please sign in again.');
         })
-        .catch(() => setErrorMessage('Could not reach the server. Please try again.'));
+        .catch(() => setErrorMessage('Could not reach Blynt. Check your connection and try again.'));
     }
   }, []);
 
@@ -100,7 +101,7 @@ export default function MfaVerificationPage() {
       setBackupInput('');
       inputRefs.current[0]?.focus();
     } catch {
-      setErrorMessage('Could not reach the server. Please try again.');
+      setErrorMessage('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setIsVerifying(false);
     }
@@ -190,15 +191,7 @@ export default function MfaVerificationPage() {
             </div>
           )}
 
-          {errorMessage && (
-            <div
-              role="alert"
-              className="p-3 mb-4 rounded-[10px] bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-center gap-2"
-            >
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+          {errorMessage && <Notice className="mb-4">{errorMessage}</Notice>}
 
           <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
             {useBackup ? (

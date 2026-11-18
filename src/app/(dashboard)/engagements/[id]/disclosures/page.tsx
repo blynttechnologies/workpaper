@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -117,7 +118,7 @@ export default function DisclosuresPage() {
         ))}
       </div>
 
-      {error && <p role="alert" className="p-3 rounded-[10px] bg-[#FDECEA] text-xs text-[#B42318]">{error}</p>}
+      {error && <Notice>{error}</Notice>}
       {a.unmappedPence !== 0n && (
         <div role="alert" className="p-3 rounded-[10px] bg-[#FFF4DB] border border-[#6B4700]/20 text-xs text-[#6B4700] flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />

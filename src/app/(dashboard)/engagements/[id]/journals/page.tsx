@@ -1,10 +1,11 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { AlertCircle, Calendar, Check, CheckCheck, ChevronDown, ChevronRight, Clock, ExternalLink, FileText, MoreHorizontal, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Undo2, X } from 'lucide-react';
+import { Calendar, Check, CheckCheck, ChevronDown, ChevronRight, Clock, ExternalLink, FileText, MoreHorizontal, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Undo2, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { formatPence, toPence } from '@/lib/money';
 import { TEMPLATES } from '@/lib/workpapers/templates';
@@ -264,11 +265,7 @@ export default function JournalsPage() {
         ))}
       </div>
 
-      {notice && (
-        <div role={notice.ok ? 'status' : 'alert'} className={`p-3 rounded-[10px] text-xs font-medium flex items-start gap-2 ${notice.ok ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FFF4DB] text-[#6B4700]'}`}>
-          {!notice.ok && <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />} {notice.text}
-        </div>
-      )}
+      {notice && <Notice tone={notice.ok ? 'ok' : 'error'}>{notice.text}</Notice>}
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2 mr-auto" role="tablist" aria-label="Status">
@@ -666,11 +663,7 @@ function JournalForm({ engagementId, periodStart, periodEnd, source, onClose, on
           </label>
         </div>
 
-        {error && (
-          <p role="alert" className="text-[11px] font-medium text-[#B42318] flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5" /> {error}
-          </p>
-        )}
+        {error && <Notice inline>{error}</Notice>}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="min-h-[36px] px-4 border border-[#D3DCEE] rounded-[8px] font-bold cursor-pointer">Cancel</button>
@@ -788,11 +781,7 @@ function SendToXero({ journal, onClose, onSent }: { journal: Adjustment; onClose
             </span>
           </label>
         )}
-        {error && (
-          <p role="alert" className="text-[#B42318] flex items-start gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" /> {error}
-          </p>
-        )}
+        {error && <Notice inline>{error}</Notice>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="min-h-[36px] px-4 border border-[#D3DCEE] rounded-[10px] font-semibold cursor-pointer">
             Cancel

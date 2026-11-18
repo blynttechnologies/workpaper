@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useEffect, useId, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { STANDARD_CHART } from '@/lib/standard-chart';
@@ -215,7 +216,7 @@ export function NewAccountForm({ firmId, clientId, initialName = '', initialBase
         <span className="font-semibold">Code (next free, {cat.from}–{cat.to})</span>
         <input type="number" min={cat.from} max={cat.to} value={code} onChange={(e) => { setCode(e.target.value); setError(''); }} className={field} />
       </label>
-      {error && <p role="alert" className="text-[#B8432F]">{error}</p>}
+      {error && <Notice inline>{error}</Notice>}
       <div className="flex justify-end gap-3">
         <button type="button" onClick={onCancel} className="font-semibold">Cancel</button>
         <button type="button" onClick={save} disabled={!code || !name.trim()} className="px-3 py-1 rounded-lg bg-[#122654] text-white font-semibold disabled:opacity-50">Approve and create</button>

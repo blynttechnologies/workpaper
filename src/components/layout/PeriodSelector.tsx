@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState, useRef, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Calendar, Lock, Unlock, ChevronDown, Check, AlertCircle, Plus } from 'lucide-react';
@@ -66,7 +67,7 @@ export const PeriodSelector: React.FC = () => {
       setUnlockReason('');
       setUnlockError('');
     } catch {
-      setUnlockError('Could not reach the server. Try again.');
+      setUnlockError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -194,7 +195,7 @@ export const PeriodSelector: React.FC = () => {
                 rows={3}
                 className="w-full text-xs p-2.5 border border-[#D3DCEE] rounded-lg focus:ring-1 focus:ring-[#1D4E89] outline-none text-[#122654]"
               />
-              {unlockError && <p role="alert" className="text-red-600 text-[11px] mt-1">{unlockError}</p>}
+              {unlockError && <Notice inline className="mt-1">{unlockError}</Notice>}
             </div>
             <div className="flex items-center justify-end gap-2.5">
               <button

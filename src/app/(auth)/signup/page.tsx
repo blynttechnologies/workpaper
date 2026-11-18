@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -180,12 +181,7 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {errorMessage && (
-            <div className="mb-5 p-3.5 bg-[#FFF1EE] border border-[#FF7A66]/30 rounded-xl flex items-start gap-2.5 text-xs text-[#B8432F] animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+          {errorMessage && <Notice className="mb-5">{errorMessage}</Notice>}
 
           {successNotice && (
             <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs text-emerald-800 animate-in fade-in">

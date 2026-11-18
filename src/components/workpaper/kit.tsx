@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { formatPence, formatPenceInput } from '@/lib/money';
@@ -297,7 +298,7 @@ export function JournalPanel({
             )}
           </>
         )}
-        {error && <span className="text-[11px] text-[#B42318]">{error}</span>}
+        {error && <Notice inline>{error}</Notice>}
       </div>
     </div>
   );

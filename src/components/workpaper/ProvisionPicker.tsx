@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { formatPence, formatPenceInput, toPence } from '@/lib/money';
@@ -121,7 +122,7 @@ export function ProvisionPicker({
         />
       </label>
       {!valid && <span className="text-[#B42318]">Enter an amount above nil and up to {formatPence(stillDue)}.</span>}
-      {error && <span role="alert" className="text-[#B42318]">{error}</span>}
+      {error && <Notice inline>{error}</Notice>}
       <div className="flex justify-end gap-1.5">
         <button type="button" onClick={onCancel} className={chip}>
           Cancel

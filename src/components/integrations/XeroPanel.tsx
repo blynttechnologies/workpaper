@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertCircle, CheckCircle2, Link2, Loader2, RefreshCw, Unplug } from 'lucide-react';
@@ -90,7 +91,7 @@ export function LedgerPanel({ provider, clientId, engagementId, reconnectNeeded 
       setResult(body);
       load();
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(null);
     }
@@ -209,11 +210,7 @@ export function LedgerPanel({ provider, clientId, engagementId, reconnectNeeded 
         </div>
       )}
 
-      {error && (
-        <p role="alert" className="text-[11px] font-medium text-[#B42318] flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-        </p>
-      )}
+      {error && <Notice inline>{error}</Notice>}
 
       {result && (
         <div className="p-3.5 rounded-[10px] bg-[#E6F4EF] border border-[#0B6B52]/20 text-xs text-[#122654] space-y-2" role="status">

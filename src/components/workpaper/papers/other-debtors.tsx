@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
@@ -92,7 +93,7 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
           </button>
         )}
       </div>
-      {note && <div className="-mt-2 text-[11px] text-[#0B6B52]">{note}</div>}
+      {note && <Notice tone="ok" inline className="-mt-2">{note}</Notice>}
 
       <div className="overflow-x-auto bg-white border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-xs text-[#122654]">

@@ -1,7 +1,8 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, AlertCircle } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { BlyntLogo } from '@/components/ui/BlyntLogo';
 import { Button } from '@/components/ui/Button';
 
@@ -50,10 +51,7 @@ export default function AuthorizePage() {
       <div className="w-full max-w-md bg-white border border-[#D3DCEE] rounded-[14px] p-6 shadow-sm">
         <BlyntLogo />
         {error ? (
-          <div className="mt-6 flex gap-2 text-sm text-[#B42318]">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <p>{error}</p>
-          </div>
+          <Notice className="mt-6">{error}</Notice>
         ) : !info ? (
           <p className="mt-6 text-sm text-[#4A5878]">Checking the request…</p>
         ) : (

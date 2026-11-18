@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { Download, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
@@ -115,7 +116,7 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
           </div>
         )}
       </div>
-      {note && <div className="-mt-2 text-[11px] text-[#0B6B52]">{note}</div>}
+      {note && <Notice tone="ok" inline className="-mt-2">{note}</Notice>}
 
       {view === 'summary' ? (
         <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
