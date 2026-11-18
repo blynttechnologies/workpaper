@@ -23,7 +23,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       user_id: actor.id,
       user_name: actor.name,
     });
-    return jsonResponse({ restart: result === 'restart' });
+    // Time goes to its own table: the browser need not download the workspace and ledger again after each heartbeat
+    return jsonResponse({ restart: result === 'restart' }, 200, { 'x-workspace-unchanged': '1' });
   } catch (err) {
     return errorResponse(err);
   }

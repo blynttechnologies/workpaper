@@ -47,9 +47,9 @@ async function loadLedger(engagementId: string) {
 
 // The open year's ledger, and the year before's for the comparisons the papers make
 async function loadLedgers(engagementId: string) {
-  await loadLedger(engagementId);
   const prior = db.engagements.find((e) => e.id === engagementId)?.prior_engagement_id;
-  if (prior) await loadLedger(prior).catch(() => undefined); // the year still opens without its comparatives
+  // Both years at once; the year still opens without its comparatives
+  await Promise.all([loadLedger(engagementId), prior ? loadLedger(prior).catch(() => undefined) : undefined]);
 }
 
 const AUTH_PAGES = ['/login', '/signup', '/forgot-password', '/reset-password', '/invite'];
@@ -121,6 +121,9 @@ function installFetchHook() {
     await serial(saveIfChanged);
     if (method === 'GET') return nativeFetch(input, init);
     const res = await nativeFetch(input, init);
+    // Routes that change nothing in the workspace (the timer's heartbeat, once a minute) say so:
+    // downloading the workspace and both years' ledgers again after each one made every paper slow
+    if (res.headers.get('x-workspace-unchanged')) return res;
     await serial(load).catch(() => undefined);
     // Routes that never touch the ledger say so, and the wait for it to download again is skipped
     if (res.headers.get('x-ledger-unchanged')) return res;
