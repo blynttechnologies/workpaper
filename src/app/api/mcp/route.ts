@@ -4,23 +4,9 @@ import { syncIn } from '@/lib/server/store';
 import { publicOrigin } from '@/lib/server/api-helpers';
 import { logError } from '@/lib/server/log-error';
 import { handleMcp } from '@/lib/server/mcp/server';
-import { mcpServerEnabled, verifyAccessToken } from '@/lib/server/mcp/oauth';
+import { limited, mcpServerEnabled, verifyAccessToken } from '@/lib/server/mcp/oauth';
 
 export const dynamic = 'force-dynamic';
-
-// shortcut: per-instance limit (each Lambda instance counts alone); move to a shared store if abuse is seen
-const WINDOW_MS = 60_000;
-const LIMIT = 120;
-const hits = new Map<string, { n: number; until: number }>();
-function limited(key: string): boolean {
-  const now = Date.now();
-  const h = hits.get(key);
-  if (!h || h.until < now) {
-    hits.set(key, { n: 1, until: now + WINDOW_MS });
-    return false;
-  }
-  return ++h.n > LIMIT;
-}
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => NextResponse.json(body, { status, headers });
 
@@ -33,7 +19,7 @@ export async function POST(req: Request) {
     const metadata = `${publicOrigin(req)}/.well-known/oauth-protected-resource/api/mcp`;
     return json({ error: 'invalid_token' }, 401, { 'WWW-Authenticate': `Bearer resource_metadata="${metadata}"` });
   }
-  if (limited(crypto.createHash('sha256').update(token!).digest('hex'))) return json({ error: 'Too many requests. Wait a minute.' }, 429, { 'Retry-After': '60' });
+  if (limited(crypto.createHash('sha256').update(token!).digest('hex'), 120)) return json({ error: 'Too many requests. Wait a minute.' }, 429, { 'Retry-After': '60' });
 
   let msg;
   try {

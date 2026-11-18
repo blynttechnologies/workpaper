@@ -7,7 +7,7 @@ import { geminiProvider } from './providers/gemini';
 import { validate } from './validate';
 import { costUsd } from './pricing';
 import { logRequest, monthSpendUsd } from './usage';
-import { AiError, PROVIDER_IDS, type Mode, type Msg, type Provider, type ProviderId, type RunCtx, type RunResult, type TaskDef } from './types';
+import { AiError, PROVIDER_IDS, type Mode, type Msg, type Provider, type ProviderId, type ProviderResult, type RunCtx, type RunResult, type TaskDef } from './types';
 
 /**
  * The AI gateway. Every model call in Workpaper goes through run(): it picks the provider for the
@@ -26,6 +26,12 @@ export const tuning = { maxAttempts: 3, retryDelayMs: 400, maxToolRounds: 6, tim
 
 export function aiSettings(firmId: string): AiSettings {
   return db.firms.find((f) => f.id === firmId)?.settings?.ai ?? {};
+}
+
+/** The practice's own monthly limit; without one, the server's AI_DEFAULT_LIMIT_USD; without that, none. */
+export function monthlyLimitUsd(s: AiSettings): number | null {
+  const fallback = Number(process.env.AI_DEFAULT_LIMIT_USD);
+  return s.monthly_limit_usd ?? (fallback > 0 ? fallback : null);
 }
 
 const enabled = (s: AiSettings, id: ProviderId) => s.providers?.[id]?.enabled !== false;
@@ -105,8 +111,10 @@ async function callProvider<I, O>(pid: ProviderId, task: TaskDef<I, O>, first: M
           engagement_id: ctx.engagementId,
           created_at: new Date(started).toISOString(),
         });
+      // Kept outside the try: a reply that is then rejected (cut off, refused, wrong shape) was still billed
+      let res: ProviderResult | undefined;
       try {
-        const res = await provider.call({
+        res = await provider.call({
           model,
           system: task.system,
           messages: history,
@@ -143,7 +151,7 @@ async function callProvider<I, O>(pid: ProviderId, task: TaskDef<I, O>, first: M
         return { output, provider: pid, model: res.model, requestId };
       } catch (e) {
         const err = e instanceof AiError ? e : new AiError((e as Error).message, 'provider');
-        await log('error', undefined, err);
+        await log('error', res, err);
         lastErr = err;
         if (!err.retryable) throw err;
       }
@@ -185,7 +193,8 @@ export async function run<I, O>(task: TaskDef<I, O>, input: I, ctx: RunCtx): Pro
   const s = aiSettings(ctx.firmId);
   const { order, mode } = routeFor(task, s);
   if (!order.length) throw new AiError('No AI provider is set up for this task.', 'not_configured');
-  if (s.monthly_limit_usd != null && (await monthSpendUsd(ctx.firmId)) >= s.monthly_limit_usd) {
+  const limit = monthlyLimitUsd(s);
+  if (limit != null && (await monthSpendUsd(ctx.firmId)) >= limit) {
     await logRequest({
       id: newId(), firm_id: ctx.firmId, user_id: ctx.userId, channel: ctx.channel ?? 'app', kind: 'model', module: task.module, task: task.id,
       provider: order[0], model: modelFor(s, order[0]), status: 'blocked', error_code: 'limit', input_tokens: 0, output_tokens: 0, cost_usd: 0,

@@ -8,7 +8,8 @@ export async function POST(req: Request) {
   if (!mcpServerEnabled()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const type = req.headers.get('content-type') || '';
   const p: Record<string, string> = type.includes('application/json')
-    ? await req.json().catch(() => ({}))
+    ? // Every value as text, as a form would send it: a number or object where a token belongs is then just a wrong token
+      Object.fromEntries(Object.entries((await req.json().catch(() => ({}))) ?? {}).map(([k, v]) => [k, String(v)]))
     : Object.fromEntries(new URLSearchParams(await req.text()));
   const headers = { 'Cache-Control': 'no-store' };
   try {

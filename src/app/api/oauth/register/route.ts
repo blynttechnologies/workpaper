@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
-import { OAuthError, mcpServerEnabled, registerClient } from '@/lib/server/mcp/oauth';
+import { OAuthError, limited, mcpServerEnabled, registerClient } from '@/lib/server/mcp/oauth';
 
 export const dynamic = 'force-dynamic';
 
 /** Dynamic client registration (RFC 7591): public clients only (PKCE, no secret). */
 export async function POST(req: Request) {
   if (!mcpServerEnabled()) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  // The last address in the list is the one the Function URL itself saw; earlier ones are whatever the caller sent
+  const ip = req.headers.get('x-forwarded-for')?.split(',').pop()?.trim() || 'unknown';
+  if (limited(`register:${ip}`, 10)) return NextResponse.json({ error: 'Too many registrations. Wait a minute.' }, { status: 429, headers: { 'Retry-After': '60' } });
   try {
     const c = await registerClient(await req.json().catch(() => ({})));
     return NextResponse.json(

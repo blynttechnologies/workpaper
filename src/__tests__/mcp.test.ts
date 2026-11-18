@@ -15,7 +15,7 @@ vi.mock('@/lib/server/store', () => ({
 
 import { db } from '@/lib/server/db';
 import { handleMcp } from '@/lib/server/mcp/server';
-import { registerClient, checkAuthRequest, createCode, exchangeCode, refreshTokens, verifyAccessToken, revoke, channelOf, validRedirect, type Grant } from '@/lib/server/mcp/oauth';
+import { registerClient, checkAuthRequest, createCode, exchangeCode, refreshTokens, verifyAccessToken, revoke, limited, channelOf, validRedirect, type Grant } from '@/lib/server/mcp/oauth';
 import { memoryRequests } from '@/lib/server/ai/usage';
 import { providers } from '@/lib/server/ai/gateway';
 
@@ -71,6 +71,14 @@ describe('OAuth for outside assistants', () => {
     await expect(refreshTokens({ refresh_token: t.refresh_token, client_id: c.client_id })).rejects.toMatchObject({ error: 'invalid_grant' });
     await revoke(t2.access_token);
     expect(await verifyAccessToken(t2.access_token)).toBeNull();
+    // Revoking one token ends the connection: its refresh token and the earlier access token go too
+    await expect(refreshTokens({ refresh_token: t2.refresh_token, client_id: c.client_id })).rejects.toMatchObject({ error: 'invalid_grant' });
+    expect(await verifyAccessToken(t.access_token)).toBeNull();
+  });
+
+  it('limits requests per key per minute', () => {
+    expect([1, 2, 3].map(() => limited('register:203.0.113.9', 2))).toEqual([false, false, true]);
+    expect(limited('register:203.0.113.10', 2)).toBe(false); // another address is counted alone
   });
 
   it('tells ChatGPT and Copilot apart by the name they registered with', () => {
@@ -129,11 +137,14 @@ describe('MCP server', () => {
 
   it('create_reconciliation_draft leaves an unconfirmed figure that blocks sign-off, and never overwrites one', async () => {
     enable();
+    db.signoffs.push({ id: 'so_test', workpaper_id: 'wp_b10', role: 'preparer', user_name: 'P', signed_at: '2026-10-01T00:00:00Z' } as any);
     const r = await call(grant('usr_test_preparer', undefined, 'Microsoft Copilot'), 'create_reconciliation_draft', { workpaper_id: 'wp_b10', statement_balance: '£124,918.17', statement_date: '2026-09-30', source: 'Barclays Sep 2026.pdf' });
     expect(r.structuredContent).toMatchObject({ filled: true, field: 'statement_p' });
     const wp = db.workpapers.find((w) => w.id === 'wp_b10')!;
     expect(wp.data_json.statement_p).toBe('12491817');
     expect(wp.data_json.values_to_confirm_count).toBe(1);
+    // The sign-off made before the figure arrived no longer stands
+    expect(db.signoffs.find((s) => s.id === 'so_test')).toMatchObject({ stale_reason: expect.stringMatching(/Draft figure from copilot/) });
     expect(wp.data_json.confidence_gate_items.at(-1)).toMatchObject({ confirmed: false, reason: expect.stringMatching(/confirm it against the statement/) });
     expect(db.audit_logs.at(-1)).toMatchObject({ action: 'MCP_RECONCILIATION_DRAFT', actor_id: 'usr_test_preparer' });
     expect(memoryRequests.at(-1)).toMatchObject({ channel: 'copilot', status: 'ok' });
@@ -150,6 +161,8 @@ describe('MCP server', () => {
     expect((await call(grant('usr_test_preparer'), 'create_reconciliation_draft', { workpaper_id: 'wp_b10_locked', statement_balance: '1.00', statement_date: '2026-09-30', source: 'x' })).structuredContent.error).toMatch(/locked/);
     expect((await call(grant('usr_test_preparer'), 'create_reconciliation_draft', { workpaper_id: 'wp_f10', statement_balance: '1.00', statement_date: '2026-09-30', source: 'x' })).structuredContent.error).toMatch(/not a bank reconciliation/);
     expect((await call(grant('usr_test_preparer'), 'create_reconciliation_draft', { workpaper_id: 'wp_b10', statement_balance: 'lots', statement_date: '2026-09-30', source: 'x' })).isError).toBe(true);
+    for (const bad of ['2026-13-45', '2026-02-30'])
+      expect((await call(grant('usr_test_preparer'), 'create_reconciliation_draft', { workpaper_id: 'wp_b10', statement_balance: '1.00', statement_date: bad, source: 'x' })).structuredContent.error).toMatch(/real date/);
     expect((await call(grant('usr_test_preparer'), 'search_workpapers', { query: 1 })).structuredContent.error).toMatch(/Invalid input/);
   });
 

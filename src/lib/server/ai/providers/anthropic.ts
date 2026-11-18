@@ -40,7 +40,8 @@ function messages(msgs: Msg[]): Anthropic.Beta.BetaMessageParam[] {
 
 function mapError(err: unknown): AiError {
   if (err instanceof AiError) return err;
-  if (err instanceof Anthropic.APIConnectionTimeoutError) return new AiError('Claude took too long to answer.', 'timeout', true);
+  // Not retried: a second wait on the same provider would outlast the Lambda; the gateway falls back instead
+  if (err instanceof Anthropic.APIConnectionTimeoutError) return new AiError('Claude took too long to answer.', 'timeout');
   if (err instanceof Anthropic.APIConnectionError) return new AiError('Could not reach Claude.', 'provider', true);
   if (err instanceof Anthropic.RateLimitError) return new AiError('Claude is rate limiting requests.', 'rate_limited', true);
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) return new AiError('The Anthropic API key was refused.', 'not_configured');
