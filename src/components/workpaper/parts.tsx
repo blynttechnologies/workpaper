@@ -209,6 +209,13 @@ export async function uploadToPaper(
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Upload failed');
+      // The same file on the same row again is not a second copy: deleting one copy then looks as if nothing happened
+      const row = opts.rowId ?? null;
+      const onRow = (x: Attachment) => (((x.links ?? [])[0] as any)?.anchor_json?.row ?? null) === row;
+      if (db.attachments.some((x) => x.workpaper_id === wp.id && !x.deleted_at && !x.archived_at && x.sha256 === body.sha256 && onRow(x))) {
+        errors.push(`${f.name} is already on ${row ? 'this row' : 'this paper'}.`);
+        continue;
+      }
       const id = `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const att: Attachment = {
         id,
