@@ -66,7 +66,7 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
           return (
             <div
               key={`${wf.engagement_id}:${wf.id}`}
-              className="flex flex-col p-5 bg-white border border-[#E3E7EF] rounded-2xl shadow-2xs"
+              className="relative flex flex-col p-5 bg-white border border-[#E3E7EF] rounded-2xl shadow-2xs hover:border-[#B9C6E2] transition-colors"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -110,14 +110,15 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
                   <Link
                     href={`/engagements/${wf.engagement_id}/workflows/${wf.id}`}
                     aria-label={`Continue ${wf.name}, ${p.percent}% complete`}
-                    className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold transition-colors"
+                    // after: stretches the link over the whole card, so a click anywhere opens it
+                    className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 rounded-xl bg-[#122654] hover:bg-[#0B1A3B] text-white text-xs font-bold transition-colors after:absolute after:inset-0 after:rounded-2xl after:content-['']"
                   >
                     Continue working papers <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                   </Link>
                   {eng.status !== 'locked' && (
                     <>
-                      <button type="button" disabled={!manager} onClick={() => run(archiveWorkflow, wf.engagement_id, wf.id)} aria-label={`Archive ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Archive</button>
-                      <button type="button" disabled={!manager} onClick={() => setConfirmDelete(`${wf.engagement_id}:${wf.id}`)} aria-label={`Delete ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="text-xs font-semibold text-[#4A5878] hover:text-[#B8432F] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Delete</button>
+                      <button type="button" disabled={!manager} onClick={() => run(archiveWorkflow, wf.engagement_id, wf.id)} aria-label={`Archive ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="relative z-10 text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Archive</button>
+                      <button type="button" disabled={!manager} onClick={() => setConfirmDelete(`${wf.engagement_id}:${wf.id}`)} aria-label={`Delete ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="relative z-10 text-xs font-semibold text-[#4A5878] hover:text-[#B8432F] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Delete</button>
                     </>
                   )}
                 </div>
