@@ -404,11 +404,20 @@ export default function WorkpaperPage() {
   };
 
   const removeFile = async (att: Attachment) => {
-    if (!(await ask.confirm({ title: 'Delete this file?', text: `${att.filename} goes to the bin, where it stays for 30 days.`, action: 'Delete', danger: true }))) return;
+    // Copies of the same file on the same row are deleted together: one at a time they looked like a delete that did nothing
+    const rowOf = (x: Attachment) => ((x.links ?? [])[0] as any)?.anchor_json?.row ?? null;
+    const copies = db.attachments.filter((x) => x.workpaper_id === workpaper.id && !x.deleted_at && !x.archived_at && x.sha256 === att.sha256 && rowOf(x) === rowOf(att));
+    const all = copies.length > 1;
+    if (!(await ask.confirm({
+      title: all ? `Delete ${copies.length} copies?` : 'Delete this file?',
+      text: all ? `${att.filename} is on this row ${copies.length} times. All of them go to the bin, where they stay for 30 days.` : `${att.filename} goes to the bin, where it stays for 30 days.`,
+      action: all ? 'Delete all' : 'Delete',
+      danger: true,
+    }))) return;
     try {
-      services.deleteAttachment(engagement.firm_id, actor, att.id);
+      for (const c of all ? copies : [att]) services.deleteAttachment(engagement.firm_id, actor, c.id);
       touchPaper();
-      setMessage({ kind: 'ok', text: `${att.filename} deleted. It stays in the bin for 30 days.` });
+      setMessage({ kind: 'ok', text: `${att.filename} deleted${all ? ` (${copies.length} copies)` : ''}. It stays in the bin for 30 days.` });
     } catch (err: any) {
       setMessage({ kind: 'error', text: err?.message || 'Could not delete the file.' });
     }
@@ -2045,8 +2054,13 @@ export default function WorkpaperPage() {
                   <select
                     aria-label={`Link ${preview.filename} to`}
                     value={((preview.links ?? [])[0]?.anchor_json as any)?.row ?? 'paper'}
-                    onChange={(e) => {
-                      relink(preview, e.target.value);
+                    onChange={async (e) => {
+                      // Moving a file changes which supplier or line its evidence belongs to, so it is confirmed first
+                      const to = e.target.value;
+                      const from = ((preview.links ?? [])[0]?.anchor_json as any)?.row ?? 'paper';
+                      const name = (id: string) => (id === 'paper' ? 'the whole paper' : result.anchors.find((x) => x.id === id)?.label ?? 'another line');
+                      if (!(await ask.confirm({ title: 'Move this file?', text: `${preview.filename} is linked to ${name(from)}. Move it to ${name(to)}?`, action: 'Move' }))) return;
+                      relink(preview, to);
                       setPreview({ ...db.attachments.find((x) => x.id === preview.id)! });
                     }}
                     className="flex-1 min-w-0 px-1.5 py-1 border border-[#D3DCEE] rounded-[8px] bg-white text-[#122654] font-semibold"
