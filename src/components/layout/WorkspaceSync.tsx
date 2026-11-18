@@ -63,11 +63,42 @@ function applyState(state: { version?: number; data?: Record<string, unknown[]> 
   lastSaved = snapshot();
 }
 
+type Rows = Record<string, any[]>;
+const rowKey = (r: any) => String(r?.id ?? JSON.stringify(r));
+
+/** The rows this browser added, changed or removed since `base`, put on top of someone else's save. On the same row this browser wins. */
+export function rebase(base: Rows, mine: Rows, theirs: Rows): Rows {
+  const out: Rows = { ...theirs };
+  for (const k of Object.keys(mine)) {
+    const was = new Map((base[k] ?? []).map((r) => [rowKey(r), JSON.stringify(r)]));
+    const changed = new Map(mine[k].filter((r) => was.get(rowKey(r)) !== JSON.stringify(r)).map((r) => [rowKey(r), r]));
+    const now = new Set(mine[k].map(rowKey));
+    const removed = new Set([...was.keys()].filter((id) => !now.has(id)));
+    if (!changed.size && !removed.size) continue;
+    const kept = (theirs[k] ?? []).filter((r) => !removed.has(rowKey(r)));
+    const theirKeys = new Set(kept.map(rowKey));
+    out[k] = [...kept.map((r) => changed.get(rowKey(r)) ?? r), ...[...changed].filter(([id]) => !theirKeys.has(id)).map(([, r]) => r)];
+  }
+  return out;
+}
+
+/**
+ * Takes the server's copy but keeps what this browser changed and has not saved yet. Without this, a save by anyone else
+ * (another tab, another user, the nightly Xero sync) silently undid the edit being saved: a deleted file came back.
+ */
+function applyKeepingMine(state: Parameters<typeof applyState>[0], mine: string) {
+  const base = lastSaved;
+  applyState(state);
+  if (base && mine !== base) db.importState(rebase(JSON.parse(base), JSON.parse(mine), JSON.parse(lastSaved)));
+}
+
 async function load() {
   const res = await nativeFetch(STATE_URL, { cache: 'no-store' });
   if (res.status === 401) throw new SignedOut();
   if (!res.ok) throw new Error('Could not load workspace');
-  applyState(await res.json());
+  const state = await res.json();
+  // Edits made while a request was on its way are kept too
+  applyKeepingMine(state, started ? snapshot() : lastSaved);
 }
 
 // A whole workspace as plain JSON outgrows the 6 MB a Lambda request may be, and the save is then refused before it reaches the app
@@ -79,16 +110,27 @@ async function packed(json: string): Promise<{ body: BodyInit; type: string }> {
 
 let saveFailing = false;
 
-async function saveIfChanged() {
+// After someone else's save got in first, the save is sent once more straight away, so a request that follows sees this browser's changes
+const saveIfChanged = async () => {
+  if (await saveOnce()) await saveOnce();
+};
+
+/** Resolves true when someone else saved first and this browser's changes are still to be sent. */
+async function saveOnce(): Promise<boolean | void> {
   const current = snapshot();
   if (current === lastSaved) return;
   const { body, type } = await packed(JSON.stringify({ version, data: JSON.parse(current) }));
   const res = await nativeFetch(STATE_URL, { method: 'PUT', headers: { 'Content-Type': type }, body });
-  if (res.status === 409 || res.status === 403) {
-    // Someone else saved first, or the server refused a change this user may not make: take the saved copy
+  if (res.status === 409) {
+    // Someone else saved first: take their copy with this browser's changes on top (those made while the save was on its way too)
+    applyKeepingMine(await res.json(), snapshot());
+    return true;
+  }
+  if (res.status === 403) {
+    // The server refused a change this user may not make: take the saved copy
     const body = await res.json();
     applyState(body);
-    if (res.status === 403) ask.tell({ title: 'Your change was not saved', text: body.error });
+    ask.tell({ title: 'Your change was not saved', text: body.error });
     return;
   }
   if (res.status === 401) window.location.href = '/login';
