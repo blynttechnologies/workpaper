@@ -101,7 +101,7 @@ export function InvestmentsSchedule({ data, result, locked, save, filesFor, atta
                       <td className="p-1.5 align-top">
                         <ExpandButton open={isOpen(p.id)} label={`details for ${name}`} onClick={() => toggle(p.id)} />
                       </td>
-                      <td className="p-1.5 min-w-[200px]">
+                      <td className="p-1.5 min-w-[150px]">
                         <TextInput label="Address" value={p.address} disabled={locked} placeholder="Address" onCommit={(v) => setProp(p.id, { address: v })} />
                         <div className="text-[10px] text-[#4A5878] mt-0.5">{[p.type, x.addedThisYear ? 'bought this year' : ''].filter(Boolean).join(' · ')}</div>
                       </td>

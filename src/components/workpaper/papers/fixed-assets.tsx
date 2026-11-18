@@ -125,7 +125,7 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                 <th className={`${th} text-left`} rowSpan={2}>
                   Class
                 </th>
-                <th className={`${th} text-left`} rowSpan={2}>
+                <th className={`${th} text-left whitespace-normal! leading-tight`} rowSpan={2}>
                   Method and rate
                 </th>
                 <th className={`${th} text-center border-l border-[#E3E7EF]`} colSpan={4}>
@@ -134,16 +134,16 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                 <th className={`${th} text-center border-l border-[#E3E7EF]`} colSpan={4}>
                   Depreciation
                 </th>
-                <th className={`${th} text-right border-l border-[#E3E7EF]`} rowSpan={2}>
+                <th className={`${th} px-1.5! text-right border-l border-[#E3E7EF]`} rowSpan={2}>
                   NBV
                 </th>
-                <th className={`${th} text-left`} rowSpan={2}>
+                <th className={`${th} text-left whitespace-normal! leading-tight`} rowSpan={2}>
                   Opening vs TB
                 </th>
               </tr>
               <tr>
                 {['Opening', 'Additions', 'Disposals', 'Closing', 'Opening', 'Charge', 'Disposals', 'Closing'].map((h, i) => (
-                  <th key={i} className={`${th} text-right ${i % 4 === 0 ? 'border-l border-[#E3E7EF]' : ''}`}>
+                  <th key={i} className={`${th} px-1.5! text-right ${i % 4 === 0 ? 'border-l border-[#E3E7EF]' : ''}`}>
                     {h}
                   </th>
                 ))}
@@ -161,11 +161,12 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                 const ok = c.priorCost === null ? c.costOpen + c.additions === c.tbCost || c.costClose === c.tbCost : c.costOpen === c.priorCost;
                 return (
                   <tr key={c.code}>
-                    <td className="p-2 font-bold">
+                    <td className="px-1.5 py-2 font-bold">
                       {c.name} <span className="font-normal font-mono text-[#7E8DA6]">{c.code}</span>
                     </td>
                     <td className="p-2">
-                      <div className="flex items-center gap-1">
+                      {/* The rate drops under the method when the table is narrow (side panel open) */}
+                      <div className="flex flex-wrap items-center gap-1">
                         <select
                           aria-label={`Depreciation method for ${c.name}`}
                           value={c.policy.method}
@@ -190,11 +191,11 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                       </div>
                     </td>
                     {[c.costOpen, c.additions, -c.disposals, c.costClose, c.depOpen, c.charge, -c.depDisposals, c.depClose].map((v, i) => (
-                      <td key={i} className={`p-2 text-right font-mono ${i === 3 || i === 7 ? 'font-bold' : ''} ${i % 4 === 0 ? 'border-l border-[#E3E7EF]' : ''}`}>
+                      <td key={i} className={`px-1.5 py-2 text-right font-mono ${i === 3 || i === 7 ? 'font-bold' : ''} ${i % 4 === 0 ? 'border-l border-[#E3E7EF]' : ''}`}>
                         {money(v)}
                       </td>
                     ))}
-                    <td className="p-2 text-right font-mono font-bold border-l border-[#E3E7EF]">{money(c.costClose - c.depClose)}</td>
+                    <td className="px-1.5 py-2 text-right font-mono font-bold border-l border-[#E3E7EF]">{money(c.costClose - c.depClose)}</td>
                     <td className="p-2">
                       <Pill tone={ok ? 'good' : 'warn'}>{ok ? 'Agrees' : `TB ${formatPence(c.priorCost ?? c.tbCost)}`}</Pill>
                     </td>
@@ -209,11 +210,11 @@ export function FixedAssetsSchedule({ data, result, locked, save, filesFor, atta
                     Total
                   </td>
                   {(['costOpen', 'additions', 'disposals', 'costClose', 'depOpen', 'charge', 'depDisposals', 'depClose'] as const).map((k, i) => (
-                    <td key={k} className={`p-2 text-right font-mono ${i % 4 === 0 ? 'border-l border-[#E3E7EF]' : ''}`}>
+                    <td key={k} className={`px-1.5 py-2 text-right font-mono ${i % 4 === 0 ? 'border-l border-[#E3E7EF]' : ''}`}>
                       {money((k === 'disposals' || k === 'depDisposals' ? -1n : 1n) * r.classes.reduce((a, c) => a + c[k], 0n))}
                     </td>
                   ))}
-                  <td className="p-2 text-right font-mono border-l border-[#E3E7EF]">{money(tot('nbv'))}</td>
+                  <td className="px-1.5 py-2 text-right font-mono border-l border-[#E3E7EF]">{money(tot('nbv'))}</td>
                   <td />
                 </tr>
               </tfoot>

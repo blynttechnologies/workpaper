@@ -1748,7 +1748,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
               <th className={`${th} text-left`}>Description</th>
               <th className={`${th} text-left`}>Reference</th>
               {cols.map((c: any) => (
-                <th key={c.key} className={`${th} text-right`}>
+                <th key={c.key} className={`${th} text-right whitespace-normal! leading-tight`}>
                   {c.label}
                   {c.custom && !locked && (
                     <button
@@ -1801,7 +1801,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
             ))}
             {lines.map((l) => (
               <tr key={l.id}>
-                <td className="p-1.5 min-w-[180px]">
+                <td className="p-1.5 min-w-[150px]">
                   <TextInput label="Description" value={l.desc} disabled={locked} placeholder="e.g. Customer or supplier" onCommit={(v) => setLine(l.id, { desc: v })} />
                 </td>
                 <td className="p-1.5 min-w-[100px]">
@@ -2119,14 +2119,14 @@ export function PayrollSchedule({ data, result, locked, save, filesFor, attachTo
             <thead className="bg-[#F5F8FD]">
               <tr>
                 <th className={`${th} text-left`}>Month</th>
-                <th className={`${th} text-right`}>Gross Pay</th>
-                <th className={`${th} text-right`}>Employer NIC</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>Gross Pay</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>Employer NIC</th>
                 <th className={`${th} text-right`}>PAYE</th>
-                <th className={`${th} text-right`}>Employee NIC</th>
-                <th className={`${th} text-right`}>Employer Pension</th>
-                <th className={`${th} text-right`}>Employee Pension</th>
-                <th className={`${th} text-right`}>HMRC Paid</th>
-                <th className={`${th} text-right`}>Pension Paid</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>Employee NIC</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>Employer Pension</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>Employee Pension</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>HMRC Paid</th>
+                <th className={`${th} text-right whitespace-normal! leading-tight`}>Pension Paid</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E3E7EF]">
