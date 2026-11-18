@@ -109,6 +109,11 @@ function reversal(actor: Actor, j: Adjustment, engagementId: string, date: strin
     auto_reverse: false,
     reverses_id: j.id,
     evidence: j.evidence,
+    // the reversal is a new, unapproved, unsent journal: none of these carry over
+    ledger: undefined,
+    self_approval_reason: undefined,
+    reject_reason: undefined,
+    reversed_by_id: undefined,
   };
 }
 
