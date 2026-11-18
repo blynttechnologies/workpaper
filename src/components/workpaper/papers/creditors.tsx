@@ -50,7 +50,7 @@ const bankList = (banks: BankChecked['banks']) => banks.map((b) => `${b.name} ($
 const bankOf = (matches: { date: string; amount_p: string; bank?: string }[], p: { date: string; amount_p: string }) =>
   (matches.find((m) => m.date === p.date && m.amount_p === p.amount_p) ?? matches.find((m) => m.date === p.date))?.bank;
 
-export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
+export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, swapEvidence }: ScheduleProps) {
   const { isOpen, toggle, show } = useOpen();
   const [filter, setFilter] = useState<'all' | 'attention' | 'done'>('all');
   const [note, setNote] = useState<{ ok: boolean; text: string; link?: { href: string; label: string } } | null>(null);
@@ -217,6 +217,22 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       tried.current.add(att.id);
       queueRead(v.s.id, att);
     }
+  });
+
+  // What the AI read belongs to the file it came from. When that file is deleted, archived or moved to another
+  // supplier, the read goes with it, and so does the balance if it is still the one the AI filled in (a typed one stays)
+  useEffect(() => {
+    if (locked) return;
+    const stale = views.filter((v) => v.s.ai_statement && !reading[v.s.id] && !filesFor(v.s.id).some((f) => f.id === v.s.ai_statement!.file));
+    if (!stale.length) return;
+    const ids = new Set(stale.map((v) => v.s.id));
+    // The file may be read again on the supplier it is moved to
+    stale.forEach((v) => tried.current.delete(v.s.ai_statement!.file));
+    save({
+      suppliers: (live().suppliers ?? []).map((s: Supplier) =>
+        ids.has(s.id) ? { ...s, ai_statement: undefined, ...(s.ai_statement?.balance_p && s.statement_p === s.ai_statement.balance_p ? { statement_p: '' } : {}) } : s
+      ),
+    });
   });
 
   const attention = (v: ReturnType<typeof supplierView>) => v.status !== 'done';
@@ -441,6 +457,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               const file = filesFor(s.id).at(-1);
               const ai = s.ai_statement;
               const aiBalance = ai?.balance_p ? asPence(ai.balance_p) : null;
+              // The supplier on this paper the statement names, when it is not this one and has no statement of its own yet
+              const owner = ai?.supplier && !sameSupplier(ai.supplier, name) ? views.find((o) => o.s.id !== s.id && sameSupplier(ai.supplier!, o.s.name) && !filesFor(o.s.id).length) : undefined;
               return (
                 <React.Fragment key={s.id}>
                   <tr
@@ -508,6 +526,20 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                                 ) : (
                                   <div className="font-bold text-[#B42318]">
                                     This statement is from {ai.supplier}, not {name}. Check it is attached to the right supplier.
+                                    {owner && !locked && swapEvidence && (
+                                      <button
+                                        type="button"
+                                        className={`${link} block ml-auto mt-0.5`}
+                                        onClick={() => {
+                                          swapEvidence(s.id, owner.s.id);
+                                          // The read and the balance it filled leave this row with the file; it is read again on the other
+                                          tried.current.delete(ai.file);
+                                          setSupplier(s.id, { ai_statement: undefined, ...(s.statement_p === ai.balance_p ? { statement_p: '' } : {}) });
+                                        }}
+                                      >
+                                        Move it to {owner.s.name}
+                                      </button>
+                                    )}
                                   </div>
                                 ))}
                               {aiBalance === v.ledger ? (
