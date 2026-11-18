@@ -112,19 +112,19 @@ export function useOpen() {
 
 export function CheckChips({ checks }: { checks: PaperResult['checks'] }) {
   return (
-    <div className="p-5 bg-white border border-[#E3E7EF] rounded-[14px] text-[#122654] flex flex-col gap-3">
+    <div className="p-3 bg-white border border-[#E3E7EF] rounded-[12px] text-[#122654] flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-lg font-bold">Checks</span>
-        <span className="text-[11px] text-[#4A5878]">Ticked automatically from the work above. No separate procedures list.</span>
+        <span className="text-sm font-bold">Checks</span>
+        <span className="text-[10px] text-[#4A5878]">Ticked automatically from the work above. No separate procedures list.</span>
       </div>
-      <div className="flex flex-wrap gap-2.5">
+      <div className="flex flex-wrap gap-1.5">
         {checks.map((c) => (
           <span
             key={c.id}
             title={c.detail}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[13px] font-semibold ${c.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : c.explanation ? 'bg-[#EEF1F6] text-[#4A5878]' : 'bg-[#FFF4DB] text-[#5C4100]'}`}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] text-[11px] font-semibold ${c.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : c.explanation ? 'bg-[#EEF1F6] text-[#4A5878]' : 'bg-[#FFF4DB] text-[#5C4100]'}`}
           >
-            {c.passed ? <Check className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4 text-[#8A5A00]" />} {c.label}
+            {c.passed ? <Check className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5 text-[#8A5A00]" />} {c.label}
           </span>
         ))}
       </div>

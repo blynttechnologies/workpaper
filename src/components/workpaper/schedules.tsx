@@ -155,8 +155,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const src = sourcesOf(l.code);
     return src.length > 0 && !accounts.some((a) => a.code === l.code && !a.client_code) ? src.filter((m) => !accounts.some((a) => a.code === l.code && a.client_code === m.source_code)).map((m) => ({ l, m })) : [];
   });
-  const tile = 'p-4 bg-white border border-[#E3E7EF] rounded-[14px]';
-  const rth = 'p-3 text-xs font-semibold text-[#4A5878] whitespace-nowrap';
+  const tile = 'p-3 bg-white border border-[#E3E7EF] rounded-[12px] min-w-0';
+  const rth = 'p-2 text-[11px] font-semibold text-[#4A5878] whitespace-nowrap';
   const pill = {
     todo: 'bg-[#EEF1F6] text-[#4A5878]',
     out: 'bg-[#FFF1EE] text-[#B42318]',
@@ -169,12 +169,12 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className={tile}>
-          <div className="text-sm text-[#4A5878]">Ledger balance (all accounts)</div>
-          <div className="mt-1 text-2xl font-bold font-mono text-[#122654] whitespace-nowrap">{signed(tot('ledger'))}</div>
+          <div className="text-xs text-[#4A5878]">Ledger balance (all accounts)</div>
+          <div className="mt-0.5 text-lg font-bold font-mono text-[#122654] whitespace-nowrap">{signed(tot('ledger'))}</div>
         </div>
         <div className={tile}>
-          <div className="text-sm text-[#4A5878]">Accounts reconciled</div>
-          <div className="mt-1 text-2xl font-bold text-[#122654]">
+          <div className="text-xs text-[#4A5878]">Accounts reconciled</div>
+          <div className="mt-0.5 text-lg font-bold text-[#122654]">
             {reconciled} of {rows.length}
           </div>
           <div role="progressbar" aria-label="Accounts reconciled" aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={reconciled} className="mt-2 h-1.5 rounded-full bg-[#E3E7EF] overflow-hidden">
@@ -182,31 +182,31 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
           </div>
         </div>
         <div className={tile}>
-          <div className="text-sm text-[#4A5878]">Unexplained difference</div>
-          <div className={`mt-1 text-2xl font-bold font-mono ${tot('unexplained') > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{formatPence(tot('unexplained'))}</div>
+          <div className="text-xs text-[#4A5878]">Unexplained difference</div>
+          <div className={`mt-0.5 text-lg font-bold font-mono ${tot('unexplained') > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{formatPence(tot('unexplained'))}</div>
         </div>
         <div className={`${tile} flex items-center gap-4`}>
-          <span className="flex items-center justify-center w-11 h-11 shrink-0 rounded-[10px] bg-[#F5F8FD] text-[#122654]">
-            <Paperclip className="w-5 h-5" />
+          <span className="flex items-center justify-center w-9 h-9 shrink-0 rounded-[10px] bg-[#F5F8FD] text-[#122654]">
+            <Paperclip className="w-4 h-4" />
           </span>
           <div>
-            <div className="text-sm text-[#4A5878]">Evidence attached</div>
-            <div className="mt-1 text-2xl font-bold text-[#122654]">
+            <div className="text-xs text-[#4A5878]">Evidence attached</div>
+            <div className="mt-0.5 text-lg font-bold text-[#122654]">
               {withEvidence} of {rows.length}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 p-4 bg-white border border-[#E3E7EF] rounded-[14px]">
+      <div className="flex flex-col gap-2 p-3 bg-white border border-[#E3E7EF] rounded-[12px]">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-bold text-[#122654]">Accounts ({rows.length})</h2>
+          <h2 className="text-base font-bold text-[#122654]">Accounts ({rows.length})</h2>
           {!locked && unused.length + unusedSources.length > 0 && (
             <select
               aria-label="Add account"
               value=""
               onChange={(e) => addAccount(e.target.value)}
-              className="min-h-[40px] px-4 text-sm font-bold text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[10px] cursor-pointer"
+              className="max-w-[220px] min-h-[32px] px-3 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[8px] cursor-pointer"
             >
               <option value="">+ Add account</option>
               {unusedSources.map(({ l, m }) => (
@@ -241,13 +241,13 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-[#122654]">
+          <table className="w-full text-xs text-[#122654]">
             <thead className="border-b border-[#E3E7EF]">
               <tr>
-                <th className="w-10" />
+                <th className="w-8" />
                 <th className={`${rth} text-left`}>Account</th>
                 <th className={`${rth} text-right`}>Ledger balance</th>
-                <th className={`${rth} text-center w-[160px]`}>Statement / count</th>
+                <th className={`${rth} text-center w-[130px]`}>Statement / count</th>
                 <th className={`${rth} text-right`}>Difference</th>
                 <th className={`${rth} text-left`}>Status</th>
                 <th className={`${rth} text-left`}>Evidence</th>
@@ -257,7 +257,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
             <tbody className="divide-y divide-[#E3E7EF]">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-3 text-xs text-[#7E8DA6]">
+                  <td colSpan={8} className="p-2 text-xs text-[#7E8DA6]">
                     No bank, card or cash accounts in the trial balance yet. Add one above once the trial balance is mapped.
                   </td>
                 </tr>
@@ -281,23 +281,23 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                       onDragLeave={() => setDragOver(null)}
                       onDrop={(e) => onDrop(e, a.id)}
                     >
-                      <td className="p-2 align-top">
+                      <td className="p-1.5 align-top">
                         <button
                           type="button"
                           aria-expanded={isOpen}
                           aria-label={`${isOpen ? 'Hide' : 'Show'} reconciling items for ${name}`}
                           onClick={() => setOpen((o) => ({ ...o, [a.id]: !isOpen }))}
-                          className="p-1.5 rounded-[8px] border border-[#E3E7EF] bg-white text-[#122654] hover:border-[#122654]"
+                          className="p-1 rounded-[6px] border border-[#E3E7EF] bg-white text-[#122654] hover:border-[#122654]"
                         >
-                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         </button>
                       </td>
-                      <td className="p-3 align-top">
+                      <td className="p-2 align-top">
                         <div className="font-bold">
                           {a.code !== '*' && <span className="font-mono mr-1.5">{single?.blynt_code ?? rowCode(a, result.engagementId)}</span>}
                           {single ? single.source_name || single.source_code : a.name}
                         </div>
-                        <div className="text-xs text-[#4A5878]">
+                        <div className="text-[11px] text-[#4A5878]">
                           {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
                           {a.client_code || single ? ` · ${a.client_code ?? single!.source_code}` : ''}
                           {a.detail ? ` · ${a.detail}` : ''}
@@ -324,18 +324,18 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           )
                         )}
                         {note && (
-                          <div className="mt-0.5 flex items-center gap-1 text-xs text-[#B8432F]">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {note}
+                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#B8432F]">
+                            <AlertTriangle className="w-3 h-3 shrink-0" /> {note}
                           </div>
                         )}
                         {!locked && (statementEntered(a) || files.length > 0 || items > 0) && accounts.length > 1 && (
-                          <label className="mt-0.5 flex items-center gap-1 text-xs text-[#4A5878]">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-[#8A5A00]" />
+                          <label className="mt-0.5 flex items-center gap-1 text-[11px] text-[#4A5878]">
+                            <AlertTriangle className="w-3 h-3 shrink-0 text-[#8A5A00]" />
                             <select
                               aria-label={`Move the statement, items and files on ${name} to another account`}
                               value=""
                               onChange={(e) => e.target.value && moveDetails(a, e.target.value)}
-                              className="max-w-[180px] text-xs text-[#4A5878] bg-transparent border border-transparent hover:border-[#D3DCEE] rounded cursor-pointer"
+                              className="max-w-[170px] text-[11px] text-[#4A5878] bg-transparent border border-transparent hover:border-[#D3DCEE] rounded cursor-pointer"
                             >
                               <option value="">Wrong account? Move to…</option>
                               {accounts.filter((x) => x.id !== a.id).map((x) => (
@@ -347,7 +347,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           </label>
                         )}
                       </td>
-                      <td className="p-3 align-top text-right">
+                      <td className="p-2 align-top text-right">
                         <div className="font-mono font-semibold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
                           {signed(ledger.final)}
                         </div>
@@ -380,7 +380,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           <div className="text-right text-[11px] font-semibold text-[#8A5A00]">Not the year end ({ukDate(periodEnd)})</div>
                         )}
                       </td>
-                      <td className="p-3 align-top text-right">
+                      <td className="p-2 align-top text-right">
                         <div className={`font-mono font-semibold whitespace-nowrap ${!entered ? 'text-[#7E8DA6]' : abs(diff) > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{entered ? formatPence(diff) : '—'}</div>
                         {items > 0 && (
                           <button type="button" onClick={() => setOpen((o) => ({ ...o, [a.id]: true }))} className="text-[11px] text-[#1D4E89] underline whitespace-nowrap">
@@ -388,8 +388,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                           </button>
                         )}
                       </td>
-                      <td className="p-3 align-top">
-                        <span className={`inline-block px-3 py-1 rounded-[8px] text-xs font-semibold whitespace-nowrap ${pill[status]}`}>{pillLabel[status]}</span>
+                      <td className="p-2 align-top">
+                        <span className={`inline-block px-2 py-0.5 rounded-[6px] text-[11px] font-semibold whitespace-nowrap ${pill[status]}`}>{pillLabel[status]}</span>
                       </td>
                       <td className="p-2 align-top">
                         {files.length === 0 && !locked ? (
@@ -398,9 +398,9 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                             onClick={() => attachTo(a.id)}
                             title={`Attach the ${kind === 'cash' ? 'count sheet' : 'statement'}, or drop it on this row`}
                             aria-label={`Attach ${kind === 'cash' ? 'count sheet' : 'statement'} for ${name}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#122654] border border-dashed border-[#B9C4D8] hover:border-[#122654] rounded-[8px] whitespace-nowrap"
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-[#122654] border border-dashed border-[#B9C4D8] hover:border-[#122654] rounded-[8px] whitespace-nowrap"
                           >
-                            <Upload className="w-3.5 h-3.5" /> Attach
+                            <Upload className="w-3 h-3" /> Attach
                           </button>
                         ) : (
                           <div className="flex flex-col gap-1 text-xs">
@@ -460,7 +460,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                     {isOpen && (
                       <tr>
                         <td colSpan={8} className="px-2 pb-3">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] text-sm">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[10px] text-xs">
                             {/* One list: a deposit in transit is entered as a negative payment */}
                             <div>
                               <div className="flex items-center justify-between font-bold mb-1">
@@ -506,12 +506,12 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                             </div>
                             <div className="flex flex-col gap-3 md:pl-5 md:border-l md:border-[#D3DCEE] text-xs">
                               <label className="flex flex-col gap-1">
-                                <span className="text-sm font-bold">Bank or provider</span>
+                                <span className="font-bold">Bank or provider</span>
                                 <TextInput label={`Bank or provider for ${name}`} value={a.detail} disabled={locked} placeholder="e.g. Starling Business Current Account" onCommit={(v) => updateAcc(a.id, { detail: v })} />
                               </label>
                               {kind !== 'cash' && (
                                 <label className="flex flex-col gap-1">
-                                  <span className="text-sm font-bold">Balance per bank confirmation (optional)</span>
+                                  <span className="font-bold">Balance per bank confirmation (optional)</span>
                                   <MoneyInput label={`Bank confirmation for ${name}`} value={a.confirmation_p} disabled={locked} onCommit={(p) => updateAcc(a.id, { confirmation_p: p })} />
                                 </label>
                               )}
@@ -528,17 +528,17 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
               <tfoot className="bg-[#F5F8FD] font-bold">
                 <tr>
                   <td />
-                  <td className="p-3">
+                  <td className="p-2">
                     Total · {rows.length} account{rows.length === 1 ? '' : 's'}
                   </td>
-                  <td className="p-3 text-right font-mono whitespace-nowrap">{signed(tot('ledger'))}</td>
-                  <td className="p-3 text-right font-mono whitespace-nowrap">{signed(tot('statement'))}</td>
-                  <td className={`p-3 text-right font-mono whitespace-nowrap ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
+                  <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('ledger'))}</td>
+                  <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('statement'))}</td>
+                  <td className={`p-2 text-right font-mono whitespace-nowrap ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
                     {formatPence(rows.filter((r) => r.entered).reduce((acc, r) => acc + abs(r.diff), 0n))}
                     {todo ? ` + ${todo} to do` : ''}
                   </td>
                   <td />
-                  <td className="p-3 text-xs font-normal text-[#4A5878] whitespace-nowrap" colSpan={2}>
+                  <td className="p-2 text-xs font-normal text-[#4A5878] whitespace-nowrap" colSpan={2}>
                     {withEvidence} of {rows.length} attached
                   </td>
                 </tr>
@@ -657,14 +657,14 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const pct = tot('positive') > 0n ? Number((tot('collected') * 100n) / tot('positive')) : 0;
   const days = result.totals.debtor_days;
   const daysPy = result.totals.debtor_days_py;
-  const tile = 'p-4 bg-white border border-[#E3E7EF] rounded-[14px]';
-  const tileLabel = 'text-sm text-[#4A5878]';
-  const tileValue = 'mt-1 text-2xl font-bold';
-  const tileSub = 'mt-1 text-sm text-[#4A5878]';
-  const dth = 'p-3 text-xs font-semibold text-[#4A5878] whitespace-nowrap';
+  const tile = 'p-3 bg-white border border-[#E3E7EF] rounded-[12px] min-w-0';
+  const tileLabel = 'text-xs text-[#4A5878]';
+  const tileValue = 'mt-0.5 text-lg font-bold';
+  const tileSub = 'mt-0.5 text-[11px] text-[#4A5878]';
+  const dth = 'p-2 text-[11px] font-semibold text-[#4A5878] whitespace-nowrap';
   const money = (p: bigint) => (p === 0n ? '–' : formatPence(p, { symbol: '', accountingFormat: true }));
-  const btn = 'px-3 py-1.5 text-xs font-bold rounded-[8px]';
-  const chip = 'px-3 py-1 rounded-[8px] text-xs font-semibold';
+  const btn = 'px-2.5 py-1 text-[11px] font-bold rounded-[6px]';
+  const chip = 'px-2 py-0.5 rounded-[6px] text-[11px] font-semibold';
 
   // Choosing how much to provide: a share of what is still due, a custom amount, or the AI's suggestion
   const [picking, setPicking] = useState<string | null>(null);
@@ -778,7 +778,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         <div className={tile}>
           <div className={tileLabel}>Aged report vs control account</div>
           <div className={`${tileValue} flex items-center gap-2 ${controlCheck?.passed ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>
-            {controlCheck?.passed ? <CheckCircle2 className="w-6 h-6 shrink-0" /> : <AlertTriangle className="w-6 h-6 shrink-0" />}
+            {controlCheck?.passed ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
             {controlCheck?.passed ? 'Agrees' : 'Differs'}
           </div>
           <div className={tileSub}>{controlCheck?.passed ? `${formatPence(tot('control'))} both` : `Difference ${formatPence(tot('difference'))}`}</div>
@@ -805,7 +805,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         <div className={tile}>
           <div className={tileLabel}>Debtor days</div>
           <div className={`${tileValue} text-[#122654]`}>{days !== undefined ? String(days) : '–'}</div>
-          <div className={`mt-1 text-sm ${days !== undefined && daysPy !== undefined && days > daysPy ? 'text-[#B8432F]' : 'text-[#4A5878]'}`}>
+          <div className={`mt-0.5 text-[11px] ${days !== undefined && daysPy !== undefined && days > daysPy ? 'text-[#B8432F]' : 'text-[#4A5878]'}`}>
             {days === undefined
               ? 'Needs revenue and debtors in the TB'
               : daysPy === undefined
@@ -816,10 +816,10 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       </div>
 
       {pending.length > 0 && (
-        <div className="p-4 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[14px] flex flex-col sm:flex-row sm:items-center gap-4">
-          <Sparkles className="w-7 h-7 shrink-0 text-[#FF7A66]" />
-          <div className="flex-1 text-sm text-[#122654]">
-            <div className="text-base font-bold">
+        <div className="p-3 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] flex flex-col sm:flex-row sm:items-center gap-3">
+          <Sparkles className="w-5 h-5 shrink-0 text-[#FF7A66]" />
+          <div className="flex-1 text-xs text-[#122654]">
+            <div className="text-sm font-bold">
               {pending.length} suggestion{pending.length === 1 ? '' : 's'} ready
             </div>
             <div className="text-[#4A5878] mt-0.5">
@@ -833,7 +833,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
             </div>
           </div>
           {!locked && (
-            <button type="button" onClick={acceptAll} className="shrink-0 min-h-[40px] px-5 text-sm font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[10px]">
+            <button type="button" onClick={acceptAll} className="shrink-0 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[10px]">
               {pending.length === 1 ? 'Accept suggestion' : 'Accept all suggestions'}
             </button>
           )}
@@ -848,7 +848,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
               type="button"
               aria-pressed={filter === key}
               onClick={() => setFilter(key)}
-              className={`px-4 py-2 rounded-full text-sm font-semibold border ${filter === key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE] hover:border-[#122654]'}`}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border ${filter === key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE] hover:border-[#122654]'}`}
             >
               {key === 'over90' ? oldestLabel : label} ({count(key)})
             </button>
@@ -856,23 +856,23 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
           {!locked && (
             <div className="ml-auto flex flex-wrap items-center gap-2">
               {hasOpenItems && (
-                <label className="flex items-center gap-2 text-sm text-[#4A5878]">
+                <label className="flex items-center gap-1.5 text-xs text-[#4A5878]">
                   Age by
                   <select
                     value={data.basis === 'invoice' ? 'invoice' : 'due'}
                     onChange={(e) => refresh(e.target.value as 'due' | 'invoice')}
-                    className="min-h-[38px] px-3 text-sm font-semibold border border-[#D3DCEE] rounded-[10px] bg-white text-[#122654] cursor-pointer"
+                    className="min-h-[32px] px-2 text-xs font-semibold border border-[#D3DCEE] rounded-[8px] bg-white text-[#122654] cursor-pointer"
                   >
                     <option value="due">Due date</option>
                     <option value="invoice">Invoice date</option>
                   </select>
                 </label>
               )}
-              <button type="button" onClick={() => refresh()} className={`${addBtn} min-h-[38px] rounded-[10px] text-sm`}>
-                <RefreshCw className="w-4 h-4" /> Refresh from ledger
+              <button type="button" onClick={() => refresh()} className={`${addBtn}`}>
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
               </button>
-              <button type="button" onClick={addCustomer} className={`${addBtn} min-h-[38px] rounded-[10px] text-sm`}>
-                <Plus className="w-4 h-4" /> Add customer
+              <button type="button" onClick={addCustomer} className={`${addBtn}`}>
+                <Plus className="w-3.5 h-3.5" /> Add customer
               </button>
             </div>
           )}
@@ -881,11 +881,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         {note && <div className={`text-xs ${note.kind === 'ok' ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
       </div>
 
-      <div className="overflow-x-auto bg-white border border-[#E3E7EF] rounded-[14px]">
-        <table className="w-full text-sm text-[#122654]">
+      <div className="overflow-x-auto bg-white border border-[#E3E7EF] rounded-[12px]">
+        <table className="w-full text-xs text-[#122654]">
           <thead className="bg-[#F5F8FD]">
             <tr>
-              <th className="w-10" />
+              <th className="w-8" />
               <th className={`${dth} text-left`}>Customer</th>
               {BUCKETS.map((b) => (
                 <th key={b} className={`${dth} text-right`}>
@@ -900,14 +900,14 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
           <tbody className="divide-y divide-[#E3E7EF]">
             {views.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-4 text-xs text-[#7E8DA6]">
+                <td colSpan={9} className="p-2 text-[11px] text-[#7E8DA6]">
                   No customers yet. Refresh from the ledger, or add customers by hand.
                 </td>
               </tr>
             )}
             {views.length > 0 && shown.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-4 text-xs text-[#7E8DA6]">
+                <td colSpan={9} className="p-2 text-[11px] text-[#7E8DA6]">
                   No customers match this filter.
                 </td>
               </tr>
@@ -929,51 +929,51 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                       if (files.length && !locked && dropFiles) dropFiles(files, l.id);
                     }}
                   >
-                    <td className="p-2 align-top">
+                    <td className="p-1.5 align-top">
                       <button
                         type="button"
                         aria-expanded={isOpen}
                         aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${name}`}
                         onClick={() => setOpen((o) => ({ ...o, [l.id]: !isOpen }))}
-                        className="p-1.5 rounded-[8px] text-[#122654] hover:bg-[#F5F8FD]"
+                        className="p-1 rounded-[6px] text-[#122654] hover:bg-[#F5F8FD]"
                       >
-                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </button>
                     </td>
-                    <td className="p-3 align-top">
-                      <div className="text-base font-bold">{name}</div>
+                    <td className="p-2 align-top">
+                      <div className="text-[13px] font-bold">{name}</div>
                       {items ? (
-                        <div className="text-xs text-[#4A5878]">
+                        <div className="text-[11px] text-[#4A5878]">
                           {items} item{items === 1 ? '' : 's'}
                           {l.oldest_days ? (byDue ? ` · most overdue ${l.oldest_days} days` : ` · oldest ${l.oldest_days} days`) : ''}
                         </div>
                       ) : null}
                     </td>
                     {[v.cur, v.d30, v.d60, v.d90].map((p, i) => (
-                      <td key={i} className="p-3 align-top text-right font-mono whitespace-nowrap">
+                      <td key={i} className="p-2 align-top text-right font-mono whitespace-nowrap">
                         <span className={i === 3 && p > 0n && v.suggestion?.kind === 'provide' ? 'px-2 py-0.5 rounded-[6px] bg-[#FFF1EE] text-[#B42318]' : ''}>{money(p)}</span>
                       </td>
                     ))}
-                    <td className="p-3 align-top text-right font-mono font-bold whitespace-nowrap">{money(v.total)}</td>
-                    <td className="p-3 align-top text-right">
+                    <td className="p-2 align-top text-right font-mono font-bold whitespace-nowrap">{money(v.total)}</td>
+                    <td className="p-2 align-top text-right">
                       <div className={`font-mono font-semibold whitespace-nowrap ${v.total > 0n && v.after === 0n ? 'text-[#B42318]' : v.total > 0n && v.after >= v.total ? 'text-[#0B6B52]' : ''}`}>
                         {v.total > 0n && v.after === 0n ? 'Nil' : money(v.after)}
                       </div>
                       {l.receipts?.length ? (
-                        <button type="button" onClick={() => setOpen((o) => ({ ...o, [l.id]: true }))} className="text-xs text-[#1D4E89] underline whitespace-nowrap">
+                        <button type="button" onClick={() => setOpen((o) => ({ ...o, [l.id]: true }))} className="text-[11px] text-[#1D4E89] underline whitespace-nowrap">
                           {l.receipts.length} bank line{l.receipts.length === 1 ? '' : 's'}
                         </button>
                       ) : null}
                     </td>
-                    <td className="p-3 align-top text-right">{recoverability(v)}</td>
+                    <td className="p-2 align-top text-right">{recoverability(v)}</td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={9} className="px-4 pb-4">
+                      <td colSpan={9} className="px-3 pb-3">
                         <div className="p-3 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] flex flex-col gap-3 text-xs">
                           {v.suggestion && (
-                            <div className="px-1 text-sm text-[#122654] flex items-start gap-2">
-                              <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#FF7A66]" /> {v.suggestion.why}
+                            <div className="px-1 text-xs text-[#122654] flex items-start gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#FF7A66]" /> {v.suggestion.why}
                             </div>
                           )}
                           {!l.invoices?.length && (
@@ -1033,17 +1033,17 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
             <tfoot className="bg-[#F5F8FD] border-t border-[#E3E7EF] font-bold">
               <tr>
                 <td />
-                <td className="p-3">
+                <td className="p-2">
                   Total · {views.length} customer{views.length === 1 ? '' : 's'}
                 </td>
                 {(['cur', 'd30', 'd60', 'd90', 'total'] as const).map((k) => (
-                  <td key={k} className={`p-3 text-right font-mono whitespace-nowrap ${k === 'd90' && views.some((v) => v.d90 > 0n) ? 'text-[#B42318]' : ''}`}>
+                  <td key={k} className={`p-2 text-right font-mono whitespace-nowrap ${k === 'd90' && views.some((v) => v.d90 > 0n) ? 'text-[#B42318]' : ''}`}>
                     {money(views.reduce((acc, v) => acc + v[k], 0n))}
                   </td>
                 ))}
-                <td className="p-3 text-right font-mono whitespace-nowrap">{money(tot('collected'))}</td>
-                <td className="p-3 text-right">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-[8px] text-xs font-semibold whitespace-nowrap ${controlCheck?.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FFF1EE] text-[#B42318]'}`}>
+                <td className="p-2 text-right font-mono whitespace-nowrap">{money(tot('collected'))}</td>
+                <td className="p-2 text-right">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-semibold whitespace-nowrap ${controlCheck?.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FFF1EE] text-[#B42318]'}`}>
                     {controlCheck?.passed ? <Check className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
                     {controlCheck?.passed ? 'Agrees to control account' : 'Differs from control account'} {formatPence(tot('control'))}
                   </span>
@@ -1054,10 +1054,10 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         </table>
       </div>
 
-      <div className="p-5 bg-white border border-[#E3E7EF] rounded-[14px] text-sm text-[#122654]">
+      <div className="p-3 bg-white border border-[#E3E7EF] rounded-[12px] text-xs text-[#122654]">
         <div className="flex items-baseline justify-between gap-2 mb-1">
-          <span className="text-lg font-bold">Adjustments</span>
-          <span className="text-xs text-[#4A5878]">Built from your decisions above</span>
+          <span className="text-sm font-bold">Adjustments</span>
+          <span className="text-[11px] text-[#4A5878]">Built from your decisions above</span>
         </div>
         {journalLines.length === 0 ? (
           <div className="text-[#4A5878]">
@@ -1098,7 +1098,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
               ) : (
                 <>
                   {!locked && (
-                    <button type="button" disabled={sending} onClick={sendJournal} className="min-h-[38px] px-4 text-sm font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[10px] disabled:opacity-50">
+                    <button type="button" disabled={sending} onClick={sendJournal} className="min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[10px] disabled:opacity-50">
                       {sending ? 'Sending…' : 'Send to journals'}
                     </button>
                   )}
