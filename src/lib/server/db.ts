@@ -118,6 +118,15 @@ class Database {
     for (const k of Database.COLLECTIONS) {
       if (Array.isArray(state[k])) (this as any)[k] = state[k];
     }
+    // Older reversals copied the approval and Xero state of the journal they reverse: drop the copies.
+    // One already marked in_ledger off a copied Xero id is left alone: changing its status needs a person.
+    for (const r of this.adjustments) {
+      if (!r.reverses_id || r.status === 'in_ledger') continue;
+      const original = this.adjustments.find((a) => a.id === r.reverses_id);
+      if (r.ledger && r.ledger.id === original?.ledger?.id) delete r.ledger; // its own send has its own Xero id
+      if (r.approved_by !== r.proposed_by) delete r.self_approval_reason;
+      if (r.status !== 'rejected') delete r.reject_reason;
+    }
     // The standard chart always comes from the code, so a saved workspace picks up chart
     // updates; accounts the practice added itself are kept
     const standard = new Set(STANDARD_CHART.map((a) => a.code));
