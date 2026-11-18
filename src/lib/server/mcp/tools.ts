@@ -155,7 +155,9 @@ export const TOOLS: McpTool[] = [
     async run(actor, a, channel) {
       if (!WRITERS.includes(actor.role)) throw new ServiceError('Your Workpaper role is read-only.', 403, 'READONLY');
       if (!/^-?\d+(\.\d{1,2})?$/.test(String(a.statement_balance).replace(/[£,\s]/g, ''))) throw new ServiceError('statement_balance must be a plain amount such as 118402.17.', 400);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.statement_date)) throw new ServiceError('statement_date must be YYYY-MM-DD.', 400);
+      // Shape, then a round trip: 2026-13-45 fails to parse, and 2026-02-30 parses but comes back as 2 March
+      const day = Date.parse(a.statement_date);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.statement_date) || Number.isNaN(day) || new Date(day).toISOString().slice(0, 10) !== a.statement_date) throw new ServiceError('statement_date must be a real date, as YYYY-MM-DD.', 400);
       const balance = toPence(String(a.statement_balance).replace(/[£,\s]/g, '')).toString();
       return freshWrite(() => {
         const wp = workpaperFor(actor, a.workpaper_id);
@@ -191,6 +193,11 @@ export const TOOLS: McpTool[] = [
         data.values_to_confirm_count = items.filter((i) => !i.confirmed).length;
         wp.data_json = data;
         wp.updated_at = new Date().toISOString();
+        // As with an edit in the app (updateWorkpaperData): a sign-off does not cover a figure added after it
+        for (const s of db.signoffs.filter((x) => x.workpaper_id === wp.id && !x.stale_at)) {
+          s.stale_at = wp.updated_at;
+          s.stale_reason = `Draft figure from ${channel} for ${actor.name} on ${new Date().toLocaleDateString('en-GB')}`;
+        }
         db.logAudit(actor.firmId, actor, 'MCP_RECONCILIATION_DRAFT', 'workpapers', wp.id, null, { field, balance_p: balance, statement_date: a.statement_date, channel, source: a.source }, `Draft from ${channel}`);
         return { filled: true, workpaper_id: wp.id, field, balance: pounds(balance), status: 'Unconfirmed: a person must confirm it in Workpaper before sign-off.' };
       });

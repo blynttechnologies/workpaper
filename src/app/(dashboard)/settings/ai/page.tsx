@@ -20,6 +20,8 @@ interface Data {
   month_spend_usd: number;
   usage: { total: Bucket; by_provider: Record<string, Bucket>; by_module: Record<string, Bucket>; by_channel: Record<string, Bucket>; by_task: Record<string, Bucket>; failures: any[] };
   recent: any[];
+  usage_capped?: boolean;
+  limit_usd: number | null;
   mcp: { server_enabled: boolean; practice_enabled: boolean; url: string; tools: { name: string; title: string; write: boolean; enabled: boolean }[] };
 }
 
@@ -178,7 +180,7 @@ export default function AiControlCentre() {
       <section className={card}>
         <div className="flex items-baseline justify-between">
           <h2 className={h2}>Usage, last {data.days} days</h2>
-          <span className={muted}>This month: {usd(data.month_spend_usd)}{s.monthly_limit_usd != null ? ` of ${usd(s.monthly_limit_usd)} limit` : ''}</span>
+          <span className={muted}>This month: {usd(data.month_spend_usd)}{data.limit_usd != null ? ` of ${usd(data.limit_usd)} limit` : ''}</span>
         </div>
         <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
@@ -200,8 +202,9 @@ export default function AiControlCentre() {
           <UsageTable title="By channel" rows={data.usage.by_channel} />
         </div>
         {data.usage.total.unpriced > 0 && <p className={`${muted} mt-3`}>* Some requests used a model with no price set. Add it to AI_PRICES on the server to cost them.</p>}
+        {data.usage_capped && <p className={`${muted} mt-3`}>These totals cover only the most recent requests in the period, so they are lower than the true figures. Choose a shorter period, or export the log for the full detail.</p>}
         <label className="mt-5 flex items-center gap-2 text-xs text-[#122654]">
-          Monthly spending limit (USD, empty for none)
+          Monthly spending limit (USD, {s.monthly_limit_usd == null && data.limit_usd != null ? `empty for the standard ${usd(data.limit_usd)}` : 'empty for none'})
           <input className={`${select} w-28`} value={limit} onChange={(e) => setLimit(e.target.value)} inputMode="decimal" />
           <button type="button" className="font-bold text-[#1D4E89] hover:underline cursor-pointer" onClick={() => save({ monthly_limit_usd: limit.trim() === '' ? null : Number(limit) }, 'Limit saved')}>
             Save

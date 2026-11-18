@@ -58,7 +58,7 @@ export const openaiProvider: Provider = {
         signal: AbortSignal.timeout(c.timeoutMs),
       });
     } catch (err) {
-      if ((err as Error).name === 'TimeoutError' || (err as Error).name === 'AbortError') throw new AiError('OpenAI took too long to answer.', 'timeout', true);
+      if ((err as Error).name === 'TimeoutError' || (err as Error).name === 'AbortError') throw new AiError('OpenAI took too long to answer.', 'timeout'); // not retried: the gateway falls back
       throw new AiError('Could not reach OpenAI.', 'provider', true);
     }
     const json = (await res.json().catch(() => ({}))) as {

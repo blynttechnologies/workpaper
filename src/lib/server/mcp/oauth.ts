@@ -15,6 +15,23 @@ export const SCOPES = ['workpaper.read', 'workpaper.draft'] as const;
 const CODE_TTL_S = 10 * 60;
 const ACCESS_TTL_S = 60 * 60;
 const REFRESH_TTL_S = 30 * 24 * 60 * 60;
+// A registration nobody connects with lapses; every token issued renews it (longer than a refresh token lives)
+const CLIENT_TTL_S = 90 * 24 * 60 * 60;
+
+// shortcut: per-instance limit (each Lambda instance counts alone); move to a shared store if abuse is seen
+const hits = new Map<string, { n: number; until: number }>();
+/** True once `key` has made more than `limit` requests in the current minute. */
+export function limited(key: string, limit: number): boolean {
+  const now = Date.now();
+  const h = hits.get(key);
+  if (!h || h.until < now) {
+    // Keys can be IP addresses, so finished windows are dropped before the map grows without end
+    if (hits.size > 5000) for (const [k, v] of hits) if (v.until < now) hits.delete(k);
+    hits.set(key, { n: 1, until: now + 60_000 });
+    return false;
+  }
+  return ++h.n > limit;
+}
 
 /** The whole outside-assistant feature is off unless MCP_ENABLED=1 on the server. */
 export const mcpServerEnabled = () => process.env.MCP_ENABLED === '1';
@@ -34,6 +51,8 @@ export interface Grant {
   user_id: string;
   firm_id: string;
   scope: string;
+  /** One per connection, carried through every refresh, so revoking any of its tokens ends all of them */
+  grant_id?: string;
 }
 
 // ---------------------------------------------------------------- storage (Postgres, or memory without a database)
@@ -77,6 +96,13 @@ async function take<T>(id: string): Promise<T | null> {
   return rows[0]?.data ?? null;
 }
 
+/** Drops everything past its expiry: used codes and tokens are deleted on use, unused ones only here. */
+async function sweep() {
+  if (!hasDatabase()) {
+    for (const [id, r] of memory) if (r.expires_at && r.expires_at < Date.now()) memory.delete(id);
+  } else await query('DELETE FROM oauth_records WHERE expires_at < now()');
+}
+
 async function remove(id: string) {
   if (!hasDatabase()) memory.delete(id);
   else await query('DELETE FROM oauth_records WHERE id = $1', [id]);
@@ -114,7 +140,7 @@ export async function registerClient(body: { client_name?: unknown; redirect_uri
     redirect_uris: uris,
     created_at: new Date().toISOString(),
   };
-  await put(`client:${client.client_id}`, 'client', client, null);
+  await put(`client:${client.client_id}`, 'client', client, CLIENT_TTL_S);
   return client;
 }
 
@@ -158,7 +184,11 @@ export async function createCode(r: AuthRequest, user: { id: string; firmId: str
 
 // ---------------------------------------------------------------- tokens
 
-async function issue(g: Grant) {
+async function issue(grant: Grant) {
+  const g = { ...grant, grant_id: grant.grant_id ?? crypto.randomUUID() };
+  await sweep();
+  const client = await getClient(g.client_id);
+  if (client) await put(`client:${g.client_id}`, 'client', client, CLIENT_TTL_S);
   const access = `wpa_${random()}`;
   const refresh = `wpr_${random()}`;
   await put(`at:${hash(access)}`, 'access', g, ACCESS_TTL_S);
@@ -184,7 +214,16 @@ export async function refreshTokens(p: { refresh_token?: string; client_id?: str
 
 export const verifyAccessToken = (token: string) => get<Grant>(`at:${hash(token)}`);
 
+/** Ends the whole connection: the token given, its pair, and any still-live tokens from earlier refreshes. */
 export async function revoke(token: string) {
-  await remove(`at:${hash(token)}`);
-  await remove(`rt:${hash(token)}`);
+  const ids = [`at:${hash(token)}`, `rt:${hash(token)}`];
+  const g = (await get<Grant>(ids[0])) ?? (await get<Grant>(ids[1]));
+  for (const id of ids) await remove(id);
+  if (!g?.grant_id) return; // a token issued before connections had an id: only itself
+  if (!hasDatabase()) {
+    for (const [id, r] of memory) if ((r.data as Grant).grant_id === g.grant_id) memory.delete(id);
+    return;
+  }
+  // shortcut: no index on grant_id, a full scan of a small table; add one if oauth_records grows large
+  await query("DELETE FROM oauth_records WHERE data->>'grant_id' = $1", [g.grant_id]);
 }

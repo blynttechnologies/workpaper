@@ -140,6 +140,8 @@ describe('single mode, retries and fallback', () => {
     providers.openai = { ...O.p, configured: () => false };
     A.queue.push({ stop: 'max_tokens', text: '{"answer":"tru' });
     await expect(run(schemaTask, { q: 'hi' }, ctx)).rejects.toMatchObject({ code: 'truncated' });
+    // The provider billed for it, so the error row carries the tokens and the cost
+    expect(memoryRequests[0]).toMatchObject({ status: 'error', error_code: 'truncated', input_tokens: 1000, output_tokens: 500, cost_usd: 0.014 });
   });
 
   it('stops at the practice monthly limit and logs the blocked request', async () => {
@@ -149,6 +151,16 @@ describe('single mode, retries and fallback', () => {
     await expect(run(schemaTask, { q: 'two' }, ctx)).rejects.toMatchObject({ code: 'limit' });
     expect(memoryRequests.at(-1)).toMatchObject({ status: 'blocked', error_code: 'limit' });
     expect(A.calls).toHaveLength(1);
+  });
+
+  it('a practice with no limit of its own gets the server default; its own limit wins', async () => {
+    vi.stubEnv('AI_DEFAULT_LIMIT_USD', '0.01');
+    A.queue.push({ text: '{"answer":"a","n":1}' }, { text: '{"answer":"b","n":2}' });
+    await run(schemaTask, { q: 'one' }, ctx); // $0.014 spent, over the default
+    await expect(run(schemaTask, { q: 'two' }, ctx)).rejects.toMatchObject({ code: 'limit' });
+    setAi({ monthly_limit_usd: 5 });
+    expect((await run(schemaTask, { q: 'three' }, ctx)).output.n).toBe(2);
+    vi.unstubAllEnvs();
   });
 });
 
@@ -262,6 +274,9 @@ describe('OpenAI adapter errors', () => {
     await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'provider', retryable: false, message: expect.stringMatching(/no credit left/) });
     reply(429, { error: { type: 'requests', message: 'Rate limit reached' } });
     await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'rate_limited', retryable: true });
+    // A timeout goes straight to the next provider: three waits on one would outlast the Lambda
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+    await expect(openaiProvider.call(c)).rejects.toMatchObject({ code: 'timeout', retryable: false });
     vi.restoreAllMocks();
   });
 });

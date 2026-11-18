@@ -64,8 +64,10 @@ export async function listRequests(firmId: string, sinceIso: string, limit = 500
 export const monthStart = (now = new Date()) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 
 export async function monthSpendUsd(firmId: string): Promise<number> {
-  const rows = await listRequests(firmId, monthStart(), 100000);
-  return rows.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
+  if (!hasDatabase()) return (await listRequests(firmId, monthStart(), 100000)).reduce((s, r) => s + (r.cost_usd ?? 0), 0);
+  // Summed in the database: this runs before every AI call, so it must not fetch the month's rows
+  const rows = await query<{ spend: string }>("SELECT COALESCE(SUM((data->>'cost_usd')::numeric), 0) AS spend FROM ai_requests WHERE firm_id = $1 AND created_at >= $2", [firmId, monthStart()]);
+  return Number(rows[0]?.spend ?? 0);
 }
 
 type Bucket = { requests: number; failed: number; input_tokens: number; output_tokens: number; cost_usd: number; unpriced: number; latency_ms: number };

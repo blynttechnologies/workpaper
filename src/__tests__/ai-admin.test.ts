@@ -11,13 +11,13 @@ describe('AI Control Centre settings', () => {
   it('keeps known settings and refuses anything else', () => {
     expect(
       parseSettings({
-        providers: { openai: { enabled: true, model: 'gpt-x.1' } },
+        providers: { openai: { enabled: true, model: 'gpt-5.4' } },
         routes: { review_workpaper: { provider: 'openai', mode: 'review', fallback: false } },
         monthly_limit_usd: 250,
         mcp: { enabled: true, disabled_tools: ['generate_report'] },
       })
     ).toEqual({
-      providers: { openai: { enabled: true, model: 'gpt-x.1' } },
+      providers: { openai: { enabled: true, model: 'gpt-5.4' } },
       routes: { review_workpaper: { provider: 'openai', mode: 'review', fallback: false } },
       monthly_limit_usd: 250,
       mcp: { enabled: true, disabled_tools: ['generate_report'] },
@@ -28,6 +28,10 @@ describe('AI Control Centre settings', () => {
     expect(() => parseSettings({ monthly_limit_usd: -1 })).toThrow(/monthly limit/);
     expect(() => parseSettings({ mcp: { disabled_tools: ['rm_rf'] } })).toThrow(/Unknown tool/);
     expect(() => parseSettings({ providers: { anthropic: { model: 'claude"; drop' } } })).toThrow(/model name/);
+    expect(() => parseSettings({ providers: { openai: null } })).toThrow(/must be an object/);
+    expect(() => parseSettings(null)).toThrow(/as an object/);
+    // A model with no price would slip under the monthly limit
+    expect(() => parseSettings({ providers: { openai: { model: 'gpt-x.1' } } })).toThrow(/No price is set/);
     // An API key is not a setting: it is ignored, never stored
     expect(parseSettings({ providers: { openai: { api_key: 'sk-secret' } } })).toEqual({ providers: { openai: {} } });
   });
