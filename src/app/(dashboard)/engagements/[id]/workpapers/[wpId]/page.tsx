@@ -1005,7 +1005,7 @@ export default function WorkpaperPage() {
           <div className="py-1 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="min-w-0 flex items-center gap-3">
               <span className="flex items-center justify-center w-11 h-11 shrink-0 rounded-[10px] bg-[#FFF1EE] text-[#B8432F]">
-                {t.kind === 'reconciliation' ? <Landmark className="w-6 h-6" /> : t.ref === 'C-10' ? <Layers className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                {t.kind === 'reconciliation' ? <Landmark className="w-6 h-6" /> : t.ref === 'C-10' || t.ref === 'C-20' ? <Layers className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
               </span>
               <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
