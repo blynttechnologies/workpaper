@@ -229,22 +229,22 @@ export default function JournalsPage() {
       <PreviewModal file={preview} onClose={() => setPreview(null)} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#122654]">Journals</h1>
-          <p className="text-sm text-[#4A5878] mt-1">Create, review and approve journal adjustments.</p>
-          <p className="text-xs text-[#4A5878] mt-1">
+          <h1 className="text-xl font-bold text-[#122654]">Journals</h1>
+          <p className="text-xs text-[#4A5878] mt-0.5">Create, review and approve journal adjustments.</p>
+          <p className="text-[11px] text-[#4A5878] mt-0.5">
             Effect on profit <span className={`font-mono font-semibold ${totals.profit < 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(totals.profit)}</span>
             {' · '}net assets <span className={`font-mono font-semibold ${totals.netAssets < 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(totals.netAssets)}</span>
           </p>
         </div>
         <div className="flex gap-2">
           {canApprove && selected.size > 0 && (
-            <button type="button" disabled={busy} onClick={approveSelected} className="inline-flex items-center gap-1.5 min-h-[42px] px-4 bg-[#0B6B52] text-white text-sm font-bold rounded-[10px] cursor-pointer disabled:opacity-60">
-              <Check className="w-4 h-4" /> Approve selected ({selected.size})
+            <button type="button" disabled={busy} onClick={approveSelected} className="inline-flex items-center gap-1.5 min-h-[36px] px-4 bg-[#0B6B52] text-white text-xs font-bold rounded-[8px] cursor-pointer disabled:opacity-60">
+              <Check className="w-3.5 h-3.5" /> Approve selected ({selected.size})
             </button>
           )}
           {!locked && (
-            <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-2 min-h-[42px] px-5 bg-[#122654] text-white text-sm font-bold rounded-[10px] cursor-pointer hover:bg-[#1D4E89]">
-              <Plus className="w-4 h-4" /> New journal
+            <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-1.5 min-h-[36px] px-4 bg-[#122654] text-white text-xs font-bold rounded-[8px] cursor-pointer hover:bg-[#1D4E89]">
+              <Plus className="w-3.5 h-3.5" /> New journal
             </button>
           )}
         </div>
@@ -252,13 +252,13 @@ export default function JournalsPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {cards.map((c) => (
-          <div key={c.label} className="flex items-center gap-4 bg-white border border-[#E3E7EF] rounded-[14px] p-4">
-            <span className={`flex items-center justify-center w-11 h-11 rounded-[10px] shrink-0 ${c.tone}`}>
-              <c.icon className="w-5 h-5" />
+          <div key={c.label} className="flex items-center gap-3 bg-white border border-[#E3E7EF] rounded-[12px] p-3">
+            <span className={`flex items-center justify-center w-9 h-9 rounded-[10px] shrink-0 ${c.tone}`}>
+              <c.icon className="w-4 h-4" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-[#122654]">{c.label}</p>
-              <p className="text-2xl font-bold text-[#122654] leading-tight">{c.value}</p>
+              <p className="text-xs font-semibold text-[#122654]">{c.label}</p>
+              <p className="text-lg font-bold text-[#122654] leading-tight">{c.value}</p>
             </div>
           </div>
         ))}
@@ -274,20 +274,20 @@ export default function JournalsPage() {
         <div className="flex flex-wrap gap-2 mr-auto" role="tablist" aria-label="Status">
           {/* Only statuses that have journals, so the filter isn't a row of zeros */}
           {TABS.filter(([k]) => k === 'all' || k === tab || count(k) > 0).map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`px-4 py-2 text-sm font-semibold rounded-full cursor-pointer ${tab === k ? 'bg-[#122654] text-white' : 'bg-white border border-[#D3DCEE] text-[#122654] hover:border-[#1D4E89]/40'}`}>
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`px-3 py-1 text-xs font-semibold rounded-full cursor-pointer ${tab === k ? 'bg-[#122654] text-white' : 'bg-white border border-[#D3DCEE] text-[#122654] hover:border-[#1D4E89]/40'}`}>
               {label} ({count(k)})
             </button>
           ))}
         </div>
         <label className="relative flex-1 min-w-[200px] max-w-sm">
           <span className="sr-only">Search journals</span>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A5878]" />
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search journals…" className="w-full min-h-[40px] pl-9 pr-3 text-sm bg-white border border-[#D3DCEE] rounded-[10px] text-[#122654] placeholder:text-[#4A5878]" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4A5878]" />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search journals…" className="w-full min-h-[32px] pl-8 pr-3 text-xs bg-white border border-[#D3DCEE] rounded-[8px] text-[#122654] placeholder:text-[#4A5878]" />
         </label>
         <label className="relative">
           <span className="sr-only">Date</span>
-          <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A5878]" />
-          <select value={day} onChange={(e) => setDay(e.target.value)} className="min-h-[40px] pl-9 pr-3 text-sm bg-white border border-[#D3DCEE] rounded-[10px] text-[#122654] cursor-pointer">
+          <Calendar className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4A5878]" />
+          <select value={day} onChange={(e) => setDay(e.target.value)} className="min-h-[32px] pl-8 pr-3 text-xs bg-white border border-[#D3DCEE] rounded-[8px] text-[#122654] cursor-pointer">
             <option value="">All dates</option>
             {dates.map((d) => (
               <option key={d} value={d}>{ukDate(d)}</option>
@@ -296,17 +296,17 @@ export default function JournalsPage() {
         </label>
       </div>
 
-      <div className="bg-white border border-[#E3E7EF] rounded-[14px] overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#F5F8FD] text-xs font-semibold text-[#4A5878]">
+      <div className="bg-white border border-[#E3E7EF] rounded-[12px] overflow-x-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-[#F5F8FD] text-[11px] font-semibold text-[#4A5878]">
             <tr>
-              {anySelectable && <th className="py-3 px-3 w-8"><span className="sr-only">Select</span></th>}
-              <th className="py-3 px-4">Ref</th>
-              <th className="py-3 px-3">Date</th>
-              <th className="py-3 px-3">Description</th>
-              <th className="py-3 px-3 text-right">Amount</th>
-              <th className="py-3 px-3">Status</th>
-              <th className="py-3 px-4">Action</th>
+              {anySelectable && <th className="py-2 px-3 w-8"><span className="sr-only">Select</span></th>}
+              <th className="py-2 px-4">Ref</th>
+              <th className="py-2 px-3">Date</th>
+              <th className="py-2 px-3">Description</th>
+              <th className="py-2 px-3 text-right">Amount</th>
+              <th className="py-2 px-3">Status</th>
+              <th className="py-2 px-4">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF] text-[#122654]">
@@ -327,7 +327,7 @@ export default function JournalsPage() {
               return (
                 <Fragment key={j.id}>
                 <tr className={`align-top ${open ? '' : 'hover:bg-[#FAFBFD]'}`}>
-                  {anySelectable && <td className="py-4 px-3">
+                  {anySelectable && <td className="py-2.5 px-3">
                     {approvable && (
                       <input
                         type="checkbox"
@@ -342,28 +342,28 @@ export default function JournalsPage() {
                       />
                     )}
                   </td>}
-                  <td className="py-4 px-4">
-                    <button type="button" onClick={() => setOpenId(open ? null : j.id)} aria-expanded={open} title={open ? 'Hide the entries' : 'Show the debits and credits'} className="inline-flex items-center gap-2 font-bold whitespace-nowrap cursor-pointer hover:text-[#1D4E89]">
-                      {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />} {j.ref}
+                  <td className="py-2.5 px-4">
+                    <button type="button" onClick={() => setOpenId(open ? null : j.id)} aria-expanded={open} title={open ? 'Hide the entries' : 'Show the debits and credits'} className="inline-flex items-center gap-1.5 font-bold whitespace-nowrap cursor-pointer hover:text-[#1D4E89]">
+                      {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />} {j.ref}
                     </button>
                   </td>
-                  <td className="py-4 px-3 whitespace-nowrap">{ukDate(dateOf(j))}</td>
-                  <td className="py-4 px-3 max-w-[420px] break-words">
+                  <td className="py-2.5 px-3 whitespace-nowrap">{ukDate(dateOf(j))}</td>
+                  <td className="py-2.5 px-3 max-w-[420px] break-words">
                     <span className="block line-clamp-2 font-medium" title={j.narrative}>{j.narrative}</span>
                     {/* One short line here; the calculation and the reasons are in the opened row */}
-                    <span className="block text-xs text-[#4A5878] mt-0.5">
+                    <span className="block text-[11px] text-[#4A5878] mt-0.5">
                       {[j.source_schedule && `From ${j.source_schedule}`, j.reject_reason && 'Rejected', j.self_approval_reason && 'Self-approved', j.auto_reverse && 'Auto-reverses', ownWaiting && !canSelfApprove && 'Needs another approver'].filter(Boolean).join(' · ')}
                     </span>
                   </td>
-                  <td className="py-4 px-3 text-right font-mono whitespace-nowrap">{formatPence(total(j))}</td>
-                  <td className="py-4 px-3">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-[6px] whitespace-nowrap ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
+                  <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">{formatPence(total(j))}</td>
+                  <td className="py-2.5 px-3">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-[6px] whitespace-nowrap ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="py-2 px-4">
+                    <div className="flex items-center justify-end gap-1.5">
                       {primary && (
-                        <button type="button" disabled={busy} onClick={primary.run} title={primary.title} className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 bg-[#122654] text-white text-sm font-semibold rounded-[8px] whitespace-nowrap cursor-pointer hover:bg-[#1D4E89] disabled:opacity-60">
-                          <primary.icon className="w-4 h-4" /> {primary.label}
+                        <button type="button" disabled={busy} onClick={primary.run} title={primary.title} className="inline-flex items-center gap-1 min-h-[30px] px-3 bg-[#122654] text-white text-xs font-semibold rounded-[8px] whitespace-nowrap cursor-pointer hover:bg-[#1D4E89] disabled:opacity-60">
+                          <primary.icon className="w-3.5 h-3.5" /> {primary.label}
                         </button>
                       )}
                       {more > 0 && (
@@ -376,9 +376,9 @@ export default function JournalsPage() {
                             const r = e.currentTarget.getBoundingClientRect();
                             setMenu(menu?.id === j.id ? null : { id: j.id, top: r.bottom + 4, right: window.innerWidth - r.right });
                           }}
-                          className="flex items-center justify-center w-9 h-9 border border-[#D3DCEE] rounded-[8px] text-[#122654] cursor-pointer hover:bg-[#F5F8FD]"
+                          className="flex items-center justify-center w-8 h-8 border border-[#D3DCEE] rounded-[8px] text-[#122654] cursor-pointer hover:bg-[#F5F8FD]"
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          <MoreHorizontal className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -386,8 +386,8 @@ export default function JournalsPage() {
                 </tr>
                 {open && (
                   <tr>
-                    <td colSpan={7} className="px-4 pb-4 pt-0">
-                      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] p-4 text-sm">
+                    <td colSpan={7} className="px-4 pb-3 pt-0">
+                      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] bg-[#F5F8FD] border border-[#E3E7EF] rounded-[10px] p-3 text-xs">
                         <div className="space-y-1 break-words text-[#4A5878] md:pr-5 md:border-r md:border-[#D3DCEE]">
                           <p className="font-bold text-[#122654]">Narrative</p>
                           <p className="text-[#122654]">{j.narrative}</p>
@@ -395,7 +395,7 @@ export default function JournalsPage() {
                           {j.reject_reason && <p className="text-xs">Rejected: {j.reject_reason}</p>}
                           {j.self_approval_reason && <p className="text-xs text-[#8A5A00]">Self-approved. Reason: “{j.self_approval_reason}”</p>}
                           {j.auto_reverse && <p className="text-xs">Reverses itself on the first day of the next period.</p>}
-                          <p className="text-xs pt-1">
+                          <p className="text-[11px] pt-1">
                             {TYPES.find((t) => t[0] === j.type)?.[1] ?? 'Adjusting'} · Prepared by {j.proposed_by_name}
                             {j.approved_by_name && ` · Approved by ${j.approved_by_name}`}
                           </p>
@@ -432,7 +432,7 @@ export default function JournalsPage() {
                                     {l.narrative && <span className="block text-xs text-[#4A5878] truncate" title={l.narrative}>{l.narrative}</span>}
                                   </span>
                                   <span className="font-mono">{formatPence(dr || BigInt(l.credit_p))}</span>
-                                  <span className="w-14 text-center text-xs font-semibold px-2 py-0.5 rounded-[6px] bg-[#E3E7EF] text-[#4A5878]">{dr ? 'Debit' : 'Credit'}</span>
+                                  <span className="w-12 text-center text-[11px] font-semibold px-1.5 py-0.5 rounded-[6px] bg-[#E3E7EF] text-[#4A5878]">{dr ? 'Debit' : 'Credit'}</span>
                                 </li>
                               );
                             })}
@@ -441,7 +441,7 @@ export default function JournalsPage() {
                         {j.ledger && (
                           <div className="md:pl-2 space-y-1">
                             <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-semibold text-[#1D4E89] hover:underline">
-                              <ExternalLink className="w-4 h-4" /> View in Xero
+                              <ExternalLink className="w-3.5 h-3.5" /> View in Xero
                             </a>
                             <p className="text-xs text-[#4A5878] max-w-[200px]">
                               {j.status === 'in_ledger'
@@ -463,7 +463,7 @@ export default function JournalsPage() {
             })}
           </tbody>
         </table>
-        <p className="px-4 py-3 border-t border-[#E3E7EF] text-xs text-[#4A5878]">
+        <p className="px-4 py-2.5 border-t border-[#E3E7EF] text-[11px] text-[#4A5878]">
           Showing {shown.length} of {journals.length} journal{journals.length === 1 ? '' : 's'}
         </p>
       </div>
@@ -471,7 +471,7 @@ export default function JournalsPage() {
       {menu && menuJournal && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onWheel={() => setMenu(null)} aria-hidden="true" />
-          <div role="menu" style={{ top: menu.top, right: menu.right }} className="fixed z-50 min-w-[170px] bg-white border border-[#E3E7EF] rounded-[10px] shadow-lg py-1 text-sm">
+          <div role="menu" style={{ top: menu.top, right: menu.right }} className="fixed z-50 min-w-[170px] bg-white border border-[#E3E7EF] rounded-[10px] shadow-lg py-1 text-xs">
             {menuItems.map((a) => (
               <button
                 key={a.label}
@@ -485,7 +485,7 @@ export default function JournalsPage() {
                 }}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left cursor-pointer hover:bg-[#F5F8FD] disabled:opacity-60 ${a.danger ? 'text-[#B8432F]' : 'text-[#122654]'}`}
               >
-                <a.icon className="w-4 h-4" /> {a.label}
+                <a.icon className="w-3.5 h-3.5" /> {a.label}
               </button>
             ))}
           </div>
