@@ -495,6 +495,7 @@ export function parseTransactions(engagementId: string, shortCode: string | null
   const rows: LedgerTransaction[] = [];
   const add = (doc: XeroDoc, id: string, path: string | undefined, code: string | undefined, net: bigint, vat: bigint, description: string) => {
     if (!code) return;
+    const ref = doc.InvoiceNumber || doc.CreditNoteNumber;
     rows.push({
       id: `tx_${engagementId}_${id}_${rows.length}`,
       engagement_id: engagementId,
@@ -509,6 +510,7 @@ export function parseTransactions(engagementId: string, shortCode: string | null
       source: 'Xero',
       external_id: id,
       ...(path ? { external_url: xeroDeepLink(shortCode, path) } : {}),
+      ...(ref ? { ref } : {}),
     });
   };
   // Tax-inclusive documents carry the tax inside LineAmount

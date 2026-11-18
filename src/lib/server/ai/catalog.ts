@@ -10,6 +10,7 @@ export const TASK_CATALOG: { id: string; label: string; module: string; provider
   { id: 'risk_review', label: 'Find unusual balances', module: 'Risk', provider: 'anthropic', mode: 'single' },
   { id: 'suggest_provision', label: 'Suggest a bad debt provision', module: 'Debtors', provider: 'anthropic', mode: 'single' },
   { id: 'review_after_date_costs', label: 'Read costs posted after the period end', module: 'Creditors', provider: 'anthropic', mode: 'single' },
+  { id: 'review_prepaid_costs', label: 'Read costs that may run past the period end', module: 'Prepayments', provider: 'anthropic', mode: 'single' },
   { id: 'draft_conclusion', label: 'Draft a paper conclusion', module: 'Reporting', provider: 'anthropic', mode: 'single' },
   { id: 'summarise_engagement', label: 'Engagement summaries and reports', module: 'Reporting', provider: 'anthropic', mode: 'single' },
   { id: 'research', label: 'Accounting research (Workpaper sources)', module: 'Research', provider: 'anthropic', mode: 'single' },
