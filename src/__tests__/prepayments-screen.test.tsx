@@ -47,4 +47,33 @@ describe('prepayments screen', () => {
     expect(ids).toEqual(expect.arrayContaining(['period_entered', 'has_invoice', 'by_hand', 'big']));
     expect(screen.getByText(/2 taken off the list\./)).toBeTruthy();
   });
+
+  it('undoes the decided suggestions in one go, keeping what was entered', () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'C-20') ?? db.addWorkpaper(eng.id, 'C-20')!;
+    const line = (id: string, extra: Record<string, any>) => ({ id, desc: id, code: '4600', net_p: '87647', method: 'days', start: '2025-01-27', ...extra });
+    wp.data_json = {
+      ...wp.data_json,
+      prepayments: [line('added', { found: true, decision: 'add', end: '2026-01-26' }), line('not', { found: true, decision: 'not' }), line('by_hand', {})],
+    };
+    render(
+      <PrepaymentsSchedule
+        data={wp.data_json}
+        result={evaluatePaper(wp)!}
+        locked={false}
+        save={(p) => Object.assign(wp.data_json, p)}
+        filesFor={() => []}
+        attachTo={() => {}}
+        preview={() => {}}
+        tickFor={() => null}
+        live={() => wp.data_json}
+      />
+    );
+    fireEvent.click(screen.getByText('Undo 2 decided'));
+    const [added, not, byHand] = wp.data_json.prepayments;
+    expect(added).toMatchObject({ decision: undefined, end: '2026-01-26' });
+    expect(not.decision).toBeUndefined();
+    expect(byHand.id).toBe('by_hand');
+  });
 });

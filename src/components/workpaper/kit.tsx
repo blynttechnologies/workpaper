@@ -48,17 +48,40 @@ export const Pill = ({ tone, children }: { tone: keyof typeof pillTone; children
 );
 
 /** The "N suggestions ready" banner: a rule-based summary with one button to accept them all. */
-export function SuggestBanner({ count, text, onAccept, locked }: { count: number; text: React.ReactNode; onAccept?: () => void; locked: boolean }) {
-  if (!count) return null;
+export function SuggestBanner({
+  count,
+  text,
+  onAccept,
+  locked,
+  decided = 0,
+  onUndo,
+}: {
+  count: number;
+  text: React.ReactNode;
+  onAccept?: () => void;
+  locked: boolean;
+  /** Suggestions already decided; with onUndo the banner stays to offer putting them back */
+  decided?: number;
+  onUndo?: () => void;
+}) {
+  const canUndo = !locked && !!onUndo && decided > 0;
+  if (!count && !canUndo) return null;
   return (
     <div className="p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-[12px] flex flex-col sm:flex-row sm:items-center gap-3">
       <div className="flex-1 text-xs text-[#122654]">
         <div className="font-bold flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> {count} suggestion{count === 1 ? '' : 's'} ready
+          <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> {count ? `${count} suggestion${count === 1 ? '' : 's'} ready` : `${decided} suggestion${decided === 1 ? '' : 's'} decided`}
         </div>
-        <div className="text-[11px] text-[#4A5878] mt-0.5">{text} Accepting builds the journal below; you can still undo each one.</div>
+        <div className="text-[11px] text-[#4A5878] mt-0.5">
+          {count ? <>{text} Accepting builds the journal below; you can still undo each one.</> : 'Undo puts them back to decide again. What you entered on each line is kept.'}
+        </div>
       </div>
-      {!locked && onAccept && (
+      {canUndo && (
+        <button type="button" onClick={onUndo} className="shrink-0 min-h-[32px] px-3 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[8px]">
+          Undo {decided} decided
+        </button>
+      )}
+      {!locked && onAccept && count > 0 && (
         <button type="button" onClick={onAccept} className="shrink-0 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px]">
           Accept all suggestions
         </button>

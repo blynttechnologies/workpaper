@@ -76,6 +76,8 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
         count={pending.length}
         locked={locked}
         onAccept={() => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.found && !l.decision ? { ...l, decision: 'add' } : l)) })}
+        decided={views.filter((v) => v.l.found && v.l.decision).length}
+        onUndo={() => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.found && l.decision ? { ...l, decision: undefined } : l)) })}
         text={`${pending.map((v) => v.l.desc).join(' · ')} read like costs that run past the year end. Enter the period from each invoice so the prepaid part is right.`}
       />
 
