@@ -4,7 +4,7 @@ import { ask } from '@/components/ui/ask';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { inLead } from '@/lib/workpapers/common';
-import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, ArrowRight, ChevronDown, ChevronRight, Upload, Paperclip } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, Check, ArrowRight, ChevronDown, ChevronRight, Upload, Paperclip } from 'lucide-react';
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
@@ -657,9 +657,14 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const pct = tot('positive') > 0n ? Number((tot('collected') * 100n) / tot('positive')) : 0;
   const days = result.totals.debtor_days;
   const daysPy = result.totals.debtor_days_py;
-  const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
+  const tile = 'p-4 bg-white border border-[#E3E7EF] rounded-[14px]';
+  const tileLabel = 'text-sm text-[#4A5878]';
+  const tileValue = 'mt-1 text-2xl font-bold';
+  const tileSub = 'mt-1 text-sm text-[#4A5878]';
+  const dth = 'p-3 text-xs font-semibold text-[#4A5878] whitespace-nowrap';
   const money = (p: bigint) => (p === 0n ? '–' : formatPence(p, { symbol: '', accountingFormat: true }));
-  const btn = 'px-2 py-1 text-[11px] font-bold rounded-[6px]';
+  const btn = 'px-3 py-1.5 text-xs font-bold rounded-[8px]';
+  const chip = 'px-3 py-1 rounded-[8px] text-xs font-semibold';
 
   // Choosing how much to provide: a share of what is still due, a custom amount, or the AI's suggestion
   const [picking, setPicking] = useState<string | null>(null);
@@ -682,17 +687,17 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
 
   const recoverability = (v: ReturnType<typeof debtorView>) => {
     const undo = !locked && (
-      <button type="button" onClick={() => decide(v, undefined)} className="text-[10px] text-[#1D4E89] underline">
+      <button type="button" onClick={() => decide(v, undefined)} className="text-[11px] text-[#1D4E89] underline">
         Undo
       </button>
     );
     switch (v.status) {
       case 'suggest':
         return (
-          <div className="relative flex flex-col items-end gap-1">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF4DB] text-[#8A5A00]">Suggested: provide {formatPence(v.suggestion!.amount)}</span>
+          <div className="relative flex flex-col items-end gap-1.5">
+            <span className={`${chip} whitespace-nowrap bg-[#FFF4DB] text-[#8A5A00]`}>Suggested: provide {formatPence(v.suggestion!.amount)}</span>
             {!locked && (
-              <div className="flex gap-1">
+              <div className="flex gap-1.5">
                 <button type="button" onClick={() => setPicking(v.line.id)} aria-expanded={picking === v.line.id} className={`${btn} bg-[#122654] text-white`}>
                   Provide…
                 </button>
@@ -707,13 +712,13 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       case 'credit':
         return (
           <div className="flex flex-col items-end gap-1">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1EE] text-[#B42318]">Credit balance</span>
+            <span className={`${chip} bg-[#FFF1EE] text-[#B42318]`}>Credit balance</span>
             {!locked && (
               <div className="flex items-center gap-1.5">
                 <button type="button" onClick={() => decide(v, 'creditors')} className={`${btn} bg-[#122654] text-white`}>
                   Move to creditors
                 </button>
-                <button type="button" onClick={() => decide(v, 'no_provision')} className="text-[10px] text-[#1D4E89] underline">
+                <button type="button" onClick={() => decide(v, 'no_provision')} className="text-[11px] text-[#1D4E89] underline">
                   Leave
                 </button>
               </div>
@@ -723,11 +728,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       case 'provided':
         return (
           <div className="relative flex flex-col items-end gap-1 max-w-[260px]">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#122654]">Provided {formatPence(v.provision)}</span>
-            {v.line.provision_reason && <span className="text-[10px] text-[#4A5878] text-right">{v.line.provision_reason}</span>}
+            <span className={`${chip} bg-[#EEF1F6] text-[#122654]`}>Provided {formatPence(v.provision)}</span>
+            {v.line.provision_reason && <span className="text-[11px] text-[#4A5878] text-right">{v.line.provision_reason}</span>}
             {!locked && (
               <span className="flex gap-2">
-                <button type="button" onClick={() => setPicking(v.line.id)} className="text-[10px] text-[#1D4E89] underline">
+                <button type="button" onClick={() => setPicking(v.line.id)} className="text-[11px] text-[#1D4E89] underline">
                   Change
                 </button>
                 {undo}
@@ -739,27 +744,27 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       case 'moved':
         return (
           <div className="flex flex-col items-end gap-1">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#122654]">Moved to creditors</span>
+            <span className={`${chip} bg-[#EEF1F6] text-[#122654]`}>Moved to creditors</span>
             {undo}
           </div>
         );
       case 'no_provision':
         return (
           <div className="flex flex-col items-end gap-1 min-w-[180px]">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#4A5878]">{v.total < 0n ? 'Left in debtors' : 'No provision'}</span>
+            <span className={`${chip} bg-[#EEF1F6] text-[#4A5878]`}>{v.total < 0n ? 'Left in debtors' : 'No provision'}</span>
             <TextInput label={`Reason for ${v.line.desc}`} value={v.line.reason} disabled={locked} placeholder="Reason (required)" onCommit={(r) => setLine(v.line.id, { reason: r })} />
             {undo}
           </div>
         );
       case 'collected':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E6F4EF] text-[#0B6B52]">✓ Collected after date</span>;
+        return <span className={`${chip} whitespace-nowrap bg-[#E6F4EF] text-[#0B6B52]`}>✓ Collected after date</span>;
       case 'nil':
-        return <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF1F6] text-[#4A5878]">No balance entered</span>;
+        return <span className={`${chip} whitespace-nowrap bg-[#EEF1F6] text-[#4A5878]`}>No balance entered</span>;
       default:
         return (
           <div className="flex flex-col items-end gap-0.5">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F0FC] text-[#1D4E89]">Recoverable</span>
-            <span className="text-[10px] text-[#4A5878] text-right">
+            <span className={`${chip} bg-[#E8F0FC] text-[#1D4E89]`}>Recoverable</span>
+            <span className="text-[11px] text-[#4A5878] text-right">
               {formatPence(v.stillDue)} still due{v.d90 === 0n ? ', under 90 days' : ''}
             </span>
           </div>
@@ -771,33 +776,36 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Aged report vs control account</div>
-          <div className={`text-lg font-bold ${controlCheck?.passed ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{controlCheck?.passed ? 'Agrees' : 'Differs'}</div>
-          <div className="text-[10px] text-[#4A5878]">{controlCheck?.passed ? `${formatPence(tot('control'))} both` : `Difference ${formatPence(tot('difference'))}`}</div>
+          <div className={tileLabel}>Aged report vs control account</div>
+          <div className={`${tileValue} flex items-center gap-2 ${controlCheck?.passed ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>
+            {controlCheck?.passed ? <CheckCircle2 className="w-6 h-6 shrink-0" /> : <AlertTriangle className="w-6 h-6 shrink-0" />}
+            {controlCheck?.passed ? 'Agrees' : 'Differs'}
+          </div>
+          <div className={tileSub}>{controlCheck?.passed ? `${formatPence(tot('control'))} both` : `Difference ${formatPence(tot('difference'))}`}</div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Collected after period end</div>
-          <div className="text-lg font-bold text-[#122654]">{pct}%</div>
-          <div className="text-[10px] text-[#4A5878]">
+          <div className={tileLabel}>Collected after period end</div>
+          <div className={`${tileValue} text-[#122654]`}>{pct}%</div>
+          <div className={tileSub}>
             {formatPence(tot('collected'))} of {formatPence(tot('positive'))}
           </div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">{oldestLabel}</div>
-          <div className={`text-lg font-bold font-mono ${tot('over90') > 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(tot('over90'))}</div>
-          <div className="text-[10px] text-[#4A5878]">
+          <div className={tileLabel}>{oldestLabel}</div>
+          <div className={`${tileValue} font-mono ${tot('over90') > 0n ? 'text-[#B42318]' : 'text-[#122654]'}`}>{formatPence(tot('over90'))}</div>
+          <div className={tileSub}>
             {String(tot('over90_count'))} customer{tot('over90_count') === 1n ? '' : 's'}
           </div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Provision</div>
-          <div className="text-lg font-bold font-mono text-[#122654]">{formatPence(tot('provision'))}</div>
-          <div className="text-[10px] text-[#4A5878]">{tot('suggested') ? `AI suggests ${formatPence(tot('suggested'))}` : 'Nothing suggested'}</div>
+          <div className={tileLabel}>Provision</div>
+          <div className={`${tileValue} font-mono text-[#122654]`}>{formatPence(tot('provision'))}</div>
+          <div className={tileSub}>{tot('suggested') ? `AI suggests ${formatPence(tot('suggested'))}` : 'Nothing suggested'}</div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Debtor days</div>
-          <div className="text-lg font-bold text-[#122654]">{days !== undefined ? String(days) : '–'}</div>
-          <div className={`text-[10px] ${days !== undefined && daysPy !== undefined && days > daysPy ? 'text-[#B8432F]' : 'text-[#4A5878]'}`}>
+          <div className={tileLabel}>Debtor days</div>
+          <div className={`${tileValue} text-[#122654]`}>{days !== undefined ? String(days) : '–'}</div>
+          <div className={`mt-1 text-sm ${days !== undefined && daysPy !== undefined && days > daysPy ? 'text-[#B8432F]' : 'text-[#4A5878]'}`}>
             {days === undefined
               ? 'Needs revenue and debtors in the TB'
               : daysPy === undefined
@@ -808,92 +816,98 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       </div>
 
       {pending.length > 0 && (
-        <div className="p-3 bg-[#F5F8FD] border border-[#D3DCEE] rounded-[12px] flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex-1 text-xs text-[#122654]">
-            <div className="font-bold flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#B8432F]" /> {pending.length} suggestion{pending.length === 1 ? '' : 's'} ready
+        <div className="p-4 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[14px] flex flex-col sm:flex-row sm:items-center gap-4">
+          <Sparkles className="w-7 h-7 shrink-0 text-[#FF7A66]" />
+          <div className="flex-1 text-sm text-[#122654]">
+            <div className="text-base font-bold">
+              {pending.length} suggestion{pending.length === 1 ? '' : 's'} ready
             </div>
-            <div className="text-[11px] text-[#4A5878] mt-0.5">
-              {pending
-                .map((v) => (v.suggestion!.kind === 'provide' ? `provide ${formatPence(v.suggestion!.amount)} for ${v.line.desc}` : `move ${v.line.desc} (${formatPence(v.suggestion!.amount)}) to creditors`))
-                .join(' · ')}
+            <div className="text-[#4A5878] mt-0.5">
+              {(() => {
+                const s = pending
+                  .map((v) => (v.suggestion!.kind === 'provide' ? `provide ${formatPence(v.suggestion!.amount)} for ${v.line.desc}` : `move ${v.line.desc} (${formatPence(v.suggestion!.amount)}) to creditors`))
+                  .join(' · ');
+                return s.charAt(0).toUpperCase() + s.slice(1);
+              })()}
               . Accepting builds the journal below; you can still undo each line.
             </div>
           </div>
           {!locked && (
-            <button type="button" onClick={acceptAll} className="shrink-0 min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px]">
-              Accept all suggestions
+            <button type="button" onClick={acceptAll} className="shrink-0 min-h-[40px] px-5 text-sm font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[10px]">
+              {pending.length === 1 ? 'Accept suggestion' : 'Accept all suggestions'}
             </button>
           )}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {DEBTOR_FILTERS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={filter === key}
-            onClick={() => setFilter(key)}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${filter === key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE]'}`}
-          >
-            {key === 'over90' ? oldestLabel : label} {count(key)}
-          </button>
-        ))}
-        {!locked && (
-          <div className="ml-auto flex items-center gap-2">
-            {hasOpenItems && (
-              <label className="flex items-center gap-1.5 text-[11px] text-[#4A5878]">
-                Age by
-                <select
-                  value={data.basis === 'invoice' ? 'invoice' : 'due'}
-                  onChange={(e) => refresh(e.target.value as 'due' | 'invoice')}
-                  className="text-[11px] border border-[#D3DCEE] rounded-md px-1.5 py-1 bg-white text-[#122654]"
-                >
-                  <option value="due">Due date</option>
-                  <option value="invoice">Invoice date</option>
-                </select>
-              </label>
-            )}
-            <button type="button" onClick={() => refresh()} className={addBtn}>
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh from ledger
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {DEBTOR_FILTERS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={filter === key}
+              onClick={() => setFilter(key)}
+              className={`px-4 py-2 rounded-full text-sm font-semibold border ${filter === key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE] hover:border-[#122654]'}`}
+            >
+              {key === 'over90' ? oldestLabel : label} ({count(key)})
             </button>
-            <button type="button" onClick={addCustomer} className={addBtn}>
-              <Plus className="w-3.5 h-3.5" /> Add customer
-            </button>
-          </div>
-        )}
+          ))}
+          {!locked && (
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {hasOpenItems && (
+                <label className="flex items-center gap-2 text-sm text-[#4A5878]">
+                  Age by
+                  <select
+                    value={data.basis === 'invoice' ? 'invoice' : 'due'}
+                    onChange={(e) => refresh(e.target.value as 'due' | 'invoice')}
+                    className="min-h-[38px] px-3 text-sm font-semibold border border-[#D3DCEE] rounded-[10px] bg-white text-[#122654] cursor-pointer"
+                  >
+                    <option value="due">Due date</option>
+                    <option value="invoice">Invoice date</option>
+                  </select>
+                </label>
+              )}
+              <button type="button" onClick={() => refresh()} className={`${addBtn} min-h-[38px] rounded-[10px] text-sm`}>
+                <RefreshCw className="w-4 h-4" /> Refresh from ledger
+              </button>
+              <button type="button" onClick={addCustomer} className={`${addBtn} min-h-[38px] rounded-[10px] text-sm`}>
+                <Plus className="w-4 h-4" /> Add customer
+              </button>
+            </div>
+          )}
+        </div>
+        {data.refreshed_at && <div className="text-xs text-[#4A5878]">Aged from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
+        {note && <div className={`text-xs ${note.kind === 'ok' ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
       </div>
-      {data.refreshed_at && <div className="-mt-2 text-[10px] text-[#4A5878]">Aged from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
-      {note && <div className={`text-[11px] ${note.kind === 'ok' ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
 
-      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
-        <table className="w-full text-xs text-[#122654]">
+      <div className="overflow-x-auto bg-white border border-[#E3E7EF] rounded-[14px]">
+        <table className="w-full text-sm text-[#122654]">
           <thead className="bg-[#F5F8FD]">
             <tr>
-              <th className="w-8" />
-              <th className={`${th} text-left`}>Customer</th>
+              <th className="w-10" />
+              <th className={`${dth} text-left`}>Customer</th>
               {BUCKETS.map((b) => (
-                <th key={b} className={`${th} text-right`}>
+                <th key={b} className={`${dth} text-right`}>
                   {b}
                 </th>
               ))}
-              <th className={`${th} text-right`}>Total</th>
-              <th className={`${th} text-right`}>Received after date</th>
-              <th className={`${th} text-right`}>Recoverability</th>
+              <th className={`${dth} text-right`}>Total</th>
+              <th className={`${dth} text-right`}>Received after date</th>
+              <th className={`${dth} text-right`}>Recoverability</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF]">
             {views.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-3 text-[11px] text-[#7E8DA6]">
+                <td colSpan={9} className="p-4 text-xs text-[#7E8DA6]">
                   No customers yet. Refresh from the ledger, or add customers by hand.
                 </td>
               </tr>
             )}
             {views.length > 0 && shown.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-3 text-[11px] text-[#7E8DA6]">
+                <td colSpan={9} className="p-4 text-xs text-[#7E8DA6]">
                   No customers match this filter.
                 </td>
               </tr>
@@ -915,59 +929,58 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                       if (files.length && !locked && dropFiles) dropFiles(files, l.id);
                     }}
                   >
-                    <td className="p-1.5 align-top">
+                    <td className="p-2 align-top">
                       <button
                         type="button"
                         aria-expanded={isOpen}
                         aria-label={`${isOpen ? 'Hide' : 'Show'} details for ${name}`}
                         onClick={() => setOpen((o) => ({ ...o, [l.id]: !isOpen }))}
-                        className="p-1 rounded border border-[#D3DCEE] text-[#4A5878] hover:text-[#122654]"
+                        className="p-1.5 rounded-[8px] text-[#122654] hover:bg-[#F5F8FD]"
                       >
-                        {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </button>
                     </td>
-                    <td className="p-2 align-top">
-                      <div className="font-bold">{name}</div>
+                    <td className="p-3 align-top">
+                      <div className="text-base font-bold">{name}</div>
                       {items ? (
-                        <div className="text-[10px] text-[#4A5878]">
+                        <div className="text-xs text-[#4A5878]">
                           {items} item{items === 1 ? '' : 's'}
                           {l.oldest_days ? (byDue ? ` · most overdue ${l.oldest_days} days` : ` · oldest ${l.oldest_days} days`) : ''}
                         </div>
                       ) : null}
                     </td>
                     {[v.cur, v.d30, v.d60, v.d90].map((p, i) => (
-                      <td key={i} className="p-2 align-top text-right font-mono">
-                        <span className={i === 3 && p > 0n && v.suggestion?.kind === 'provide' ? 'px-1 rounded bg-[#FFF4DB]' : ''}>{money(p)}</span>
+                      <td key={i} className="p-3 align-top text-right font-mono whitespace-nowrap">
+                        <span className={i === 3 && p > 0n && v.suggestion?.kind === 'provide' ? 'px-2 py-0.5 rounded-[6px] bg-[#FFF1EE] text-[#B42318]' : ''}>{money(p)}</span>
                       </td>
                     ))}
-                    <td className="p-2 align-top text-right font-mono font-bold">{money(v.total)}</td>
-                    <td className="p-2 align-top text-right">
-                      <div className={`font-mono font-bold ${v.total > 0n && v.after === 0n ? 'text-[#B42318]' : v.total > 0n && v.after >= v.total ? 'text-[#0B6B52]' : ''}`}>
+                    <td className="p-3 align-top text-right font-mono font-bold whitespace-nowrap">{money(v.total)}</td>
+                    <td className="p-3 align-top text-right">
+                      <div className={`font-mono font-semibold whitespace-nowrap ${v.total > 0n && v.after === 0n ? 'text-[#B42318]' : v.total > 0n && v.after >= v.total ? 'text-[#0B6B52]' : ''}`}>
                         {v.total > 0n && v.after === 0n ? 'Nil' : money(v.after)}
                       </div>
                       {l.receipts?.length ? (
-                        <button type="button" onClick={() => setOpen((o) => ({ ...o, [l.id]: true }))} className="text-[10px] text-[#1D4E89] underline">
+                        <button type="button" onClick={() => setOpen((o) => ({ ...o, [l.id]: true }))} className="text-xs text-[#1D4E89] underline whitespace-nowrap">
                           {l.receipts.length} bank line{l.receipts.length === 1 ? '' : 's'}
                         </button>
                       ) : null}
                     </td>
-                    <td className="p-2 align-top text-right">{recoverability(v)}</td>
+                    <td className="p-3 align-top text-right">{recoverability(v)}</td>
                   </tr>
                   {isOpen && (
-                    <tr className="bg-[#FAFBFD]">
-                      <td />
-                      <td colSpan={8} className="p-3">
-                        {v.suggestion && (
-                          <div className="mb-2 px-3 py-2 rounded-[8px] bg-[#F5F8FD] text-[11px] text-[#122654] flex items-start gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#B8432F]" /> {v.suggestion.why}
-                          </div>
-                        )}
-                        <div className="flex flex-col gap-3">
+                    <tr>
+                      <td colSpan={9} className="px-4 pb-4">
+                        <div className="p-3 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] flex flex-col gap-3 text-xs">
+                          {v.suggestion && (
+                            <div className="px-1 text-sm text-[#122654] flex items-start gap-2">
+                              <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[#FF7A66]" /> {v.suggestion.why}
+                            </div>
+                          )}
                           {!l.invoices?.length && (
                             <div className="p-3 bg-white border border-[#E3E7EF] rounded-[10px] flex flex-col gap-2">
                               <div className="font-bold">Balance at {peLabel}</div>
                               <label className="flex flex-col gap-1">
-                                <span className="text-[10px] font-semibold text-[#4A5878]">Customer</span>
+                                <span className="text-[11px] font-semibold text-[#4A5878]">Customer</span>
                                 <TextInput label="Customer name" value={l.desc} disabled={locked} placeholder="Customer name" onCommit={(d) => setLine(l.id, { desc: d })} />
                               </label>
                               <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
@@ -981,7 +994,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                                   ] as const
                                 ).map(([key, label]) => (
                                   <label key={key} className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-semibold text-[#4A5878]">{label}</span>
+                                    <span className="text-[11px] font-semibold text-[#4A5878]">{label}</span>
                                     <MoneyInput label={`${name} ${label}`} value={l[key]} disabled={locked} allowNegative={key !== 'after_date_p'} onCommit={(p) => setLine(l.id, { [key]: p })} />
                                   </label>
                                 ))}
@@ -990,7 +1003,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                           )}
                           {l.decision === 'provide' && (
                             <label className="flex items-center gap-2 max-w-xs">
-                              <span className="text-[10px] font-semibold text-[#4A5878] shrink-0">Provision</span>
+                              <span className="text-[11px] font-semibold text-[#4A5878] shrink-0">Provision</span>
                               <MoneyInput label={`Provision for ${name}`} value={l.provision_p} disabled={locked} allowNegative={false} onCommit={(p) => setLine(l.id, { provision_p: p })} />
                             </label>
                           )}
@@ -999,16 +1012,16 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                               <OpenItemsTable items={l.invoices} peLabel={peLabel} title={`Open invoices at ${peLabel}`} byDue={byDue} warnAfter={byDue ? 60 : 90} />
                             </div>
                           )}
+                          {!locked && (
+                            <div className="text-right">
+                              <RemoveButton
+                                onClick={async () => (await ask.confirm({ title: `Remove ${name} from the schedule?`, action: 'Remove', danger: true })) && save({ lines: (live().lines ?? []).filter((x: any) => x.id !== l.id) })}
+                                label={`Remove ${name}`}
+                                disabled={locked}
+                              />
+                            </div>
+                          )}
                         </div>
-                        {!locked && (
-                          <div className="mt-2 text-right">
-                            <RemoveButton
-                              onClick={async () => (await ask.confirm({ title: `Remove ${name} from the schedule?`, action: 'Remove', danger: true })) && save({ lines: (live().lines ?? []).filter((x: any) => x.id !== l.id) })}
-                              label={`Remove ${name}`}
-                              disabled={locked}
-                            />
-                          </div>
-                        )}
                       </td>
                     </tr>
                   )}
@@ -1017,20 +1030,23 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
             })}
           </tbody>
           {views.length > 0 && (
-            <tfoot className="border-t-2 border-[#122654]/20 font-bold">
+            <tfoot className="bg-[#F5F8FD] border-t border-[#E3E7EF] font-bold">
               <tr>
                 <td />
-                <td className="p-2">
+                <td className="p-3">
                   Total · {views.length} customer{views.length === 1 ? '' : 's'}
                 </td>
                 {(['cur', 'd30', 'd60', 'd90', 'total'] as const).map((k) => (
-                  <td key={k} className="p-2 text-right font-mono">
+                  <td key={k} className={`p-3 text-right font-mono whitespace-nowrap ${k === 'd90' && views.some((v) => v.d90 > 0n) ? 'text-[#B42318]' : ''}`}>
                     {money(views.reduce((acc, v) => acc + v[k], 0n))}
                   </td>
                 ))}
-                <td className="p-2 text-right font-mono">{money(tot('collected'))}</td>
-                <td className={`p-2 text-right text-[11px] ${controlCheck?.passed ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>
-                  {controlCheck?.passed ? 'Agrees to control account' : 'Differs from control account'} {formatPence(tot('control'), { symbol: '' })}
+                <td className="p-3 text-right font-mono whitespace-nowrap">{money(tot('collected'))}</td>
+                <td className="p-3 text-right">
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-[8px] text-xs font-semibold whitespace-nowrap ${controlCheck?.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FFF1EE] text-[#B42318]'}`}>
+                    {controlCheck?.passed ? <Check className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                    {controlCheck?.passed ? 'Agrees to control account' : 'Differs from control account'} {formatPence(tot('control'))}
+                  </span>
                 </td>
               </tr>
             </tfoot>
@@ -1038,19 +1054,19 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         </table>
       </div>
 
-      <div className="p-3 bg-white border border-[#E3E7EF] rounded-[12px] text-xs">
-        <div className="flex items-baseline justify-between gap-2 mb-2">
-          <span className="font-bold text-[#122654]">Adjustments</span>
-          <span className="text-[10px] text-[#4A5878]">Built from your decisions above</span>
+      <div className="p-5 bg-white border border-[#E3E7EF] rounded-[14px] text-sm text-[#122654]">
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <span className="text-lg font-bold">Adjustments</span>
+          <span className="text-xs text-[#4A5878]">Built from your decisions above</span>
         </div>
         {journalLines.length === 0 ? (
-          <div className="text-[11px] text-[#4A5878]">
+          <div className="text-[#4A5878]">
             {tot('provision_in_tb') ? `The provision already in the trial balance (${formatPence(tot('provision_in_tb'))}) matches the decisions. ` : ''}
             No adjustments needed. Provide or move a balance and the journal appears here.
           </div>
         ) : (
           <>
-            <table className="w-full max-w-2xl text-[11px]">
+            <table className="w-full max-w-2xl text-xs">
               <thead>
                 <tr className="text-[#4A5878]">
                   <th className="text-left font-semibold py-1">Account</th>
@@ -1061,39 +1077,38 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
               <tbody>
                 {journalLines.map((jl, i) => (
                   <tr key={i} className="border-t border-[#EEF1F6]">
-                    <td className="py-1">
+                    <td className="py-1.5">
                       <span className="font-mono mr-1.5">{jl.blynt_code}</span>
                       {jl.narrative}
                     </td>
-                    <td className="py-1 text-right font-mono">{jl.debit ? formatPence(jl.debit, { symbol: '' }) : ''}</td>
-                    <td className="py-1 text-right font-mono">{jl.credit ? formatPence(jl.credit, { symbol: '' }) : ''}</td>
+                    <td className="py-1.5 text-right font-mono">{jl.debit ? formatPence(jl.debit, { symbol: '' }) : ''}</td>
+                    <td className="py-1.5 text-right font-mono">{jl.credit ? formatPence(jl.credit, { symbol: '' }) : ''}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {tot('provision_in_tb') !== 0n && need.provision !== 0n && (
-              <div className="mt-1 text-[10px] text-[#4A5878]">
+              <div className="mt-1 text-[11px] text-[#4A5878]">
                 Provision decided {formatPence(tot('provision'))} less {formatPence(tot('provision_in_tb'))} already in the trial balance.
               </div>
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               {journalCheck?.passed ? (
-                <span className="text-[11px] text-[#0B6B52] font-semibold">✓ {journalCheck.detail}</span>
+                <span className="text-xs text-[#0B6B52] font-semibold">✓ {journalCheck.detail}</span>
               ) : (
                 <>
                   {!locked && (
-                    <button type="button" disabled={sending} onClick={sendJournal} className="min-h-[32px] px-3 text-xs font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[8px] disabled:opacity-50">
+                    <button type="button" disabled={sending} onClick={sendJournal} className="min-h-[38px] px-4 text-sm font-bold text-white bg-[#122654] hover:bg-[#1D4E89] rounded-[10px] disabled:opacity-50">
                       {sending ? 'Sending…' : 'Send to journals'}
                     </button>
                   )}
-                  {data.journal && <span className="text-[11px] text-[#B8432F]">{journalCheck?.detail}</span>}
+                  {data.journal && <span className="text-xs text-[#B8432F]">{journalCheck?.detail}</span>}
                 </>
               )}
             </div>
           </>
         )}
       </div>
-
     </div>
   );
 }
