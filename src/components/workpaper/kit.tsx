@@ -25,10 +25,10 @@ export function Tiles({ items }: { items: { label: string; value: React.ReactNod
   return (
     <div className={`grid grid-cols-2 gap-3 ${items.length >= 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
       {items.map((t) => (
-        <div key={t.label} className="p-3 bg-white border border-[#D3DCEE] rounded-[12px]">
-          <div className="text-[11px] text-[#4A5878]">{t.label}</div>
-          <div className={`text-lg font-bold ${toneText[t.tone ?? 'plain']}`}>{t.value}</div>
-          {t.sub !== undefined && <div className="text-[10px] text-[#4A5878]">{t.sub}</div>}
+        <div key={t.label} className="p-3 bg-white border border-[#E3E7EF] rounded-[12px] min-w-0">
+          <div className="text-xs text-[#4A5878]">{t.label}</div>
+          <div className={`mt-0.5 text-lg font-bold ${toneText[t.tone ?? 'plain']}`}>{t.value}</div>
+          {t.sub !== undefined && <div className="mt-0.5 text-[11px] text-[#4A5878]">{t.sub}</div>}
         </div>
       ))}
     </div>
@@ -137,23 +137,23 @@ export function AccountsPreview({ title = 'How it shows in the accounts', rows, 
   const hasPrior = rows.some((r) => r.prior !== undefined);
   return (
     <div className={card}>
-      <div className="font-bold mb-2">{title}</div>
-      <table className="w-full text-[11px]">
+      <div className="text-sm font-bold mb-2">{title}</div>
+      <table className="w-full text-xs">
         {hasPrior && (
           <thead>
             <tr className="text-[#4A5878]">
               <th />
-              <th className="text-right font-semibold">This year</th>
-              <th className="text-right font-semibold">Last year</th>
+              <th className="px-2 pb-1 text-right font-semibold">This year</th>
+              <th className="px-2 pb-1 text-right font-semibold">Last year</th>
             </tr>
           </thead>
         )}
         <tbody>
           {rows.map((r) => (
-            <tr key={r.label} className={r.strong ? 'font-bold border-t border-[#D3DCEE]' : ''}>
-              <td className="py-1">{r.label}</td>
-              <td className="py-1 text-right font-mono">{r.amount === null ? '–' : money(r.amount)}</td>
-              {hasPrior && <td className="py-1 text-right font-mono">{r.prior == null ? '–' : money(r.prior)}</td>}
+            <tr key={r.label} className={r.strong ? 'font-bold bg-[#F5F8FD]' : 'border-b border-[#EEF1F6]'}>
+              <td className="py-1.5 px-2">{r.label}</td>
+              <td className="py-1.5 px-2 text-right font-mono">{r.amount === null ? '–' : money(r.amount)}</td>
+              {hasPrior && <td className="py-1.5 px-2 text-right font-mono">{r.prior == null ? '–' : money(r.prior)}</td>}
             </tr>
           ))}
         </tbody>
@@ -168,10 +168,10 @@ export function FlowsTo({ engagementId, rows }: { engagementId: string; rows: { 
   return (
     <div className={card}>
       <div className="flex items-baseline justify-between gap-2 mb-2">
-        <span className="font-bold">Where this flows</span>
-        <span className="text-[10px] text-[#4A5878]">Updates the linked schedules</span>
+        <span className="text-sm font-bold">Where this flows</span>
+        <span className="text-[11px] text-[#4A5878]">Updates the linked schedules</span>
       </div>
-      <ul className="flex flex-col divide-y divide-[#EEF1F6] text-[11px]">
+      <ul className="flex flex-col divide-y divide-[#EEF1F6] text-xs">
         {rows.map((r) => {
           const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === r.ref);
           return (
@@ -184,7 +184,7 @@ export function FlowsTo({ engagementId, rows }: { engagementId: string; rows: { 
                 ) : (
                   <span className="font-semibold">{r.label}</span>
                 )}
-                <span className="block text-[10px] text-[#4A5878]">{r.detail}</span>
+                <span className="block text-[11px] text-[#4A5878]">{r.detail}</span>
               </span>
               <span className="font-mono">{r.amount === null || r.amount === 0n ? '–' : money(r.amount)}</span>
             </li>
@@ -260,24 +260,24 @@ export function JournalPanel({
   return (
     <div className={card}>
       <div className="flex items-baseline justify-between gap-2 mb-2">
-        <span className="font-bold">{title}</span>
+        <span className="text-sm font-bold">{title}</span>
         {autoReverse ? <Pill tone="info">Reverses on the first day of next year</Pill> : <span className="text-[10px] text-[#4A5878]">Built from your decisions</span>}
       </div>
       {lines.length === 0 ? (
-        <div className="text-[11px] text-[#4A5878]">{empty}</div>
+        <div className="text-xs text-[#4A5878]">{empty}</div>
       ) : (
-        <table className="w-full text-[11px]">
+        <table className="w-full text-xs">
           <tbody>
             {lines.map((l, i) => (
               <tr key={i} className="border-t border-[#EEF1F6]">
-                <td className="py-1 w-6 text-[#4A5878]">{l.debit ? 'Dr' : 'Cr'}</td>
-                <td className="py-1">
-                  <span className="font-mono mr-1.5">{l.code}</span>
+                <td className="py-1.5 w-7 text-[#4A5878]">{l.debit ? 'Dr' : 'Cr'}</td>
+                <td className="py-1.5">
+                  <span className="font-mono font-semibold mr-1.5">{l.code}</span>
                   {chartName(l.code)}
-                  <div className="text-[10px] text-[#4A5878]">{l.narrative}</div>
+                  <div className="text-[11px] text-[#4A5878]">{l.narrative}</div>
                 </td>
-                <td className="py-1 text-right font-mono">{l.debit ? formatPence(l.debit, { symbol: '' }) : ''}</td>
-                <td className="py-1 text-right font-mono">{l.credit ? formatPence(l.credit, { symbol: '' }) : ''}</td>
+                <td className="py-1.5 text-right font-mono">{l.debit ? formatPence(l.debit, { symbol: '' }) : ''}</td>
+                <td className="py-1.5 text-right font-mono">{l.credit ? formatPence(l.credit, { symbol: '' }) : ''}</td>
               </tr>
             ))}
           </tbody>

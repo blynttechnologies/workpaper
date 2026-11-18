@@ -14,6 +14,7 @@ import { accruedIncome, findPrepaidCosts, lastYear, prepaymentsJournal, prepView
 
 export function PrepaymentsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const [note, setNote] = useState<string | null>(null);
+  const [tab, setTab] = useState<'prep' | 'accrued'>('prep');
   const eng = db.engagements.find((e) => e.id === result.engagementId);
   const pe = eng?.period_end ?? '';
   const ctx = {
@@ -71,10 +72,29 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
         text={`${pending.map((v) => v.l.desc).join(' · ')} read like costs that run past the year end. Enter the period from each invoice so the prepaid part is right.`}
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-[#122654]">Schedule</span>
-        {!locked && (
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 p-3 bg-white border border-[#E3E7EF] rounded-[12px]">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E3E7EF]">
+        <div role="tablist" aria-label="Schedule" className="flex gap-1">
+          {(
+            [
+              ['prep', `Prepayments (${views.length})`],
+              ['accrued', `Accrued income (${accrued.length})`],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
+              className={`px-3 py-2 text-xs border-b-2 -mb-px whitespace-nowrap ${tab === k ? 'font-bold border-[#FF7A66] text-[#122654]' : 'font-semibold border-transparent text-[#4A5878] hover:text-[#122654]'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {!locked && tab === 'prep' && (
+          <div className="ml-auto mb-1.5 flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1 text-[11px]">
               Ignore items under £
               <span className="w-20">
@@ -90,11 +110,12 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
           </div>
         )}
       </div>
-      {note && <div className="-mt-2 text-[11px] text-[#0B6B52]">{note}</div>}
+      {note && <div className="text-[11px] text-[#0B6B52]">{note}</div>}
 
-      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
+      {tab === 'prep' && (
+      <div className="overflow-x-auto">
         <table className="w-full text-xs text-[#122654]">
-          <thead className="bg-[#F5F8FD]">
+          <thead>
             <tr>
               <th className={`${th} text-left`}>Item</th>
               <th className={`${th} text-left`}>Invoice date</th>
@@ -106,11 +127,6 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF]">
-            <tr className="bg-[#F5F8FD]/70">
-              <td colSpan={7} className="p-2 text-[10px] font-bold uppercase tracking-wider text-[#4A5878]">
-                Prepayments · 730
-              </td>
-            </tr>
             {views.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-3 text-[11px] text-[#7E8DA6]">
@@ -216,18 +232,33 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                 </React.Fragment>
               );
             })}
-            <tr className="font-bold bg-[#FAFBFD]">
-              <td colSpan={5} className="p-2">
+            <tr className="font-bold bg-[#F5F8FD]">
+              <td colSpan={5} className="p-2.5">
                 Total prepayments
               </td>
-              <td className="p-2 text-right font-mono">{money(tot('prepaid'))}</td>
+              <td className="p-2.5 text-right font-mono">{money(tot('prepaid'))}</td>
               <td />
             </tr>
-            <tr className="bg-[#F5F8FD]/70">
-              <td colSpan={7} className="p-2 text-[10px] font-bold uppercase tracking-wider text-[#4A5878]">
-                Accrued income · from the Revenue paper
-              </td>
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      {tab === 'accrued' && (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs text-[#122654]">
+          <thead>
+            <tr>
+              <th className={`${th} text-left`}>Item</th>
+              <th className={`${th} text-left`}>Date</th>
+              <th className={`${th} text-left`}>Period covered</th>
+              <th className={`${th} text-right`}>Amount</th>
+              <th className={`${th} text-left`}>Source</th>
+              <th className={`${th} text-right`}>Accrued</th>
+              <th />
             </tr>
+          </thead>
+          <tbody className="divide-y divide-[#E3E7EF]">
             {accrued.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-3 text-[11px] text-[#7E8DA6]">
@@ -250,15 +281,17 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                 <td />
               </tr>
             ))}
-            <tr className="font-bold border-t-2 border-[#122654]/20">
-              <td colSpan={5} className="p-2">
-                Prepayments and accrued income
+            <tr className="font-bold bg-[#F5F8FD]">
+              <td colSpan={5} className="p-2.5">
+                Total accrued income
               </td>
-              <td className="p-2 text-right font-mono">{money(tot('total'))}</td>
+              <td className="p-2.5 text-right font-mono">{money(tot('accrued'))}</td>
               <td />
             </tr>
           </tbody>
         </table>
+      </div>
+      )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
