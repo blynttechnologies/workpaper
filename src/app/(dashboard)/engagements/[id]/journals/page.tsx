@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { AlertCircle, Check, ExternalLink, Paperclip, Plus, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronRight, ExternalLink, Paperclip, Plus, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { formatPence, toPence } from '@/lib/money';
 import { TEMPLATES } from '@/lib/workpapers/templates';
@@ -107,6 +107,8 @@ export default function JournalsPage() {
   // A schedule's "Propose journal" link opens the form for a proposal from that schedule
   const [form, setForm] = useState<null | { source?: string }>(() => (search.get('propose') ? { source: search.get('propose')! } : null));
   const [sending, setSending] = useState<Adjustment | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const accounts = db.accountsFor(engagementId);
 
   const journals = useMemo(
     () => db.adjustments.filter((a) => a.engagement_id === engagementId).sort((a, b) => a.ref.localeCompare(b.ref)),
@@ -171,6 +173,10 @@ export default function JournalsPage() {
     setRev((r) => r + 1);
   };
 
+  const reverse = (j: Adjustment) => {
+    if (window.confirm(`Reverse ${j.ref}? A new journal with the opposite entries cancels it out. ${j.ref} stays on record.`)) act(j, 'reverse');
+  };
+
   const reject = (j: Adjustment) => {
     const reason = window.prompt(`Why reject ${j.ref}? The reason helps improve future proposals.`);
     if (reason?.trim()) act(j, 'reject', reason.trim());
@@ -178,6 +184,11 @@ export default function JournalsPage() {
 
   if (!engagement) return <p className="text-sm text-[#4A5878]">Engagement not found.</p>;
   const locked = engagement.status === 'locked';
+  const count = (k: 'all' | Adjustment['status']) => (k === 'all' ? journals.length : journals.filter((j) => j.status === k).length);
+  const drafts = count('proposed');
+  const toApprove = count('accepted');
+  // The select column only shows when there is something this user can bulk-approve
+  const anySelectable = canApprove && journals.some((j) => (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by !== actor.id);
 
   return (
     <div className="flex flex-col gap-5">
@@ -213,9 +224,7 @@ export default function JournalsPage() {
         ))}
         <div className="bg-white border border-[#E3E7EF] rounded-[12px] p-4">
           <p className="text-[11px] font-semibold text-[#4A5878]">Waiting</p>
-          <p className="text-sm text-[#122654]">
-            {journals.filter((j) => j.status === 'proposed').length} draft · {journals.filter((j) => j.status === 'accepted').length} to approve
-          </p>
+          <p className="text-sm text-[#122654]">{drafts || toApprove ? `${drafts} draft · ${toApprove} to approve` : 'Nothing waiting'}</p>
         </div>
       </div>
 
@@ -226,9 +235,10 @@ export default function JournalsPage() {
       )}
 
       <div className="flex flex-wrap gap-1" role="tablist" aria-label="Status">
-        {TABS.map(([k, label]) => (
+        {/* Only statuses that have journals, so the filter isn't a row of zeros */}
+        {TABS.filter(([k]) => k === 'all' || k === tab || count(k) > 0).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`px-3 py-1.5 text-xs font-semibold rounded-full cursor-pointer ${tab === k ? 'bg-[#122654] text-white' : 'bg-white border border-[#D3DCEE] text-[#122654]'}`}>
-            {label} ({k === 'all' ? journals.length : journals.filter((j) => j.status === k).length})
+            {label} ({count(k)})
           </button>
         ))}
       </div>
@@ -237,7 +247,7 @@ export default function JournalsPage() {
         <table className="w-full text-left text-xs">
           <thead className="bg-[#F5F8FD] text-[10px] uppercase tracking-wider text-[#4A5878]">
             <tr>
-              <th className="py-2.5 px-3 w-8"><span className="sr-only">Select</span></th>
+              {anySelectable && <th className="py-2.5 px-3 w-8"><span className="sr-only">Select</span></th>}
               <th className="py-2.5 px-3">Ref</th>
               <th className="py-2.5 px-3">Date</th>
               <th className="py-2.5 px-3">Type</th>
@@ -252,15 +262,19 @@ export default function JournalsPage() {
           <tbody className="divide-y divide-[#E3E7EF] text-[#122654]">
             {!shown.length && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-[#4A5878]">No journals here yet.</td>
+                <td colSpan={10} className="py-8 text-center text-[#4A5878]">
+                  {journals.length ? 'No journals with this status.' : locked ? 'No journals in this file.' : 'No journals yet. Use New journal to add an adjustment.'}
+                </td>
               </tr>
             )}
             {shown.map((j) => {
               const approvable = canApprove && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by !== actor.id;
               const ownApprovable = canSelfApprove && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by === actor.id;
+              const open = openId === j.id;
               return (
-                <tr key={j.id} className="align-top">
-                  <td className="py-2.5 px-3">
+                <Fragment key={j.id}>
+                <tr className="align-top hover:bg-[#FAFBFD]">
+                  {anySelectable && <td className="py-2.5 px-3">
                     {approvable && (
                       <input
                         type="checkbox"
@@ -274,16 +288,20 @@ export default function JournalsPage() {
                         }}
                       />
                     )}
+                  </td>}
+                  <td className="py-2.5 px-3">
+                    <button type="button" onClick={() => setOpenId(open ? null : j.id)} aria-expanded={open} title={open ? 'Hide the entries' : 'Show the debits and credits'} className="inline-flex items-center gap-1 font-mono font-bold whitespace-nowrap cursor-pointer hover:text-[#1D4E89]">
+                      {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />} {j.ref}
+                    </button>
                   </td>
-                  <td className="py-2.5 px-3 font-mono font-bold">{j.ref}</td>
                   <td className="py-2.5 px-3 whitespace-nowrap">{ukDate(j.date ?? j.created_at.slice(0, 10))}</td>
                   <td className="py-2.5 px-3">{TYPES.find((t) => t[0] === j.type)?.[1] ?? 'Adjusting'}</td>
-                  <td className="py-2.5 px-3 max-w-[280px]">
+                  <td className="py-2.5 px-3 max-w-[280px] break-words">
                     <span className="block">{j.narrative}</span>
                     {j.source_schedule && <span className="block text-[11px] text-[#4A5878]">From {j.source_schedule}{j.calculation ? `: ${j.calculation}` : ''}</span>}
                     {j.reverses_id && <span className="block text-[11px] text-[#4A5878]">Reverses {db.adjustments.find((a) => a.id === j.reverses_id)?.ref ?? 'a prior journal'}</span>}
                     {j.reject_reason && <span className="block text-[11px] text-[#4A5878]">Rejected: {j.reject_reason}</span>}
-                    {j.self_approval_reason && <span className="block text-[11px] text-[#8A5A00]">Approved by the person who proposed it: {j.self_approval_reason}</span>}
+                    {j.self_approval_reason && <span className="block text-[11px] text-[#8A5A00]">Self-approved. Reason: “{j.self_approval_reason}”</span>}
                     {j.auto_reverse && <span className="block text-[11px] text-[#1D4E89]">Auto-reverses next period</span>}
                     {j.ledger && (
                       <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline">
@@ -304,7 +322,7 @@ export default function JournalsPage() {
                     ))}
                   </td>
                   <td className="py-2.5 px-3">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
                   </td>
                   <td className="py-2.5 px-3">{j.proposed_by_name}</td>
                   <td className="py-2.5 px-3">{j.approved_by_name ?? '—'}</td>
@@ -347,7 +365,7 @@ export default function JournalsPage() {
                           </button>
                         )}
                         {(j.status === 'approved' || j.status === 'posted') && (
-                          <button type="button" disabled={busy} onClick={() => act(j, 'reverse')} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#F5F8FD] text-[#122654] font-semibold cursor-pointer">
+                          <button type="button" disabled={busy} onClick={() => reverse(j)} title="Cancel this journal with an opposite entry" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#F5F8FD] text-[#122654] font-semibold cursor-pointer">
                             <RotateCcw className="w-3 h-3" /> Reverse
                           </button>
                         )}
@@ -360,6 +378,37 @@ export default function JournalsPage() {
                     )}
                   </td>
                 </tr>
+                {open && (
+                  <tr className="bg-[#FAFBFD]">
+                    {anySelectable && <td />}
+                    <td colSpan={9} className="px-3 pb-3 pt-0">
+                      <table className="w-full max-w-2xl text-[11px]">
+                        <thead className="text-[10px] uppercase tracking-wider text-[#4A5878]">
+                          <tr>
+                            <th className="py-1.5 text-left">Account</th>
+                            <th className="py-1.5 text-left">Description</th>
+                            <th className="py-1.5 text-right">Debit</th>
+                            <th className="py-1.5 text-right">Credit</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#E3E7EF]">
+                          {j.lines.map((l) => (
+                            <tr key={l.id}>
+                              <td className="py-1.5 pr-3">
+                                <span className="font-mono mr-1.5">{l.blynt_code}</span>
+                                {accounts.find((a) => a.code === l.blynt_code)?.name}
+                              </td>
+                              <td className="py-1.5 pr-3 text-[#4A5878]">{l.narrative}</td>
+                              <td className="py-1.5 text-right font-mono">{BigInt(l.debit_p) ? formatPence(BigInt(l.debit_p)) : ''}</td>
+                              <td className="py-1.5 text-right font-mono">{BigInt(l.credit_p) ? formatPence(BigInt(l.credit_p)) : ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
