@@ -226,6 +226,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
   const control = result.checks.find((c) => c.id === 'control_tb');
   const lines = creditorsJournal(data);
   const cols = agedCols ? 12 : 8;
+  // Ageing columns drop out when the table is too narrow to fit them (e.g. side panel open); the supplier line still says how overdue
+  const wide = 'hidden @min-[1380px]:table-cell';
 
   // The right-hand column: the suggestion and its buttons, or the decision made and its reason, as on Trade debtors
   const status = (v: ReturnType<typeof supplierView>) => {
@@ -406,7 +408,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         </div>
       )}
 
-      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
+      <div className="@container overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-xs text-[#122654]">
           <thead className="bg-[#F5F8FD]">
             <tr>
@@ -415,8 +417,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <th className={`${th} text-right`}>Ledger</th>
               <th className={`${th} text-right w-[124px] whitespace-normal! leading-tight`}>Statement balance</th>
               <th className={`${th} text-right`}>Difference</th>
-              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} px-1.5! text-right whitespace-normal! leading-tight`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
-              {agedCols && <th className={`${th} text-right`}>Total</th>}
+              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} ${wide} px-1.5! text-right whitespace-normal! leading-tight`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
+              {agedCols && <th className={`${th} ${wide} text-right`}>Total</th>}
               <th className={`${th} text-right`}>Paid after</th>
               <th className={`${th} text-right`}>Status</th>
             </tr>
@@ -552,7 +554,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       AGED.map(([key]) => {
                         const p = asPence(s.aged?.[key] ?? '0');
                         return (
-                          <td key={key} className="px-1.5 py-2 align-top text-right font-mono">
+                          <td key={key} className={`${wide} px-1.5 py-2 align-top text-right font-mono`}>
                             <span className={key === 'd90_p' && p > 0n ? 'px-1 rounded bg-[#FFF4DB] font-bold text-[#B8432F]' : ''}>{p === 0n ? '–' : money(p)}</span>
                           </td>
                         );
@@ -562,7 +564,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                         {s.oldest_days ? <Pill tone={s.oldest_days > (s.overdue ? 60 : 90) ? 'warn' : 'plain'}>{s.oldest_days} days{s.overdue ? ' overdue' : ''}</Pill> : '–'}
                       </td>
                     )}
-                    {agedCols && <td className="p-2 align-top text-right font-mono font-bold">{money(s.aged ? AGED.reduce((t, [key]) => t + asPence(s.aged![key]), 0n) : v.ledger)}</td>}
+                    {agedCols && <td className={`${wide} p-2 align-top text-right font-mono font-bold`}>{money(s.aged ? AGED.reduce((t, [key]) => t + asPence(s.aged![key]), 0n) : v.ledger)}</td>}
                     <td className="p-2 align-top text-right">
                       <div className={`font-mono font-bold ${v.ledger > 0n && v.paid === 0n ? 'text-[#B42318]' : v.paid >= v.ledger && v.ledger > 0n ? 'text-[#0B6B52]' : ''}`}>{v.ledger > 0n && v.paid === 0n ? 'Nil' : money(v.paid)}</div>
                       {s.payments_after?.length ? (
@@ -654,8 +656,8 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                 <td className="p-2 text-right font-mono">{money(tot('aged'))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.statement ?? 0n), 0n))}</td>
                 <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.diff ?? 0n), 0n))}</td>
-                {agedCols && AGED.map(([key]) => <td key={key} className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + asPence(v.s.aged?.[key] ?? '0'), 0n))}</td>)}
-                {agedCols ? <td className="p-2 text-right font-mono">{money(views.reduce((a, v) => a + (v.s.aged ? AGED.reduce((t, [key]) => t + asPence(v.s.aged![key]), 0n) : v.ledger), 0n))}</td> : <td />}
+                {agedCols && AGED.map(([key]) => <td key={key} className={`${wide} p-2 text-right font-mono`}>{money(views.reduce((a, v) => a + asPence(v.s.aged?.[key] ?? '0'), 0n))}</td>)}
+                {agedCols ? <td className={`${wide} p-2 text-right font-mono`}>{money(views.reduce((a, v) => a + (v.s.aged ? AGED.reduce((t, [key]) => t + asPence(v.s.aged![key]), 0n) : v.ledger), 0n))}</td> : <td />}
                 <td className="p-2 text-right font-mono">{money(tot('paid_after'))}</td>
                 <td />
               </tr>
