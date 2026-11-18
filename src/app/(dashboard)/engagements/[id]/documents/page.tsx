@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -174,7 +175,7 @@ export default function DocumentsPage() {
   };
 
   const handleDeleteToBin = async (doc: DocumentItem) => {
-    if (!confirm(`Move ${doc.filename} to the 30-day trash bin?`)) return;
+    if (!(await ask.confirm({ title: 'Move this file to the bin?', text: `${doc.filename} stays in the bin for 30 days.`, action: 'Move to bin', danger: true }))) return;
     try {
       await fetch(`/api/v1/documents/${doc.id}`, { method: 'DELETE' });
     } catch {}

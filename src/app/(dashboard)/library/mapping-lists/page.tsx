@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import Link from 'next/link';
 import { BookOpen } from 'lucide-react';
 import { CompanyType } from '@/lib/types/models';
@@ -132,7 +133,7 @@ export default function MappingListsPage() {
               </div>
               <button
                 type="button"
-                onClick={() => alert(`Editing mapping list rules for ${pack.companyType}`)}
+                onClick={() => ask.tell({ title: 'Not ready yet', text: `The ${pack.companyType} mapping list cannot be edited here yet.` })}
                 className="text-xs font-bold text-[#B8432F] hover:underline"
               >
                 Edit rules →

@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -400,8 +401,8 @@ export default function WorkpaperPage() {
     }
   };
 
-  const removeFile = (att: Attachment) => {
-    if (!confirm(`Delete ${att.filename}? It goes to the bin for 30 days.`)) return;
+  const removeFile = async (att: Attachment) => {
+    if (!(await ask.confirm({ title: 'Delete this file?', text: `${att.filename} goes to the bin, where it stays for 30 days.`, action: 'Delete', danger: true }))) return;
     try {
       services.deleteAttachment(engagement.firm_id, actor, att.id);
       touchPaper();
@@ -458,9 +459,9 @@ export default function WorkpaperPage() {
     refresh();
   };
 
-  const removeProcedure = (procId: string) => {
+  const removeProcedure = async (procId: string) => {
     const proc = db.procedures.find((p) => p.id === procId);
-    if (!proc || !confirm('Remove this procedure from the paper?')) return;
+    if (!proc || !(await ask.confirm({ title: 'Remove this procedure from the paper?', action: 'Remove', danger: true }))) return;
     db.procedures = db.procedures.filter((p) => p.id !== procId);
     db.logAudit(engagement.firm_id, actor, 'REMOVE_PROCEDURE', 'procedures', procId, proc, null);
     touchPaper();
@@ -529,9 +530,10 @@ export default function WorkpaperPage() {
     setEditing(null);
     refresh();
   };
-  const deleteComment = (id: string, replyId?: string) => {
+  const deleteComment = async (id: string, replyId?: string) => {
+    if (!(await ask.confirm({ title: replyId ? 'Delete this reply?' : 'Delete this comment?', text: replyId ? undefined : 'Its replies are deleted too.', action: 'Delete', danger: true }))) return;
     const i = db.comments.findIndex((x) => x.id === id);
-    if (i < 0 || !window.confirm(replyId ? 'Delete this reply?' : 'Delete this comment and its replies?')) return;
+    if (i < 0) return;
     const c = db.comments[i];
     const before = JSON.parse(JSON.stringify(c));
     if (replyId) c.replies = (c.replies ?? []).filter((r) => r.id !== replyId);
@@ -772,8 +774,8 @@ export default function WorkpaperPage() {
                   { id: 'ai_review' as const, label: `AI Review ${db.ai_review_findings.filter((f) => (f.workpaper_id === workpaper.id || f.schedule_ref === workpaper.ref) && f.status === 'open').length}`, icon: Sparkles },
                   { id: 'history' as const, label: 'History', icon: History },
                 ];
-  const explainCheck = (id: string) => {
-    const reason = prompt('Why is this acceptable?')?.trim();
+  const explainCheck = async (id: string) => {
+    const reason = await ask.text({ title: 'Why is this acceptable?', label: 'Reason' });
     if (reason) saveData({ explanations: { ...(live().explanations ?? {}), [id]: reason } });
   };
 
@@ -1207,7 +1209,7 @@ export default function WorkpaperPage() {
             {/* Export (RPT-01) */}
             <button
               type="button"
-              onClick={() => alert(`Exporting ${workpaper.ref} to PDF and Excel with practice branding...`)}
+              onClick={() => ask.tell({ title: 'Not ready yet', text: `${workpaper.ref} cannot be exported to PDF or Excel yet.` })}
               className="min-h-[36px] px-2.5 inline-flex items-center gap-1 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[8px]"
             >
               <Download className="w-3.5 h-3.5" /> Export
@@ -2346,8 +2348,8 @@ export default function WorkpaperPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const r = prompt('Reason for dismissing this finding:');
+                                  onClick={async () => {
+                                    const r = await ask.text({ title: 'Dismiss this finding?', label: 'Reason', action: 'Dismiss' });
                                     if (r) {
                                       f.status = 'dismissed';
                                       f.dismiss_reason = r;

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { BackToTopBot } from './BackToTopBot';
+import { AskHost } from '@/components/ui/ask';
 import { useEngagementTimer } from './useEngagementTimer';
 
 interface DashboardShellProps {
@@ -56,6 +57,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({ children }) => {
         </main>
       </div>
       <BackToTopBot />
+      <AskHost />
     </div>
   );
 };

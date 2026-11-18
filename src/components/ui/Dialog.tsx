@@ -9,6 +9,8 @@ export interface DialogProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  /** Focused when the dialog opens, instead of the first control (the close button) */
+  initialFocus?: React.RefObject<HTMLElement | null>;
 }
 
 export const Dialog: React.FC<DialogProps> = ({
@@ -17,6 +19,7 @@ export const Dialog: React.FC<DialogProps> = ({
   title,
   children,
   maxWidth = 'md',
+  initialFocus,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
@@ -36,6 +39,7 @@ export const Dialog: React.FC<DialogProps> = ({
 
       // Focus first interactive control inside dialog
       setTimeout(() => {
+        if (initialFocus?.current) return initialFocus.current.focus();
         if (dialogRef.current) {
           const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
