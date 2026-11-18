@@ -240,7 +240,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           {!locked && (
             <div className="flex flex-wrap items-center justify-end gap-1">
               {k === 'missing_invoice' && (
-                <span className="inline-block w-[170px] [&>select]:w-full">
+                <span className="inline-block w-full [&>select]:w-full">
                   <CodePicker label={`Expense account for ${name}`} value={s.expense_code} codes={codes} disabled={locked} onChange={(c) => setSupplier(s.id, { expense_code: c })} />
                 </span>
               )}
@@ -262,7 +262,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       );
     } else if (s.decision) {
       blocks.push(
-        <div key="decided" className="flex flex-col items-end gap-1 min-w-[190px]">
+        <div key="decided" className="flex flex-col items-end gap-1 w-full min-w-[150px]">
           <Pill tone="info">
             {DECIDED[s.decision]}
             {s.decision === 'missing_invoice' && s.expense_code ? ` to ${s.expense_code}` : ''}
@@ -308,7 +308,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
             )}
           </div>
         ) : (
-          <div key="dispute" className="flex flex-col items-end gap-1 min-w-[190px]">
+          <div key="dispute" className="flex flex-col items-end gap-1 w-full min-w-[150px]">
             <Pill tone="plain">{s.dispute === 'ask' ? 'Asked the client (in Comments)' : 'Not disputed'}</Pill>
             {s.dispute === 'not_disputed' && (
               <TextInput label={`Why ${name} is not disputed`} value={s.dispute_reason} disabled={locked} placeholder="Reason (required), e.g. client confirmed" onCommit={(r) => setSupplier(s.id, { dispute_reason: r })} />
@@ -334,7 +334,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       }
     }
     return (
-      <div className="ml-auto flex flex-col items-end gap-2 max-w-[200px]">
+      <div className="ml-auto flex flex-col items-end gap-2 max-w-[170px] text-right [&_.rounded-full]:whitespace-normal">
         {blocks}
         {tickFor(s.id, name)}
       </div>
@@ -413,9 +413,9 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               <th className="w-8" />
               <th className={`${th} text-left`}>Supplier</th>
               <th className={`${th} text-right`}>Ledger</th>
-              <th className={`${th} text-right w-[140px]`}>Statement balance</th>
+              <th className={`${th} text-right w-[124px] whitespace-normal! leading-tight`}>Statement balance</th>
               <th className={`${th} text-right`}>Difference</th>
-              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} text-right whitespace-normal! leading-tight`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
+              {agedCols ? AGED.map(([, label]) => <th key={label} className={`${th} px-1.5! text-right whitespace-normal! leading-tight`}>{label}</th>) : <th className={`${th} text-right`}>Oldest</th>}
               {agedCols && <th className={`${th} text-right`}>Total</th>}
               <th className={`${th} text-right`}>Paid after</th>
               <th className={`${th} text-right`}>Status</th>
@@ -462,7 +462,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                     <td className="p-1.5 align-top">
                       <ExpandButton open={isOpen(s.id)} label={`details for ${name}`} onClick={() => toggle(s.id)} />
                     </td>
-                    <td className="p-2 align-top min-w-[150px]">
+                    <td className="p-2 align-top min-w-[130px]">
                       <div className="font-bold">{name}</div>
                       <div className="text-[10px] text-[#4A5878]">
                         {s.invoices?.length ? `${s.invoices.length} open bill${s.invoices.length === 1 ? '' : 's'}` : v.debit ? 'debit balance' : ''}
@@ -552,7 +552,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       AGED.map(([key]) => {
                         const p = asPence(s.aged?.[key] ?? '0');
                         return (
-                          <td key={key} className="p-2 align-top text-right font-mono">
+                          <td key={key} className="px-1.5 py-2 align-top text-right font-mono">
                             <span className={key === 'd90_p' && p > 0n ? 'px-1 rounded bg-[#FFF4DB] font-bold text-[#B8432F]' : ''}>{p === 0n ? '–' : money(p)}</span>
                           </td>
                         );
