@@ -410,14 +410,14 @@ export default function WorkpaperPage() {
     const all = copies.length > 1;
     if (!(await ask.confirm({
       title: all ? `Delete ${copies.length} copies?` : 'Delete this file?',
-      text: all ? `${att.filename} is on this row ${copies.length} times. All of them go to the bin, where they stay for 30 days.` : `${att.filename} goes to the bin, where it stays for 30 days.`,
+      text: all ? `${att.filename} is on this row ${copies.length} times. All of them will be removed from this paper.` : `${att.filename} will be removed from this paper.`,
       action: all ? 'Delete all' : 'Delete',
       danger: true,
     }))) return;
     try {
       for (const c of all ? copies : [att]) services.deleteAttachment(engagement.firm_id, actor, c.id);
       touchPaper();
-      setMessage({ kind: 'ok', text: `${att.filename} deleted${all ? ` (${copies.length} copies)` : ''}. It stays in the bin for 30 days.` });
+      setMessage({ kind: 'ok', text: `${att.filename} deleted${all ? ` (${copies.length} copies)` : ''}.` });
     } catch (err: any) {
       setMessage({ kind: 'error', text: err?.message || 'Could not delete the file.' });
     }
