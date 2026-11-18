@@ -64,7 +64,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
     const kept = all.filter((l) => !(l.found && asPence(l.net_p) < minimum && !l.end && l.method !== 'all' && !filesFor(l.id).length));
     const dropped = all.length - kept.length;
     const r = findPrepaidCosts(result.engagementId, pe, minimum, kept);
-    const lines = [...kept.map((l) => ({ ...l, ...r.links.get(l.id) })), ...r.found];
+    const lines = [...kept.filter((l) => !r.dupes.has(l.id)).map((l) => ({ ...l, ...r.links.get(l.id) })), ...r.found];
     save({ prepayments: lines, scanned_at: new Date().toISOString(), scan: { scanned: r.scanned, small: r.small, small_p: r.smallTotal.toString() } });
     void readCosts(lines.filter(unread).map((l) => l.id));
     setNote(

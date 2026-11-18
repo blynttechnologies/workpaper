@@ -67,10 +67,24 @@ export function findPrepaidCosts(engagementId: string, periodEnd: string, minimu
   const small = looks.filter((t) => asPence(t.amount_p) < minimum);
   // Where each cost opens in Xero, also for lines found by an earlier search
   const links = new Map(looks.map((t) => [`prep_${t.id}`, { ...(t.external_url ? { url: t.external_url } : {}), ...(t.ref ? { ref: t.ref } : {}) }]));
-  const found: PrepLine[] = looks
-    .filter((t) => asPence(t.amount_p) >= minimum && !existing.some((l) => l.id === `prep_${t.id}`))
-    .map((t) => ({ id: `prep_${t.id}`, desc: [t.contact, t.description].filter(Boolean).join(' · '), code: chartCodeOf(engagementId, t.account_code) ?? '4990', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true, ...links.get(`prep_${t.id}`) }));
-  return { found, links, scanned: costs.length, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(t.amount_p), 0n) };
+  // A new pull from Xero renumbers the ledger rows, so a line whose id has gone is matched by date, description and amount
+  const moved = existing.filter((l) => l.found && !links.has(l.id));
+  const found: PrepLine[] = [];
+  const dupes = new Set<string>(); // the same cost suggested again under its new id, before this matching
+  for (const t of looks) {
+    const id = `prep_${t.id}`;
+    const desc = [t.contact, t.description].filter(Boolean).join(' · ');
+    const same = existing.find((l) => l.id === id);
+    const at = same?.decision ? -1 : moved.findIndex((l) => l.invoice_date === t.date && l.desc === desc && l.net_p === t.amount_p);
+    if (at >= 0) {
+      // The earlier line carries the work done on it, so it stays and takes the link
+      links.set(moved.splice(at, 1)[0].id, links.get(id)!);
+      if (same) dupes.add(id);
+    } else if (!same && asPence(t.amount_p) >= minimum) {
+      found.push({ id, desc, code: chartCodeOf(engagementId, t.account_code) ?? '4990', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true, ...links.get(id) });
+    }
+  }
+  return { found, links, dupes, scanned: costs.length, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(t.amount_p), 0n) };
 }
 
 /** Last year's paper: its prepayments, and whether its journal was reversed into this year. */
