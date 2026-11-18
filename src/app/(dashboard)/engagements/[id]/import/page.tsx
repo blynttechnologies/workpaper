@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -288,7 +289,7 @@ export default function ImportDataPage() {
 
   // Clear existing test data on engagement
   const handleClearTestData = async () => {
-    if (!confirm('Are you sure you want to remove all existing trial balance and mapping data for this engagement? This cannot be undone.')) {
+    if (!(await ask.confirm({ title: 'Remove the trial balance?', text: 'This removes the trial balance and all account mapping for this engagement. It cannot be undone.', action: 'Remove', danger: true }))) {
       return;
     }
 
@@ -304,10 +305,10 @@ export default function ImportDataPage() {
         setFileName(null);
         setIsCommitted(false);
       } else {
-        alert('Error clearing test data: ' + data.error);
+        ask.tell({ title: 'The trial balance was not removed', text: data.error });
       }
     } catch (err) {
-      alert('Network error while clearing test data: ' + String(err));
+      ask.tell({ title: 'The trial balance was not removed', text: 'Blynt could not be reached. Check your connection and try again.' });
     } finally {
       setIsClearing(false);
     }
@@ -316,7 +317,7 @@ export default function ImportDataPage() {
   // Commit Import to database
   const handleCommitImport = async () => {
     if (!isBalanced) {
-      alert('Cannot import unbalanced trial balance: sum of debits must equal sum of credits.');
+      ask.tell({ title: 'The trial balance does not balance', text: 'Total debits must equal total credits before it can be imported.' });
       return;
     }
 
@@ -347,10 +348,10 @@ export default function ImportDataPage() {
           router.push(`/engagements/${engagementId}/mapping`);
         }, 1200);
       } else {
-        alert('Import error: ' + (data.error || 'Failed to import trial balance'));
+        ask.tell({ title: 'The trial balance was not imported', text: data.error || 'Try again.' });
       }
     } catch (err) {
-      alert('Network error during import: ' + String(err));
+      ask.tell({ title: 'The trial balance was not imported', text: 'Blynt could not be reached. Check your connection and try again.' });
     }
   };
 

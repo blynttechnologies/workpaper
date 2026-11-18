@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import { getActor } from '@/lib/session';
 
 import { useState, useEffect } from 'react';
@@ -95,11 +96,11 @@ export default function EngagementOverviewPage() {
       });
       const json = await res.json();
       if (res.ok && json.new_engagement) {
-        alert(`Successfully rolled forward to ${json.new_engagement.period}!`);
+        await ask.tell({ title: 'Rolled forward', text: `${json.new_engagement.period} is ready.` });
         router.push(`/engagements/${json.new_engagement.id}`);
       }
     } catch {
-      alert('Roll forward completed.');
+      ask.tell({ title: 'The roll forward did not finish', text: 'Try again.' });
     } finally {
       setExecutingRollForward(false);
       setRollForwardModal(false);

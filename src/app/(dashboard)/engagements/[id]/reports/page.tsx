@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { db } from '@/lib/server/db';
@@ -162,7 +163,7 @@ export default function ReportsPage() {
           <div className="flex flex-wrap items-center gap-2 text-xs no-print">
             {budgets.length > 0 && <select aria-label="Budget version" value={budget?.id} onChange={(e) => setBudgetId(e.target.value)} className="px-3 py-1.5 border border-[#D3DCEE] rounded-lg bg-white">{budgets.map((b) => <option key={b.id} value={b.id}>{b.name}{b.active ? ' (active)' : ''}</option>)}</select>}
             {(['prior', 'blank'] as const).map((m) => (
-              <button key={m} type="button" disabled={locked} className={btnSecondary} onClick={() => { const name = window.prompt('Name this budget version', budgets.length ? 'Reforecast' : 'Original'); const b = name && newBudget(engagementId, name, m, actor); if (b) setBudgetId(b.id); done(); }}>{m === 'prior' ? `New from ${a.hasPrior ? 'last year' : 'this year’s figures'}` : 'New blank'}</button>
+              <button key={m} type="button" disabled={locked} className={btnSecondary} onClick={async () => { const name = await ask.text({ title: 'Name this budget version', label: 'Name', initial: budgets.length ? 'Reforecast' : 'Original', action: 'Create' }); const b = name && newBudget(engagementId, name, m, actor); if (b) setBudgetId(b.id); done(); }}>{m === 'prior' ? `New from ${a.hasPrior ? 'last year' : 'this year’s figures'}` : 'New blank'}</button>
             ))}
             {budget && !budget.active && <button type="button" disabled={locked} className={btnPrimary} onClick={() => { setActiveBudget(engagementId, budget.id, actor); done(); }}>Set as active</button>}
             {budget && <button type="button" className={btnSecondary} onClick={() => downloadText(`${client.name} budget ${budget.name}.csv`, budgetCsv(budget))}>Export for Excel</button>}

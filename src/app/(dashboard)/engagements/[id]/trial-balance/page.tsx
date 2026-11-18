@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import { TEMPLATES } from '@/lib/workpapers/templates';
 import { inLead } from '@/lib/workpapers/common';
 
@@ -1234,8 +1235,8 @@ export default function TrialBalancePage() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const c = window.prompt('Enter reason for opening balance difference:');
+                                onClick={async () => {
+                                  const c = await ask.text({ title: 'Explain the opening balance difference', label: 'Reason' });
                                   if (c) handleExplainOpeningDiff(diff.id, c);
                                 }}
                                 className="px-2.5 py-1 border border-[#D3DCEE] hover:bg-slate-50 text-[#122654] text-[11px] font-semibold rounded-[6px]"

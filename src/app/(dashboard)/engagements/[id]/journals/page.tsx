@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -92,10 +93,9 @@ export default function JournalsPage() {
   // Sole practitioners: the practice may let a partner or admin approve their own journal, with a reason
   const firmId = db.memberships.find((m) => m.user_id === actor.id)?.firm_id;
   const canSelfApprove = !!db.firms.find((f) => f.id === firmId)?.settings?.defaults?.self_approve_journals && ['partner', 'admin'].includes(actor.role);
-  const selfApprove = (j: Adjustment) => {
-    const reason = window.prompt(`You proposed ${j.ref}. Why are you approving it yourself? (at least 10 characters; kept on the journal and in the activity log)`);
-    if (reason && reason.trim().length >= 10) act(j, 'approve', reason.trim());
-    else if (reason !== null) setNotice({ ok: false, text: 'Give a reason of at least 10 characters to approve your own journal.' });
+  const selfApprove = async (j: Adjustment) => {
+    const reason = await ask.text({ title: `Approve your own journal ${j.ref}?`, text: 'Say why you are approving it yourself. The reason is kept on the journal and in the activity log.', label: 'Reason (at least 10 characters)', action: 'Approve', minLength: 10 });
+    if (reason) act(j, 'approve', reason);
   };
 
   const [rev, setRev] = useState(0);
@@ -142,7 +142,7 @@ export default function JournalsPage() {
   };
 
   const remove = async (j: Adjustment) => {
-    if (!window.confirm(`Delete ${j.ref}? This is recorded in the activity log.`)) return;
+    if (!(await ask.confirm({ title: `Delete ${j.ref}?`, text: 'The deletion is recorded in the activity log.', action: 'Delete', danger: true }))) return;
     setBusy(true);
     try {
       await call(`/api/v1/adjustments/${encodeURIComponent(j.id)}`, 'DELETE');
@@ -173,13 +173,13 @@ export default function JournalsPage() {
     setRev((r) => r + 1);
   };
 
-  const reverse = (j: Adjustment) => {
-    if (window.confirm(`Reverse ${j.ref}? A new journal with the opposite entries cancels it out. ${j.ref} stays on record.`)) act(j, 'reverse');
+  const reverse = async (j: Adjustment) => {
+    if (await ask.confirm({ title: `Reverse ${j.ref}?`, text: `A new journal with the opposite entries cancels it out. ${j.ref} stays on record.`, action: 'Reverse' })) act(j, 'reverse');
   };
 
-  const reject = (j: Adjustment) => {
-    const reason = window.prompt(`Why reject ${j.ref}? The reason helps improve future proposals.`);
-    if (reason?.trim()) act(j, 'reject', reason.trim());
+  const reject = async (j: Adjustment) => {
+    const reason = await ask.text({ title: `Reject ${j.ref}?`, text: 'Say why. The reason helps improve future proposals.', label: 'Reason', action: 'Reject', danger: true });
+    if (reason) act(j, 'reject', reason);
   };
 
   if (!engagement) return <p className="text-sm text-[#4A5878]">Engagement not found.</p>;

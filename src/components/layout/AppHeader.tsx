@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -438,7 +439,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onMenuToggle }) => {
                   <div className="mt-3 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => alert('Suggestion accepted by named user and written to the activity log.')}
+                      onClick={() => ask.tell({ title: 'Not ready yet', text: 'A suggestion cannot be added to a paper from here yet.' })}
                       className="px-3 py-1 bg-[#122654] text-white font-semibold rounded-[8px] hover:bg-[#0B1A3B]"
                     >
                       Use in paper

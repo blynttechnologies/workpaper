@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useEffect, useState } from 'react';
 import { db } from '@/lib/server/db';
 import { usePathname } from 'next/navigation';
@@ -87,7 +88,7 @@ async function saveIfChanged() {
     // Someone else saved first, or the server refused a change this user may not make: take the saved copy
     const body = await res.json();
     applyState(body);
-    if (res.status === 403) window.alert(`Change not saved: ${body.error}`);
+    if (res.status === 403) ask.tell({ title: 'Your change was not saved', text: body.error });
     return;
   }
   if (res.status === 401) window.location.href = '/login';
@@ -98,7 +99,7 @@ async function saveIfChanged() {
   } else if (res.status !== 401 && !saveFailing) {
     // Said once per run of failures: the save is tried again every 1.5 seconds
     saveFailing = true;
-    window.alert(`Your changes are not being saved (the server answered ${res.status}). Refreshing the page will lose them. Tell your administrator.`);
+    ask.tell({ title: 'Your changes are not being saved', text: `If you refresh the page you will lose them. Tell your administrator (error ${res.status}).` });
   }
 }
 

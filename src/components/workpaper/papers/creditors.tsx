@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Landmark, Paperclip, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
@@ -634,7 +635,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                               type="button"
                               aria-label={`Remove ${name}`}
                               title={`Remove ${name}`}
-                              onClick={() => confirm(`Remove ${name} from the schedule?`) && save({ suppliers: (live().suppliers ?? []).filter((x: Supplier) => x.id !== s.id) })}
+                              onClick={async () => (await ask.confirm({ title: `Remove ${name} from the schedule?`, action: 'Remove', danger: true })) && save({ suppliers: (live().suppliers ?? []).filter((x: Supplier) => x.id !== s.id) })}
                               className="p-1 text-[#7E8DA6] hover:text-[#B42318]"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import { useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -87,7 +88,7 @@ export default function TaxLibraryPage() {
   const changedSlugs = new Set(changedPages.flatMap(([slug, p]) => [slug, ...(p.cited ?? [])]));
 
   const remove = async (t: TaxEntry) => {
-    if (!window.confirm(`Remove the practice entry for ${t.label} (${show(t)}, ${dates(t)})?`)) return;
+    if (!(await ask.confirm({ title: 'Remove this practice entry?', text: `${t.label} (${show(t)}, ${dates(t)})`, action: 'Remove', danger: true }))) return;
     const res = await fetch(`/api/v1/tax-library?id=${encodeURIComponent(t.id)}`, { method: 'DELETE' });
     if (!res.ok) setError((await res.json().catch(() => ({}))).error || 'Could not remove it.');
     setRev((r) => r + 1);

@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { inLead } from '@/lib/workpapers/common';
@@ -122,8 +123,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
       confidence_gate_items: (live().confidence_gate_items ?? []).map((g: any) => ({ ...g, field: swapField(String(g.field ?? '')) })),
     });
   };
-  const removeAccount = (a: ReconAccount) => {
-    if (!confirm(`Remove ${accountName(a, result.engagementId)} from this schedule? Its reconciling items go with it.`)) return;
+  const removeAccount = async (a: ReconAccount) => {
+    if (!(await ask.confirm({ title: `Remove ${accountName(a, result.engagementId)} from this schedule?`, text: 'Its reconciling items go with it.', action: 'Remove', danger: true }))) return;
     // A client account is remembered as removed, so it isn't added back as a new row
     const dismissed = a.client_code ? [...new Set([...(live().dismissed_accounts ?? []), `${a.code}|${a.client_code}`])] : live().dismissed_accounts;
     save({ dismissed_accounts: dismissed, accounts: reconAccounts({ ...live(), dismissed_accounts: dismissed }, leads, result.engagementId).filter((x) => x.id !== a.id) });
@@ -1002,7 +1003,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                         {!locked && (
                           <div className="mt-2 text-right">
                             <RemoveButton
-                              onClick={() => confirm(`Remove ${name} from the schedule?`) && save({ lines: (live().lines ?? []).filter((x: any) => x.id !== l.id) })}
+                              onClick={async () => (await ask.confirm({ title: `Remove ${name} from the schedule?`, action: 'Remove', danger: true })) && save({ lines: (live().lines ?? []).filter((x: any) => x.id !== l.id) })}
                               label={`Remove ${name}`}
                               disabled={locked}
                             />
@@ -1666,7 +1667,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
                 type="button"
                 className="px-3 py-1.5 text-xs font-bold bg-[#122654] text-white rounded-[6px] hover:bg-[#0B1A3B]"
                 onClick={() => {
-                  alert('Clearing journal proposed to clear suspense balance to nominal adjustments.');
+                  ask.tell({ title: 'Not ready yet', text: 'A clearing journal cannot be created from here yet. Add it on the Journals page.' });
                 }}
               >
                 Create clearing journal
@@ -1693,7 +1694,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
               type="button"
               className="px-3 py-1.5 text-xs font-bold bg-[#1E40AF] text-white rounded-[6px] hover:bg-[#1E3A8A] cursor-pointer"
               onClick={async () => {
-                await fetch(`/api/v1/schedules/${t.ref}/propose-journals`, {
+                const res = await fetch(`/api/v1/schedules/${t.ref}/propose-journals`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -1701,7 +1702,7 @@ export function LinesSchedule({ data, result, locked, save, filesFor, attachTo, 
                     schedule_data: live(),
                   }),
                 });
-                alert('Auto-reversing journal created in Draft status with next-period reversal date.');
+                ask.tell(res.ok ? { title: 'Journal created', text: 'It is a draft on the Journals page and reverses at the start of the next period.' } : { title: 'The journal was not created', text: 'Try again.' });
               }}
             >
               Generate auto-reversing journal
@@ -1973,12 +1974,12 @@ export function VatSchedule({ data, result, locked, save, filesFor, attachTo, pr
               <button
                 type="button"
                 onClick={async () => {
-                  await fetch('/api/v1/schedules/T-20/propose-journals', {
+                  const res = await fetch('/api/v1/schedules/T-20/propose-journals', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'vat_flat_rate_surplus', schedule_data: live() }),
                   });
-                  alert('Proposed Flat Rate Surplus journal created for review!');
+                  ask.tell(res.ok ? { title: 'Journal proposed', text: 'The flat rate surplus journal is on the Journals page for review.' } : { title: 'The journal was not proposed', text: 'Try again.' });
                 }}
                 className="px-3 py-1.5 bg-[#1E40AF] hover:bg-[#1E3A8A] text-white font-bold rounded-[6px] text-xs transition-colors cursor-pointer"
               >

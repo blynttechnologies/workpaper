@@ -1,5 +1,6 @@
 'use client';
 
+import { ask } from '@/components/ui/ask';
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -288,7 +289,7 @@ export default function DisclosuresPage() {
                   {c.confirmed_answer ? <span className="text-[#0B6B52]">Confirmed by {c.confirmed_by}</span> : <span className="text-[#6B4700]">Not confirmed</span>}
                   {c.confirmed_answer === 'No' && (c.manager_override_reason
                     ? <span className="text-[#4A5878]">Accepted: {c.manager_override_reason}</span>
-                    : <button type="button" disabled={locked} className={btnSecondary} onClick={() => { const r = window.prompt('Why is a No acceptable here?'); if (r) act(answerChecklist(c.id, 'No', actor, r)); }}>Needs manager acceptance</button>)}
+                    : <button type="button" disabled={locked} className={btnSecondary} onClick={async () => { const r = await ask.text({ title: 'Why is a No acceptable here?', label: 'Reason' }); if (r) act(answerChecklist(c.id, 'No', actor, r)); }}>Needs manager acceptance</button>)}
                 </div>
               </li>
             ))}
@@ -314,7 +315,7 @@ export default function DisclosuresPage() {
               {findings.map((f) => (
                 <div key={f.id} className="p-4 flex flex-wrap items-center justify-between gap-2">
                   <span><strong className={f.dismissed ? 'text-[#4A5878]' : 'text-[#B42318]'}>{f.title}.</strong> {f.why}{f.dismissed && <em> Not relevant: {f.dismissed}</em>}</span>
-                  {!f.dismissed && <button type="button" disabled={locked} className={btnSecondary} onClick={() => { const r = window.prompt('Why is this not relevant? A manager or partner must accept it.'); if (r) act(dismissStandardFinding(engagementId, f.id, r, actor)); }}>Not relevant</button>}
+                  {!f.dismissed && <button type="button" disabled={locked} className={btnSecondary} onClick={async () => { const r = await ask.text({ title: 'Why is this not relevant?', text: 'A manager or partner must accept it.', label: 'Reason' }); if (r) act(dismissStandardFinding(engagementId, f.id, r, actor)); }}>Not relevant</button>}
                 </div>
               ))}
             </div>
