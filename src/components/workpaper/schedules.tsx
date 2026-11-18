@@ -34,6 +34,8 @@ export interface ScheduleProps {
   dropFiles?: (files: File[], rowId: string | null) => void;
   /** Swap the files linked to two rows. */
   swapEvidence?: (rowA: string, rowB: string) => void;
+  /** Delete a file from the paper, after asking. */
+  removeFile?: (a: Attachment) => void;
   /** Bank and cash: read the row's statement with AI and show what it found beside the paper. */
   readStatement?: (rowId: string) => void;
 }

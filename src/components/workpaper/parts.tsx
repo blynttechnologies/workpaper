@@ -411,6 +411,7 @@ export function RowFiles({
   onAttach,
   disabled,
   label,
+  onRemove,
 }: {
   files: Attachment[];
   /** expand: opened by double-click, to show it full size */
@@ -418,21 +419,29 @@ export function RowFiles({
   onAttach: () => void;
   disabled: boolean;
   label: string;
+  /** Shows a delete button beside each file */
+  onRemove?: (a: Attachment) => void;
 }) {
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {files.map((f) => (
-        <button
-          key={f.id}
-          type="button"
-          onClick={() => onPreview(f)}
-          onDoubleClick={() => onPreview(f, true)}
-          title={f.filename}
-          className="inline-flex items-center gap-1 max-w-[150px] text-[10px] font-semibold text-[#B8432F] hover:underline"
-        >
-          <Paperclip className="w-3 h-3 shrink-0" />
-          <span className="truncate">{f.filename}</span>
-        </button>
+        <React.Fragment key={f.id}>
+          <button
+            type="button"
+            onClick={() => onPreview(f)}
+            onDoubleClick={() => onPreview(f, true)}
+            title={f.filename}
+            className="inline-flex items-center gap-1 max-w-[150px] text-[10px] font-semibold text-[#B8432F] hover:underline"
+          >
+            <Paperclip className="w-3 h-3 shrink-0" />
+            <span className="truncate">{f.filename}</span>
+          </button>
+          {onRemove && (
+            <button type="button" onClick={() => onRemove(f)} aria-label={`Delete ${f.filename}`} title={`Delete ${f.filename}`} className="text-[#7E8DA6] hover:text-[#B42318]">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </React.Fragment>
       ))}
       {!disabled && (
         <button

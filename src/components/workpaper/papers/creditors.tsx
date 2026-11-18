@@ -50,7 +50,7 @@ const bankList = (banks: BankChecked['banks']) => banks.map((b) => `${b.name} ($
 const bankOf = (matches: { date: string; amount_p: string; bank?: string }[], p: { date: string; amount_p: string }) =>
   (matches.find((m) => m.date === p.date && m.amount_p === p.amount_p) ?? matches.find((m) => m.date === p.date))?.bank;
 
-export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, swapEvidence }: ScheduleProps) {
+export function CreditorsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles, swapEvidence, removeFile }: ScheduleProps) {
   const { isOpen, toggle, show } = useOpen();
   const [filter, setFilter] = useState<'all' | 'attention' | 'done'>('all');
   const [note, setNote] = useState<{ ok: boolean; text: string; link?: { href: string; label: string } } | null>(null);
@@ -574,7 +574,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       {/* Statements already attached, kept with the balance they support */}
                       {!!filesFor(s.id).length && (
                         <div className="mt-1 flex justify-end">
-                          <RowFiles files={filesFor(s.id)} onPreview={preview} onAttach={() => attachTo(s.id)} disabled label={`the statement for ${name}`} />
+                          <RowFiles files={filesFor(s.id)} onPreview={preview} onAttach={() => attachTo(s.id)} disabled label={`the statement for ${name}`} onRemove={locked ? undefined : removeFile} />
                         </div>
                       )}
                     </td>

@@ -730,6 +730,7 @@ export default function WorkpaperPage() {
     tickFor,
     live,
     swapEvidence,
+    removeFile,
     dropFiles: (files: File[], rowId: string | null) => void doUpload(files, rowId),
     // The newest statement on the row, read again and shown beside the paper
     readStatement: (rowId: string) => {
