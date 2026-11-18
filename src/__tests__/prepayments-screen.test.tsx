@@ -59,6 +59,31 @@ describe('prepayments screen', () => {
     expect(screen.getByText(/2 taken off the list\./)).toBeTruthy();
   });
 
+  it('does not suggest a cost again when a new pull from Xero has renumbered the ledger', () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'C-20') ?? db.addWorkpaper(eng.id, 'C-20')!;
+    const line = (id: string, extra: Record<string, any> = {}) => ({ id, desc: 'Acme · Annual licence', code: '4600', invoice_date: eng.period_end, start: eng.period_end, net_p: '90000', method: 'days', found: true, ...extra });
+    wp.data_json = {
+      ...wp.data_json,
+      min_p: '0',
+      // The line added before the pull, and the same cost suggested again under its new id
+      prepayments: [line('prep_tx_old', { decision: 'add', end: '2027-01-26' }), line('prep_tx_new')],
+    };
+    db.account_mappings.push({ id: 'm_sub', engagement_id: eng.id, source_code: 'SUB', source_name: 'Subscriptions', source_type: 'Overheads', balance_p: '0', blynt_code: '4600', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
+    db.transactions.push({ id: 'tx_new', engagement_id: eng.id, account_code: 'SUB', account_name: 'Subscriptions', date: eng.period_end, contact: 'Acme', description: 'Annual licence', amount_p: '90000', vat_p: '0', gross_p: '90000', source: 'Xero', external_url: 'https://go.xero.com/x' });
+    const search = () => {
+      render(<PrepaymentsSchedule data={wp.data_json} result={evaluatePaper(wp)!} locked={false} save={(p) => Object.assign(wp.data_json, p)} filesFor={() => []} attachTo={() => {}} preview={() => {}} tickFor={() => null} live={() => wp.data_json} />);
+      fireEvent.click(screen.getByText(/^Search the ledger/));
+      cleanup();
+      return wp.data_json.prepayments.filter((l: any) => l.desc === 'Acme · Annual licence');
+    };
+    // The earlier line stays with its decision and period, and takes the link; the repeat goes
+    expect(search()).toEqual([expect.objectContaining({ id: 'prep_tx_old', decision: 'add', end: '2027-01-26', url: 'https://go.xero.com/x' })]);
+    // And searching again does not bring it back
+    expect(search()).toHaveLength(1);
+  });
+
   it('undoes the decided suggestions in one go, keeping what was entered', () => {
     db.seed(true);
     const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
