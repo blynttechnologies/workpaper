@@ -661,7 +661,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const tileLabel = 'text-xs text-[#4A5878]';
   const tileValue = 'mt-0.5 text-lg font-bold';
   const tileSub = 'mt-0.5 text-[11px] text-[#4A5878]';
-  const dth = 'p-2 text-[11px] font-semibold text-[#4A5878] whitespace-nowrap';
+  const dth = 'px-1.5 py-2 text-[11px] font-semibold text-[#4A5878] leading-tight align-bottom';
   const money = (p: bigint) => (p === 0n ? '–' : formatPence(p, { symbol: '', accountingFormat: true }));
   const btn = 'px-2.5 py-1 text-[11px] font-bold rounded-[6px]';
   const chip = 'px-2 py-0.5 rounded-[6px] text-[11px] font-semibold';
@@ -695,7 +695,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
       case 'suggest':
         return (
           <div className="relative flex flex-col items-end gap-1.5">
-            <span className={`${chip} whitespace-nowrap bg-[#FFF4DB] text-[#8A5A00]`}>Suggested: provide {formatPence(v.suggestion!.amount)}</span>
+            <span className={`${chip} text-right bg-[#FFF4DB] text-[#8A5A00]`}>Suggested: provide <span className="whitespace-nowrap">{formatPence(v.suggestion!.amount)}</span></span>
             {!locked && (
               <div className="flex gap-1.5">
                 <button type="button" onClick={() => setPicking(v.line.id)} aria-expanded={picking === v.line.id} className={`${btn} bg-[#122654] text-white`}>
@@ -750,14 +750,14 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         );
       case 'no_provision':
         return (
-          <div className="flex flex-col items-end gap-1 min-w-[180px]">
+          <div className="flex flex-col items-end gap-1 min-w-[140px]">
             <span className={`${chip} bg-[#EEF1F6] text-[#4A5878]`}>{v.total < 0n ? 'Left in debtors' : 'No provision'}</span>
             <TextInput label={`Reason for ${v.line.desc}`} value={v.line.reason} disabled={locked} placeholder="Reason (required)" onCommit={(r) => setLine(v.line.id, { reason: r })} />
             {undo}
           </div>
         );
       case 'collected':
-        return <span className={`${chip} whitespace-nowrap bg-[#E6F4EF] text-[#0B6B52]`}>✓ Collected after date</span>;
+        return <span className={`${chip} inline-block text-right bg-[#E6F4EF] text-[#0B6B52]`}>✓ Collected after date</span>;
       case 'nil':
         return <span className={`${chip} whitespace-nowrap bg-[#EEF1F6] text-[#4A5878]`}>No balance entered</span>;
       default:
@@ -940,7 +940,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                         {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </button>
                     </td>
-                    <td className="p-2 align-top">
+                    <td className="p-2 align-top min-w-[150px]">
                       <div className="text-[13px] font-bold">{name}</div>
                       {items ? (
                         <div className="text-[11px] text-[#4A5878]">
@@ -950,11 +950,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                       ) : null}
                     </td>
                     {[v.cur, v.d30, v.d60, v.d90].map((p, i) => (
-                      <td key={i} className="p-2 align-top text-right font-mono whitespace-nowrap">
+                      <td key={i} className="px-1.5 py-2 align-top text-right font-mono whitespace-nowrap">
                         <span className={i === 3 && p > 0n && v.suggestion?.kind === 'provide' ? 'px-2 py-0.5 rounded-[6px] bg-[#FFF1EE] text-[#B42318]' : ''}>{money(p)}</span>
                       </td>
                     ))}
-                    <td className="p-2 align-top text-right font-mono font-bold whitespace-nowrap">{money(v.total)}</td>
+                    <td className="px-1.5 py-2 align-top text-right font-mono font-bold whitespace-nowrap">{money(v.total)}</td>
                     <td className="p-2 align-top text-right">
                       <div className={`font-mono font-semibold whitespace-nowrap ${v.total > 0n && v.after === 0n ? 'text-[#B42318]' : v.total > 0n && v.after >= v.total ? 'text-[#0B6B52]' : ''}`}>
                         {v.total > 0n && v.after === 0n ? 'Nil' : money(v.after)}
@@ -1037,15 +1037,15 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
                   Total · {views.length} customer{views.length === 1 ? '' : 's'}
                 </td>
                 {(['cur', 'd30', 'd60', 'd90', 'total'] as const).map((k) => (
-                  <td key={k} className={`p-2 text-right font-mono whitespace-nowrap ${k === 'd90' && views.some((v) => v.d90 > 0n) ? 'text-[#B42318]' : ''}`}>
+                  <td key={k} className={`px-1.5 py-2 text-right font-mono whitespace-nowrap ${k === 'd90' && views.some((v) => v.d90 > 0n) ? 'text-[#B42318]' : ''}`}>
                     {money(views.reduce((acc, v) => acc + v[k], 0n))}
                   </td>
                 ))}
-                <td className="p-2 text-right font-mono whitespace-nowrap">{money(tot('collected'))}</td>
+                <td className="px-1.5 py-2 text-right font-mono whitespace-nowrap">{money(tot('collected'))}</td>
                 <td className="p-2 text-right">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-semibold whitespace-nowrap ${controlCheck?.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FFF1EE] text-[#B42318]'}`}>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-semibold text-left ${controlCheck?.passed ? 'bg-[#E6F4EF] text-[#0B6B52]' : 'bg-[#FFF1EE] text-[#B42318]'}`} title={`Control account ${formatPence(tot('control'))}`}>
                     {controlCheck?.passed ? <Check className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-                    {controlCheck?.passed ? 'Agrees to control account' : 'Differs from control account'} {formatPence(tot('control'))}
+                    {controlCheck?.passed ? 'Agrees to control account' : `Differs from control account ${formatPence(tot('control'))}`}
                   </span>
                 </td>
               </tr>
