@@ -4,7 +4,7 @@ import { ask } from '@/components/ui/ask';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { inLead } from '@/lib/workpapers/common';
-import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, ArrowRight, ChevronDown, ChevronRight, Upload } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, ShieldAlert, Sparkles, Building2, User, RefreshCw, FileText, Zap, CheckCircle2, ArrowRight, ChevronDown, ChevronRight, Upload, Paperclip } from 'lucide-react';
 import { asPence, formatPence, formatPenceInput } from '@/lib/money';
 import type { Attachment } from '@/lib/types/models';
 import { db } from '@/lib/server/db';
@@ -155,7 +155,8 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     const src = sourcesOf(l.code);
     return src.length > 0 && !accounts.some((a) => a.code === l.code && !a.client_code) ? src.filter((m) => !accounts.some((a) => a.code === l.code && a.client_code === m.source_code)).map((m) => ({ l, m })) : [];
   });
-  const tile = 'p-3 bg-white border border-[#D3DCEE] rounded-[12px]';
+  const tile = 'p-4 bg-white border border-[#E3E7EF] rounded-[14px]';
+  const rth = 'p-3 text-xs font-semibold text-[#4A5878] whitespace-nowrap';
   const pill = {
     todo: 'bg-[#EEF1F6] text-[#4A5878]',
     out: 'bg-[#FFF1EE] text-[#B42318]',
@@ -168,35 +169,44 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Ledger balance, all accounts</div>
-          <div className="text-lg font-bold font-mono text-[#122654] whitespace-nowrap">{signed(tot('ledger'))}</div>
+          <div className="text-sm text-[#4A5878]">Ledger balance (all accounts)</div>
+          <div className="mt-1 text-2xl font-bold font-mono text-[#122654] whitespace-nowrap">{signed(tot('ledger'))}</div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Accounts reconciled</div>
-          <div className="text-lg font-bold text-[#122654]">
+          <div className="text-sm text-[#4A5878]">Accounts reconciled</div>
+          <div className="mt-1 text-2xl font-bold text-[#122654]">
             {reconciled} of {rows.length}
+          </div>
+          <div role="progressbar" aria-label="Accounts reconciled" aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={reconciled} className="mt-2 h-1.5 rounded-full bg-[#E3E7EF] overflow-hidden">
+            <div className="h-full rounded-full bg-[#122654]" style={{ width: `${rows.length ? (reconciled / rows.length) * 100 : 0}%` }} />
           </div>
         </div>
         <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Unexplained difference</div>
-          <div className={`text-lg font-bold font-mono ${tot('unexplained') > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{formatPence(tot('unexplained'))}</div>
+          <div className="text-sm text-[#4A5878]">Unexplained difference</div>
+          <div className={`mt-1 text-2xl font-bold font-mono ${tot('unexplained') > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{formatPence(tot('unexplained'))}</div>
         </div>
-        <div className={tile}>
-          <div className="text-[11px] text-[#4A5878]">Evidence attached</div>
-          <div className="text-lg font-bold text-[#122654]">
-            {withEvidence} of {rows.length}
+        <div className={`${tile} flex items-center gap-4`}>
+          <span className="flex items-center justify-center w-11 h-11 shrink-0 rounded-[10px] bg-[#F5F8FD] text-[#122654]">
+            <Paperclip className="w-5 h-5" />
+          </span>
+          <div>
+            <div className="text-sm text-[#4A5878]">Evidence attached</div>
+            <div className="mt-1 text-2xl font-bold text-[#122654]">
+              {withEvidence} of {rows.length}
+            </div>
           </div>
         </div>
       </div>
 
-      {!locked && (
-        <div className="flex flex-wrap items-center gap-2">
-          {unused.length + unusedSources.length > 0 && (
+      <div className="flex flex-col gap-3 p-4 bg-white border border-[#E3E7EF] rounded-[14px]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold text-[#122654]">Accounts ({rows.length})</h2>
+          {!locked && unused.length + unusedSources.length > 0 && (
             <select
               aria-label="Add account"
               value=""
               onChange={(e) => addAccount(e.target.value)}
-              className="ml-auto min-h-[32px] px-2 text-xs font-bold text-[#122654] bg-white border border-[#D3DCEE] rounded-[8px]"
+              className="min-h-[40px] px-4 text-sm font-bold text-[#122654] bg-white border border-[#D3DCEE] hover:border-[#122654] rounded-[10px] cursor-pointer"
             >
               <option value="">+ Add account</option>
               {unusedSources.map(({ l, m }) => (
@@ -216,337 +226,327 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
             </select>
           )}
         </div>
-      )}
 
-      {pending.length > 0 && (
-        <div role="status" className="flex items-start gap-2 p-3 rounded-[10px] bg-[#FFF4DB] border border-[#F0D9A0] text-xs text-[#5C4100]">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            {pending.length === 1 ? '1 account is' : `${pending.length} accounts are`} mapped here but not confirmed, so not in the trial balance or on this paper:{' '}
-            <span className="font-semibold">{pending.map((m) => `${m.source_name || m.source_code} (${m.blynt_code})`).join(', ')}</span>.{' '}
-            <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="font-bold underline">
-              Confirm on Mapping
-            </Link>
+        {pending.length > 0 && (
+          <div role="status" className="flex items-start gap-2 p-3 rounded-[10px] bg-[#FFF4DB] border border-[#F0D9A0] text-xs text-[#5C4100]">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              {pending.length === 1 ? '1 account is' : `${pending.length} accounts are`} mapped here but not confirmed, so not in the trial balance or on this paper:{' '}
+              <span className="font-semibold">{pending.map((m) => `${m.source_name || m.source_code} (${m.blynt_code})`).join(', ')}</span>.{' '}
+              <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="font-bold underline">
+                Confirm on Mapping
+              </Link>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
-        <table className="w-full text-xs text-[#122654]">
-          <thead className="bg-[#F5F8FD]">
-            <tr>
-              <th className="w-8" />
-              <th className={`${th} text-left`}>Account</th>
-              <th className={`${th} text-right`}>Ledger</th>
-              <th className={`${th} text-right w-[150px]`}>Statement / count</th>
-              <th className={`${th} text-right`}>Reconciling items</th>
-              <th className={`${th} text-right`}>Difference</th>
-              <th className={`${th} text-left`}>Evidence</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#E3E7EF]">
-            {rows.length === 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-[#122654]">
+            <thead className="border-b border-[#E3E7EF]">
               <tr>
-                <td colSpan={8} className="p-3 text-[11px] text-[#7E8DA6]">
-                  No bank, card or cash accounts in the trial balance yet. Add one above once the trial balance is mapped.
-                </td>
+                <th className="w-10" />
+                <th className={`${rth} text-left`}>Account</th>
+                <th className={`${rth} text-right`}>Ledger balance</th>
+                <th className={`${rth} text-center w-[160px]`}>Statement / count</th>
+                <th className={`${rth} text-right`}>Difference</th>
+                <th className={`${rth} text-left`}>Status</th>
+                <th className={`${rth} text-left`}>Evidence</th>
+                <th className="w-8" />
               </tr>
-            )}
-            {rows.map(({ a, kind, ledger, entered, diff, files, status, note, ai }) => {
-              const isOpen = !!open[a.id];
-              const less = tot(`${a.id}_less`);
-              const add = tot(`${a.id}_add`);
-              const items = (a.less ?? []).length + (a.add ?? []).length;
-              const name = accountName(a, result.engagementId);
-              // A row from before accounts were named, with one client account on its code: show that account's name
-              const single = !a.client_code && a.code !== '*' && sourcesOf(a.code).length === 1 ? sourcesOf(a.code)[0] : null;
-              return (
-                <React.Fragment key={a.id}>
-                  <tr
-                    className={dragOver === a.id ? 'bg-[#FFF4F1]' : ''}
-                    onDragOver={(e) => {
-                      if (locked || !dropFiles) return;
-                      e.preventDefault();
-                      setDragOver(a.id);
-                    }}
-                    onDragLeave={() => setDragOver(null)}
-                    onDrop={(e) => onDrop(e, a.id)}
-                  >
-                    <td className="p-1.5 align-top">
-                      <button
-                        type="button"
-                        aria-expanded={isOpen}
-                        aria-label={`${isOpen ? 'Hide' : 'Show'} reconciling items for ${name}`}
-                        onClick={() => setOpen((o) => ({ ...o, [a.id]: !isOpen }))}
-                        className="p-1 rounded border border-[#D3DCEE] text-[#4A5878] hover:text-[#122654]"
-                      >
-                        {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      </button>
-                    </td>
-                    <td className="p-2 align-top">
-                      <div className="font-bold">
-                        {a.code !== '*' && <span className="font-mono font-normal text-[#4A5878] mr-1.5">{single?.blynt_code ?? rowCode(a, result.engagementId)}</span>}
-                        {single ? single.source_name || single.source_code : a.name}
-                      </div>
-                      <div className="text-[10px] text-[#4A5878]">
-                        {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
-                        {a.client_code || single ? ` · ${a.client_code ?? single!.source_code}` : ''}
-                        {a.detail ? ` · ${a.detail}` : ''}
-                      </div>
-                      {!locked && !a.client_code && a.code !== '*' && sourcesOf(a.code).length > 1 && (
-                        splitting === a.id ? (
-                          <div className="mt-1 p-2 rounded-[8px] border border-[#D3DCEE] bg-[#F5F8FD] text-[10px] text-[#122654] space-y-1">
-                            <div className="font-bold">{statementEntered(a) || files.length || items ? 'What is entered on this row, and its files, belong to:' : 'Split into one row per account:'}</div>
-                            <div className="flex flex-wrap gap-1">
-                              {sourcesOf(a.code).map((m) => (
-                                <button key={m.source_code} type="button" onClick={() => splitAccount(a, m.source_code)} className="px-2 py-0.5 rounded-[6px] border border-[#122654] font-bold hover:bg-white">
-                                  {m.source_name || m.source_code}
-                                </button>
-                              ))}
-                              <button type="button" onClick={() => setSplitting(null)} className="px-2 py-0.5 font-semibold text-[#4A5878]">
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button type="button" onClick={() => setSplitting(a.id)} className="mt-0.5 text-[10px] font-bold text-[#B8432F] hover:underline">
-                            Split into {sourcesOf(a.code).length} accounts
-                          </button>
-                        )
-                      )}
-                      {!locked && (statementEntered(a) || files.length > 0 || items > 0) && accounts.length > 1 && (
-                        <select
-                          aria-label={`Move the statement, items and files on ${name} to another account`}
-                          value=""
-                          onChange={(e) => e.target.value && moveDetails(a, e.target.value)}
-                          className="mt-0.5 block max-w-[180px] text-[10px] text-[#4A5878] bg-transparent border border-transparent hover:border-[#D3DCEE] rounded"
-                        >
-                          <option value="">Wrong account? Move to…</option>
-                          {accounts.filter((x) => x.id !== a.id).map((x) => (
-                            <option key={x.id} value={x.id}>
-                              {accountName(x, result.engagementId)}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {note && (
-                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#B8432F]">
-                          <AlertTriangle className="w-3 h-3 shrink-0" /> {note}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-2 align-top text-right">
-                      <div className="font-mono font-bold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
-                        {signed(ledger.final)}
-                      </div>
-                      {waiting(a) ? (
-                        <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="text-[10px] font-semibold text-[#8A5A00] underline">
-                          Not confirmed on Mapping
-                        </Link>
-                      ) : (
-                        <div className={`text-[10px] ${ledger.mapped ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{ledger.mapped ? 'Agrees to TB' : 'Not in the TB'}</div>
-                      )}
-                    </td>
-                    <td className="p-1.5 align-top">
-                      <MoneyInput
-                        label={`${kind === 'cash' ? 'Cash count' : 'Statement balance'} for ${name}`}
-                        value={a.statement_p}
-                        placeholder={kind === 'cash' ? 'Enter count' : 'Enter balance'}
-                        disabled={locked}
-                        onCommit={(p) => updateAcc(a.id, { statement_p: p, statement_date: undefined, source: 'manual', synced_at: undefined })}
-                      />
-                      <div className="mt-0.5 text-right text-[10px] text-[#4A5878]">
-                        {!entered
-                          ? kind === 'cash'
-                            ? 'Enter the cash count'
-                            : 'Enter the statement balance'
-                          : a.source === 'open_banking'
-                            ? `Open Banking${a.synced_at ? ` · ${new Date(a.synced_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`
-                            : a.source === 'upload'
-                              ? `Read from the statement${a.statement_date ? ` · ${ukDate(a.statement_date)}` : ''}`
-                              : 'Entered manually'}
-                      </div>
-                      {entered && a.statement_date && periodEnd && a.statement_date !== periodEnd && (
-                        <div className="text-right text-[10px] font-semibold text-[#8A5A00]">Not the year end ({ukDate(periodEnd)})</div>
-                      )}
-                    </td>
-                    <td className="p-2 align-top text-right">
-                      <div className="font-mono font-bold">{items ? formatPence(add - less) : 'None'}</div>
-                      <button type="button" onClick={() => setOpen((o) => ({ ...o, [a.id]: true }))} className="text-[10px] text-[#1D4E89] underline">
-                        {items ? `${items} item${items === 1 ? '' : 's'}` : locked ? '' : 'Add items'}
-                      </button>
-                    </td>
-                    <td className="p-2 align-top text-right">
-                      <div className={`font-mono font-bold ${!entered ? 'text-[#7E8DA6]' : abs(diff) > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{entered ? formatPence(diff) : '—'}</div>
-                      <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${pill[status]}`}>{pillLabel[status]}</span>
-                    </td>
-                    <td className="p-2 align-top">
-                      {files.length === 0 && !locked ? (
+            </thead>
+            <tbody className="divide-y divide-[#E3E7EF]">
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="p-3 text-xs text-[#7E8DA6]">
+                    No bank, card or cash accounts in the trial balance yet. Add one above once the trial balance is mapped.
+                  </td>
+                </tr>
+              )}
+              {rows.map(({ a, kind, ledger, entered, diff, files, status, note, ai }) => {
+                const isOpen = !!open[a.id];
+                const less = tot(`${a.id}_less`);
+                const items = (a.less ?? []).length + (a.add ?? []).length;
+                const name = accountName(a, result.engagementId);
+                // A row from before accounts were named, with one client account on its code: show that account's name
+                const single = !a.client_code && a.code !== '*' && sourcesOf(a.code).length === 1 ? sourcesOf(a.code)[0] : null;
+                return (
+                  <React.Fragment key={a.id}>
+                    <tr
+                      className={dragOver === a.id ? 'bg-[#FFF4F1]' : ''}
+                      onDragOver={(e) => {
+                        if (locked || !dropFiles) return;
+                        e.preventDefault();
+                        setDragOver(a.id);
+                      }}
+                      onDragLeave={() => setDragOver(null)}
+                      onDrop={(e) => onDrop(e, a.id)}
+                    >
+                      <td className="p-2 align-top">
                         <button
                           type="button"
-                          onClick={() => attachTo(a.id)}
-                          className="w-full min-w-[150px] px-2 py-1.5 text-[10px] text-[#4A5878] border border-dashed border-[#B9C4D8] hover:border-[#122654] rounded-[8px] text-left"
+                          aria-expanded={isOpen}
+                          aria-label={`${isOpen ? 'Hide' : 'Show'} reconciling items for ${name}`}
+                          onClick={() => setOpen((o) => ({ ...o, [a.id]: !isOpen }))}
+                          className="p-1.5 rounded-[8px] border border-[#E3E7EF] bg-white text-[#122654] hover:border-[#122654]"
                         >
-                          <Upload className="inline w-3 h-3 mr-1" />
-                          Attach {kind === 'cash' ? 'count sheet' : 'statement'} or drop here
+                          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </button>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {tickFor(a.id, name)}
-                            <RowFiles files={files} onPreview={preview} onAttach={() => attachTo(a.id)} disabled={locked} label={name} />
-                            {readStatement && kind !== 'cash' && !locked && (
-                              <button
-                                type="button"
-                                onClick={() => readStatement(a.id)}
-                                aria-label={`Read the statement for ${name} with AI`}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#B8432F] border border-[#FF7A66]/40 bg-[#FFF8F6] hover:bg-[#FFF1EE] rounded-[6px]"
-                              >
-                                <Sparkles className="w-3 h-3" /> Read with AI
-                              </button>
-                            )}
-                          </div>
-                          {ai && (
-                            <div className="text-[10px] text-[#0B6B52]">
-                              <Sparkles className="inline w-3 h-3 mr-0.5" />
-                              AI: closing balance {formatPence(asPence(ai.value))} read from page {ai.page}
-                              {asPence(ai.value) === asPence(a.statement_p || '0') ? ', agrees' : ', differs from the balance entered'}
-                              {ai.confirmed ? '' : ' · confirm above'}
-                            </div>
-                          )}
-                          {/* Balances read off the statement: one click swaps in the year-end figure, or the date before or after it */}
-                          {!locked && (a.ai_balances ?? []).some((b) => asPence(b.balance_p) !== asPence(a.statement_p || '0') || b.date !== a.statement_date) && (
-                            <div className="flex flex-col gap-0.5 text-[10px]">
-                              <span className="text-[#4A5878]">
-                                <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
-                                {asPence(a.ai_balances![0].balance_p) === asPence(a.statement_p || '0') ? 'Other balances on the statement:' : 'AI suggests:'}
-                              </span>
-                              {a.ai_balances!
-                                .filter((b) => asPence(b.balance_p) !== asPence(a.statement_p || '0') || b.date !== a.statement_date)
-                                .map((b) => (
-                                  <button
-                                    key={`${b.date}:${b.balance_p}`}
-                                    type="button"
-                                    onClick={() => updateAcc(a.id, { statement_p: b.balance_p, statement_date: b.date || undefined, source: 'upload', synced_at: undefined })}
-                                    title={`${b.label}${b.page ? `, page ${b.page}` : ''}`}
-                                    className="text-left text-[#1D4E89] hover:underline"
-                                  >
-                                    Use {formatPence(asPence(b.balance_p))}
-                                    {b.date ? ` · ${ukDate(b.date)}` : ''} <span className="text-[#7E8DA6]">({b.label})</span>
+                      </td>
+                      <td className="p-3 align-top">
+                        <div className="font-bold">
+                          {a.code !== '*' && <span className="font-mono mr-1.5">{single?.blynt_code ?? rowCode(a, result.engagementId)}</span>}
+                          {single ? single.source_name || single.source_code : a.name}
+                        </div>
+                        <div className="text-xs text-[#4A5878]">
+                          {a.code === '*' ? 'All bank and cash accounts' : KIND_LABEL[kind]}
+                          {a.client_code || single ? ` · ${a.client_code ?? single!.source_code}` : ''}
+                          {a.detail ? ` · ${a.detail}` : ''}
+                        </div>
+                        {!locked && !a.client_code && a.code !== '*' && sourcesOf(a.code).length > 1 && (
+                          splitting === a.id ? (
+                            <div className="mt-1 p-2 rounded-[8px] border border-[#D3DCEE] bg-[#F5F8FD] text-[11px] text-[#122654] space-y-1">
+                              <div className="font-bold">{statementEntered(a) || files.length || items ? 'What is entered on this row, and its files, belong to:' : 'Split into one row per account:'}</div>
+                              <div className="flex flex-wrap gap-1">
+                                {sourcesOf(a.code).map((m) => (
+                                  <button key={m.source_code} type="button" onClick={() => splitAccount(a, m.source_code)} className="px-2 py-0.5 rounded-[6px] border border-[#122654] font-bold hover:bg-white">
+                                    {m.source_name || m.source_code}
                                   </button>
                                 ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-1 align-top text-right">
-                      {/* An account with a trial balance figure comes off this paper only by remapping it, so it has no remove button */}
-                      {(ledger.final === 0n || a.code === '*') && <RemoveButton onClick={() => removeAccount(a)} label={`Remove ${name}`} disabled={locked} />}
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="bg-[#FAFBFD]">
-                      <td />
-                      <td colSpan={7} className="p-3">
-                        <div className="grid grid-cols-1 gap-3 max-w-2xl">
-                          {(
-                            [
-                              // One list: a deposit in transit is entered as a negative payment
-                              ['less', 'Reconciliation:', less, 'payment'],
-                            ] as const
-                          ).map(([side, title, total, noun]) => (
-                            <div key={side} className="p-3 bg-white border border-[#E3E7EF] rounded-[10px]">
-                              <div className="flex items-center justify-between font-bold mb-2">
-                                <span>{title}</span>
-                                <span className="font-mono">{formatPence(total)}</span>
+                                <button type="button" onClick={() => setSplitting(null)} className="px-2 py-0.5 font-semibold text-[#4A5878]">
+                                  Cancel
+                                </button>
                               </div>
-                              {(a[side] ?? []).length === 0 && <div className="text-[11px] text-[#7E8DA6] mb-2">No {noun}s.</div>}
-                              {(a[side] ?? []).map((r) => (
-                                <div key={r.id} className="grid grid-cols-[110px_1fr_110px_auto] items-center gap-1.5 mb-1.5">
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setSplitting(a.id)} className="mt-0.5 text-xs font-bold text-[#B8432F] hover:underline">
+                              Split into {sourcesOf(a.code).length} accounts
+                            </button>
+                          )
+                        )}
+                        {note && (
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-[#B8432F]">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {note}
+                          </div>
+                        )}
+                        {!locked && (statementEntered(a) || files.length > 0 || items > 0) && accounts.length > 1 && (
+                          <label className="mt-0.5 flex items-center gap-1 text-xs text-[#4A5878]">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-[#8A5A00]" />
+                            <select
+                              aria-label={`Move the statement, items and files on ${name} to another account`}
+                              value=""
+                              onChange={(e) => e.target.value && moveDetails(a, e.target.value)}
+                              className="max-w-[180px] text-xs text-[#4A5878] bg-transparent border border-transparent hover:border-[#D3DCEE] rounded cursor-pointer"
+                            >
+                              <option value="">Wrong account? Move to…</option>
+                              {accounts.filter((x) => x.id !== a.id).map((x) => (
+                                <option key={x.id} value={x.id}>
+                                  {accountName(x, result.engagementId)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </td>
+                      <td className="p-3 align-top text-right">
+                        <div className="font-mono font-semibold whitespace-nowrap" title={ledger.final < 0n ? 'Credit: owed or overdrawn' : 'Debit: money held'}>
+                          {signed(ledger.final)}
+                        </div>
+                        {waiting(a) ? (
+                          <Link href={`/engagements/${encodeURIComponent(result.engagementId)}/mapping`} className="text-[11px] font-semibold text-[#8A5A00] underline">
+                            Not confirmed on Mapping
+                          </Link>
+                        ) : (
+                          !ledger.mapped && <div className="text-[11px] text-[#B42318]">Not in the TB</div>
+                        )}
+                      </td>
+                      <td className="p-2 align-top">
+                        <MoneyInput
+                          label={`${kind === 'cash' ? 'Cash count' : 'Statement balance'} for ${name}`}
+                          value={a.statement_p}
+                          placeholder={kind === 'cash' ? 'Enter count' : 'Enter balance'}
+                          disabled={locked}
+                          onCommit={(p) => updateAcc(a.id, { statement_p: p, statement_date: undefined, source: 'manual', synced_at: undefined })}
+                        />
+                        {entered && (
+                          <div className="mt-0.5 text-right text-[11px] text-[#4A5878]">
+                            {a.source === 'open_banking'
+                              ? `Open Banking${a.synced_at ? ` · ${new Date(a.synced_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`
+                              : a.source === 'upload'
+                                ? `Read from the statement${a.statement_date ? ` · ${ukDate(a.statement_date)}` : ''}`
+                                : 'Entered manually'}
+                          </div>
+                        )}
+                        {entered && a.statement_date && periodEnd && a.statement_date !== periodEnd && (
+                          <div className="text-right text-[11px] font-semibold text-[#8A5A00]">Not the year end ({ukDate(periodEnd)})</div>
+                        )}
+                      </td>
+                      <td className="p-3 align-top text-right">
+                        <div className={`font-mono font-semibold whitespace-nowrap ${!entered ? 'text-[#7E8DA6]' : abs(diff) > tolerance ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>{entered ? formatPence(diff) : '—'}</div>
+                        {items > 0 && (
+                          <button type="button" onClick={() => setOpen((o) => ({ ...o, [a.id]: true }))} className="text-[11px] text-[#1D4E89] underline whitespace-nowrap">
+                            after {items} item{items === 1 ? '' : 's'}
+                          </button>
+                        )}
+                      </td>
+                      <td className="p-3 align-top">
+                        <span className={`inline-block px-3 py-1 rounded-[8px] text-xs font-semibold whitespace-nowrap ${pill[status]}`}>{pillLabel[status]}</span>
+                      </td>
+                      <td className="p-2 align-top">
+                        {files.length === 0 && !locked ? (
+                          <button
+                            type="button"
+                            onClick={() => attachTo(a.id)}
+                            title={`Attach the ${kind === 'cash' ? 'count sheet' : 'statement'}, or drop it on this row`}
+                            aria-label={`Attach ${kind === 'cash' ? 'count sheet' : 'statement'} for ${name}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#122654] border border-dashed border-[#B9C4D8] hover:border-[#122654] rounded-[8px] whitespace-nowrap"
+                          >
+                            <Upload className="w-3.5 h-3.5" /> Attach
+                          </button>
+                        ) : (
+                          <div className="flex flex-col gap-1 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {tickFor(a.id, name)}
+                              <RowFiles files={files} onPreview={preview} onAttach={() => attachTo(a.id)} disabled={locked} label={name} />
+                              {readStatement && kind !== 'cash' && !locked && (
+                                <button
+                                  type="button"
+                                  onClick={() => readStatement(a.id)}
+                                  aria-label={`Read the statement for ${name} with AI`}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold text-[#B8432F] border border-[#FF7A66]/40 bg-[#FFF8F6] hover:bg-[#FFF1EE] rounded-[6px]"
+                                >
+                                  <Sparkles className="w-3 h-3" /> Read with AI
+                                </button>
+                              )}
+                            </div>
+                            {ai && (
+                              <div className="text-[11px] text-[#0B6B52]">
+                                <Sparkles className="inline w-3 h-3 mr-0.5" />
+                                AI: closing balance {formatPence(asPence(ai.value))} read from page {ai.page}
+                                {asPence(ai.value) === asPence(a.statement_p || '0') ? ', agrees' : ', differs from the balance entered'}
+                                {ai.confirmed ? '' : ' · confirm above'}
+                              </div>
+                            )}
+                            {/* Balances read off the statement: one click swaps in the year-end figure, or the date before or after it */}
+                            {!locked && (a.ai_balances ?? []).some((b) => asPence(b.balance_p) !== asPence(a.statement_p || '0') || b.date !== a.statement_date) && (
+                              <div className="flex flex-col gap-0.5 text-[11px]">
+                                <span className="text-[#4A5878]">
+                                  <Sparkles className="inline w-3 h-3 mr-0.5 text-[#B8432F]" />
+                                  {asPence(a.ai_balances![0].balance_p) === asPence(a.statement_p || '0') ? 'Other balances on the statement:' : 'AI suggests:'}
+                                </span>
+                                {a.ai_balances!
+                                  .filter((b) => asPence(b.balance_p) !== asPence(a.statement_p || '0') || b.date !== a.statement_date)
+                                  .map((b) => (
+                                    <button
+                                      key={`${b.date}:${b.balance_p}`}
+                                      type="button"
+                                      onClick={() => updateAcc(a.id, { statement_p: b.balance_p, statement_date: b.date || undefined, source: 'upload', synced_at: undefined })}
+                                      title={`${b.label}${b.page ? `, page ${b.page}` : ''}`}
+                                      className="text-left text-[#1D4E89] hover:underline"
+                                    >
+                                      Use {formatPence(asPence(b.balance_p))}
+                                      {b.date ? ` · ${ukDate(b.date)}` : ''} <span className="text-[#7E8DA6]">({b.label})</span>
+                                    </button>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-1 align-top text-right">
+                        {/* An account with a trial balance figure comes off this paper only by remapping it, so it has no remove button */}
+                        {(ledger.final === 0n || a.code === '*') && <RemoveButton onClick={() => removeAccount(a)} label={`Remove ${name}`} disabled={locked} />}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={8} className="px-2 pb-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-4 bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] text-sm">
+                            {/* One list: a deposit in transit is entered as a negative payment */}
+                            <div>
+                              <div className="flex items-center justify-between font-bold mb-1">
+                                <span>Reconciliation</span>
+                                {(a.less ?? []).length > 0 && <span className="font-mono">{formatPence(less)}</span>}
+                              </div>
+                              {(a.less ?? []).length === 0 && <div className="text-xs text-[#4A5878] mb-2">No payments.</div>}
+                              {(a.less ?? []).map((r) => (
+                                <div key={r.id} className="grid grid-cols-[110px_1fr_110px_auto] items-center gap-1.5 mb-1.5 text-xs">
                                   <input
                                     type="date"
-                                    aria-label={`Date of ${r.desc || noun}`}
+                                    aria-label={`Date of ${r.desc || 'payment'}`}
                                     disabled={locked}
                                     value={r.date ?? ''}
-                                    onChange={(e) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, date: e.target.value } : x)))}
+                                    onChange={(e) => updateItems(a.id, 'less', (rs) => rs.map((x) => (x.id === r.id ? { ...x, date: e.target.value } : x)))}
                                     className="px-1.5 py-1 text-xs bg-white border border-[#D3DCEE] rounded-[8px] disabled:bg-[#F5F8FD]"
                                   />
                                   <TextInput
-                                    label={`Description of ${noun}`}
+                                    label="Description of payment"
                                     value={r.desc}
                                     disabled={locked}
                                     placeholder="e.g. Cheque 001042, or a deposit as a minus"
-                                    onCommit={(v) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, desc: v } : x)))}
+                                    onCommit={(v) => updateItems(a.id, 'less', (rs) => rs.map((x) => (x.id === r.id ? { ...x, desc: v } : x)))}
                                   />
                                   <MoneyInput
-                                    label={`${r.desc || noun} amount`}
+                                    label={`${r.desc || 'payment'} amount`}
                                     value={r.amount_p}
                                     disabled={locked}
                                     allowNegative
-                                    onCommit={(p) => updateItems(a.id, side, (rs) => rs.map((x) => (x.id === r.id ? { ...x, amount_p: p } : x)))}
+                                    onCommit={(p) => updateItems(a.id, 'less', (rs) => rs.map((x) => (x.id === r.id ? { ...x, amount_p: p } : x)))}
                                   />
                                   <div className="flex items-center gap-1">
-                                    <RowFiles files={filesFor(r.id)} onPreview={preview} onAttach={() => attachTo(r.id)} disabled={locked} label={`after-date proof for ${r.desc || noun}`} />
-                                    <RemoveButton onClick={() => updateItems(a.id, side, (rs) => rs.filter((x) => x.id !== r.id))} label={`Remove ${noun}`} disabled={locked} />
+                                    <RowFiles files={filesFor(r.id)} onPreview={preview} onAttach={() => attachTo(r.id)} disabled={locked} label={`after-date proof for ${r.desc || 'payment'}`} />
+                                    <RemoveButton onClick={() => updateItems(a.id, 'less', (rs) => rs.filter((x) => x.id !== r.id))} label="Remove payment" disabled={locked} />
                                   </div>
                                 </div>
                               ))}
                               {!locked && (
-                                <button
-                                  type="button"
-                                  className={addBtn}
-                                  onClick={() => updateItems(a.id, side, (rs) => [...rs, { id: newId('r'), date: '', desc: '', amount_p: '0' }])}
-                                >
-                                  <Plus className="w-3.5 h-3.5" /> Add {noun}
+                                <button type="button" className={addBtn} onClick={() => updateItems(a.id, 'less', (rs) => [...rs, { id: newId('r'), date: '', desc: '', amount_p: '0' }])}>
+                                  <Plus className="w-3.5 h-3.5" /> Add payment
                                 </button>
                               )}
                             </div>
-                          ))}
-                        </div>
-                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl text-xs">
-                          <label className="flex flex-col gap-1">
-                            <span className="font-semibold">Bank or provider</span>
-                            <TextInput label={`Bank or provider for ${name}`} value={a.detail} disabled={locked} placeholder="e.g. Starling Business Current Account" onCommit={(v) => updateAcc(a.id, { detail: v })} />
-                          </label>
-                          {kind !== 'cash' && (
-                            <label className="flex flex-col gap-1">
-                              <span className="font-semibold">Balance per bank confirmation (optional)</span>
-                              <MoneyInput label={`Bank confirmation for ${name}`} value={a.confirmation_p} disabled={locked} onCommit={(p) => updateAcc(a.id, { confirmation_p: p })} />
-                            </label>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-          {rows.length > 0 && (
-            <tfoot className="border-t-2 border-[#122654]/20 font-bold">
-              <tr>
-                <td />
-                <td className="p-2">
-                  Total · {rows.length} account{rows.length === 1 ? '' : 's'}
-                </td>
-                <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('ledger'))}</td>
-                <td className="p-2 text-right font-mono whitespace-nowrap">{signed(tot('statement'))}</td>
-                <td className="p-2 text-right font-mono">{formatPence(tot('adjusted') - tot('statement'))}</td>
-                <td className={`p-2 text-right font-mono ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
-                  {formatPence(rows.filter((r) => r.entered).reduce((acc, r) => acc + abs(r.diff), 0n))}
-                  {todo ? ` + ${todo} to do` : ''}
-                </td>
-                <td className="p-2 text-[11px] font-normal text-[#4A5878]" colSpan={2}>
-                  {withEvidence} of {rows.length} attached
-                </td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
+                            <div className="flex flex-col gap-3 md:pl-5 md:border-l md:border-[#D3DCEE] text-xs">
+                              <label className="flex flex-col gap-1">
+                                <span className="text-sm font-bold">Bank or provider</span>
+                                <TextInput label={`Bank or provider for ${name}`} value={a.detail} disabled={locked} placeholder="e.g. Starling Business Current Account" onCommit={(v) => updateAcc(a.id, { detail: v })} />
+                              </label>
+                              {kind !== 'cash' && (
+                                <label className="flex flex-col gap-1">
+                                  <span className="text-sm font-bold">Balance per bank confirmation (optional)</span>
+                                  <MoneyInput label={`Bank confirmation for ${name}`} value={a.confirmation_p} disabled={locked} onCommit={(p) => updateAcc(a.id, { confirmation_p: p })} />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            {rows.length > 0 && (
+              <tfoot className="bg-[#F5F8FD] font-bold">
+                <tr>
+                  <td />
+                  <td className="p-3">
+                    Total · {rows.length} account{rows.length === 1 ? '' : 's'}
+                  </td>
+                  <td className="p-3 text-right font-mono whitespace-nowrap">{signed(tot('ledger'))}</td>
+                  <td className="p-3 text-right font-mono whitespace-nowrap">{signed(tot('statement'))}</td>
+                  <td className={`p-3 text-right font-mono whitespace-nowrap ${rows.some((r) => r.entered && abs(r.diff) > tolerance) ? 'text-[#B42318]' : 'text-[#0B6B52]'}`}>
+                    {formatPence(rows.filter((r) => r.entered).reduce((acc, r) => acc + abs(r.diff), 0n))}
+                    {todo ? ` + ${todo} to do` : ''}
+                  </td>
+                  <td />
+                  <td className="p-3 text-xs font-normal text-[#4A5878] whitespace-nowrap" colSpan={2}>
+                    {withEvidence} of {rows.length} attached
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
-
     </div>
   );
 }
