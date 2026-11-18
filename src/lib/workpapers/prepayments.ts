@@ -20,6 +20,10 @@ export interface PrepLine {
   method: 'days' | 'months' | 'all';
   found?: boolean; // found in the ledger, needs a decision
   decision?: 'add' | 'not';
+  url?: string; // the record in Xero
+  ref?: string; // its invoice number
+  /** The AI's reading of the description: the period it covers when that can be told, and a line on whether it runs past the year end. */
+  ai?: { from: string; to: string; summary: string };
 }
 
 const LOOKS_PREPAID = /insurance|annual|subscription|licen[cs]e|renewal|in advance|quarter|booking|deposit for|rent/i;
@@ -61,10 +65,12 @@ export function findPrepaidCosts(engagementId: string, periodEnd: string, minimu
   const costs = ledgerFor(engagementId, ['4']).filter((t) => t.date > from && t.date <= periodEnd && asPence(t.amount_p) > 0n);
   const looks = costs.filter((t) => LOOKS_PREPAID.test(`${t.description} ${t.contact}`));
   const small = looks.filter((t) => asPence(t.amount_p) < minimum);
+  // Where each cost opens in Xero, also for lines found by an earlier search
+  const links = new Map(looks.map((t) => [`prep_${t.id}`, { ...(t.external_url ? { url: t.external_url } : {}), ...(t.ref ? { ref: t.ref } : {}) }]));
   const found: PrepLine[] = looks
     .filter((t) => asPence(t.amount_p) >= minimum && !existing.some((l) => l.id === `prep_${t.id}`))
-    .map((t) => ({ id: `prep_${t.id}`, desc: [t.contact, t.description].filter(Boolean).join(' · '), code: chartCodeOf(engagementId, t.account_code) ?? '4990', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true }));
-  return { found, scanned: costs.length, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(t.amount_p), 0n) };
+    .map((t) => ({ id: `prep_${t.id}`, desc: [t.contact, t.description].filter(Boolean).join(' · '), code: chartCodeOf(engagementId, t.account_code) ?? '4990', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true, ...links.get(`prep_${t.id}`) }));
+  return { found, links, scanned: costs.length, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(t.amount_p), 0n) };
 }
 
 /** Last year's paper: its prepayments, and whether its journal was reversed into this year. */

@@ -337,6 +337,30 @@ export const reviewAfterDateCostsTask: TaskDef<AfterDateCostsInput, AfterDateCos
   effort: 'low',
 };
 
+// ---------------------------------------------------------------- prepayments: costs in the year that may run past the period end
+
+/** The same input and answer as the creditors reading, asked the other way round: costs posted before the period end. */
+export const reviewPrepaidCostsTask: TaskDef<AfterDateCostsInput, AfterDateCostsOutput> = {
+  ...reviewAfterDateCostsTask,
+  id: 'review_prepaid_costs',
+  module: 'prepayments',
+  version: '2026-11-18',
+  build: (d) => [
+    json('costs_posted_in_the_year', d),
+    {
+      type: 'text',
+      text:
+        'These costs were posted to the ledger in the year ending on period_end. An accountant must decide whether part of each is a ' +
+        'prepayment: goods or services that run past period_end. For every cost, return its id with: covers_from and covers_to, the ' +
+        'period the goods or services cover as YYYY-MM-DD, only when the description or the supplier\'s billing pattern in ' +
+        'supplier_history shows it (for example a named month, a quarter, a date range, or a yearly charge the supplier bills once a ' +
+        'year); leave both as empty strings when it cannot be told. And summary: one short sentence, at most 25 words, saying whether ' +
+        'it looks like it runs past the period end, falls wholly within the year (for example a monthly charge or a one-off stay), ' +
+        'or cannot be told, naming the evidence, and what to check on the invoice when unsure. Do not guess dates.',
+    },
+  ],
+};
+
 // ---------------------------------------------------------------- research (internal sources only)
 
 export interface ResearchOutput {

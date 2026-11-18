@@ -17,13 +17,14 @@ import {
   riskReviewTask,
   suggestProvisionTask,
   reviewAfterDateCostsTask,
+  reviewPrepaidCostsTask,
   researchTask,
   type PaperInput,
 } from './tasks/accounting';
 import type { UserRole } from '../../types/models';
 import { debtorView, type DebtorLine } from '../../workpapers/debtors';
 import { searchAfterDate } from '../../workpapers/creditors';
-import { chartName, ledgerFor } from '../../workpapers/common';
+import { chartCodeOf, chartName, ledgerFor } from '../../workpapers/common';
 import { asPence } from '../../money';
 import { mappingExamples } from '../learning';
 import { vatFactsFor } from '../../tax';
@@ -299,6 +300,25 @@ export async function reviewAfterDateCosts(actor: Actor, engagementId: string, o
   const days = Math.min(366, Math.max(1, Math.round(Number(opts.days) || 60)));
   const found = searchAfterDate(engagementId, eng.period_end, days, asPence(opts.min_p || '0'));
   const costs = (opts.ids?.length ? found.filter((i) => opts.ids!.includes(i.id)) : found).slice(0, AFTER_DATE_BATCH);
+  return readCosts(reviewAfterDateCostsTask, actor, engagementId, costs, channel);
+}
+
+/**
+ * The AI's reading of costs the prepayments search found in the year: the period each covers when the
+ * description or the supplier's billing shows it, and a line on whether it runs past the period end.
+ * Read from the ledger here, not from the browser; nothing is saved and the person still decides.
+ * shortcut: reads the first 60 costs asked for, ask again for the rest.
+ */
+export async function reviewPrepaidCosts(actor: Actor, engagementId: string, opts: { ids: string[] }, channel?: RunCtx['channel']) {
+  const costs = ledgerFor(engagementId, ['4'])
+    .filter((t) => opts.ids.includes(`prep_${t.id}`))
+    .slice(0, AFTER_DATE_BATCH)
+    .map((t) => ({ id: `prep_${t.id}`, date: t.date, contact: t.contact, desc: t.description, amount_p: t.amount_p, code: chartCodeOf(engagementId, t.account_code) ?? '4990' }));
+  return readCosts(reviewPrepaidCostsTask, actor, engagementId, costs, channel);
+}
+
+async function readCosts(task: typeof reviewAfterDateCostsTask, actor: Actor, engagementId: string, costs: { id: string; date: string; contact: string; desc: string; amount_p: string; code: string }[], channel?: RunCtx['channel']) {
+  const eng = engagementOf(engagementId);
   if (!costs.length) return { items: [] };
   const suppliers = new Set(costs.map((i) => i.contact).filter(Boolean));
   const history = ledgerFor(engagementId, ['2', '3', '4'])
@@ -306,7 +326,7 @@ export async function reviewAfterDateCosts(actor: Actor, engagementId: string, o
     .sort((a, b) => b.date.localeCompare(a.date));
   const seen = new Map<string, number>();
   const r = await run(
-    reviewAfterDateCostsTask,
+    task,
     {
       period_end: eng.period_end,
       costs: costs.map((i) => ({ id: i.id, posted: i.date, supplier: i.contact, description: i.desc, amount_p: i.amount_p, account: `${i.code} ${chartName(i.code)}` })),

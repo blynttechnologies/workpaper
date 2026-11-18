@@ -856,6 +856,7 @@ export interface LedgerTransaction {
   source: 'Xero' | 'QuickBooks' | 'Bank Feed' | 'CSV Upload';
   external_id?: string;
   external_url?: string;
+  ref?: string; // the invoice or credit note number
   attachment_url?: string;
   attachment_name?: string;
   invoice_id?: string;

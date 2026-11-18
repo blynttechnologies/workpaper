@@ -7,7 +7,7 @@ vi.mock('../lib/server/ai/gateway', () => ({ run: (...a: unknown[]) => run(...a)
 
 import { db } from '../lib/server/db';
 import { searchAfterDate } from '../lib/workpapers/creditors';
-import { reviewAfterDateCosts } from '../lib/server/ai/services';
+import { reviewAfterDateCosts, reviewPrepaidCosts } from '../lib/server/ai/services';
 
 const actor = { id: 'usr_admin', name: 'Admin', role: 'admin' as const, firmId: 'firm_blynt_uk' };
 let engId = '';
@@ -63,6 +63,17 @@ describe("the AI's reading of costs posted after the period end", () => {
     const input = run.mock.calls[0][1];
     expect(input.costs).toHaveLength(2);
     expect(input.supplier_history).toEqual([{ supplier: 'Booker', posted: day(-4), description: '1666 wk 31', amount_p: '700000' }]);
+  });
+
+  it('reads the costs the prepayments search found, from the cost accounts only', async () => {
+    db.account_mappings.push({ id: 'm_sub', engagement_id: engId, source_code: 'SUB', source_name: 'Subscriptions', source_type: 'Overheads', balance_p: '0', blynt_code: '4600', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
+    db.transactions.push({ id: 'tx_p_2', engagement_id: engId, account_code: 'SUB', account_name: 'Subscriptions', date: day(-30), contact: 'Acme', description: 'Annual licence', amount_p: '90000', vat_p: '0', gross_p: '90000', source: 'Xero' });
+    run.mockResolvedValue({ output: { items: [{ id: 'prep_tx_p_2', covers_from: day(-30), covers_to: day(334), summary: 'Annual licence, so most of it runs past the year end.' }] }, provider: 'anthropic', model: 'm' });
+    // tx_old is a purchase, not an overhead, so it is not read however it is asked for
+    const out = await reviewPrepaidCosts(actor, engId, { ids: ['prep_tx_p_2', 'prep_tx_old'] });
+    expect(out.items).toEqual([{ id: 'prep_tx_p_2', from: day(-30), to: day(334), summary: 'Annual licence, so most of it runs past the year end.' }]);
+    expect(run.mock.calls[0][0].id).toBe('review_prepaid_costs');
+    expect(run.mock.calls[0][1].costs).toEqual([{ id: 'prep_tx_p_2', posted: day(-30), supplier: 'Acme', description: 'Annual licence', amount_p: '90000', account: expect.stringMatching(/^4600 /) }]);
   });
 
   it('does not ask the AI when there is nothing to read', async () => {

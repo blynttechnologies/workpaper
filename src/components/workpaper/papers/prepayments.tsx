@@ -2,7 +2,7 @@
 
 import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
@@ -35,6 +35,26 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
   const codes = expenseCodes();
 
   const setLine = (id: string, patch: Partial<PrepLine>) => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.id === id ? { ...l, ...patch } : l)) });
+  // The AI reads each cost still to decide: the period it covers when the description says, and whether it runs past the year end. It never decides.
+  const [aiReading, setAiReading] = useState(false);
+  const [aiNote, setAiNote] = useState('');
+  const unread = (l: PrepLine) => !!l.found && !l.decision && !l.ai;
+  const readCosts = async (ids: string[]) => {
+    if (!ids.length) return;
+    setAiReading(true);
+    setAiNote('');
+    try {
+      const res = await fetch(`/api/v1/engagements/${encodeURIComponent(result.engagementId)}/ai-prepaid-costs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'The AI could not read these costs. Try again.');
+      const read = new Map<string, NonNullable<PrepLine['ai']>>((body.items ?? []).map((x: { id: string; from: string; to: string; summary: string }) => [x.id, { from: x.from, to: x.to, summary: x.summary }]));
+      save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (read.has(l.id) ? { ...l, ai: read.get(l.id) } : l)) });
+    } catch (e) {
+      setAiNote((e as Error).message);
+    } finally {
+      setAiReading(false);
+    }
+  };
   const scan = () => {
     // live(), not the render's value: the amount box commits on blur, just before this click
     const minimum = asPence(live().min_p ?? '10000');
@@ -44,7 +64,9 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
     const kept = all.filter((l) => !(l.found && asPence(l.net_p) < minimum && !l.end && l.method !== 'all' && !filesFor(l.id).length));
     const dropped = all.length - kept.length;
     const r = findPrepaidCosts(result.engagementId, pe, minimum, kept);
-    save({ prepayments: [...kept, ...r.found], scanned_at: new Date().toISOString(), scan: { scanned: r.scanned, small: r.small, small_p: r.smallTotal.toString() } });
+    const lines = [...kept.map((l) => ({ ...l, ...r.links.get(l.id) })), ...r.found];
+    save({ prepayments: lines, scanned_at: new Date().toISOString(), scan: { scanned: r.scanned, small: r.small, small_p: r.smallTotal.toString() } });
+    void readCosts(lines.filter(unread).map((l) => l.id));
     setNote(
       `${r.scanned} cost${r.scanned === 1 ? '' : 's'} in the year scanned; ${r.found.length} new one${r.found.length === 1 ? '' : 's'} read like they run past the year end.${r.small ? ` ${r.small} under ${formatPence(minimum)} (${formatPence(r.smallTotal)}) left out.` : ''}${dropped ? ` ${dropped} taken off the list.` : ''} Enter the period covered from each invoice.`
     );
@@ -120,6 +142,12 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
         )}
       </div>
       {note && <Notice tone="ok" inline>{note}</Notice>}
+      {aiNote && <Notice inline>{aiNote}</Notice>}
+      {!locked && !aiReading && tab === 'prep' && views.some((v) => unread(v.l)) && (
+        <button type="button" className="self-start text-[10px] text-[#1D4E89] underline inline-flex items-center gap-1" onClick={() => readCosts(views.filter((v) => unread(v.l)).map((v) => v.l.id))}>
+          <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Read with AI
+        </button>
+      )}
 
       {tab === 'prep' && (
       <div className="overflow-x-auto">
@@ -162,7 +190,19 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                       <TextInput label="Item" value={l.desc} disabled={locked} placeholder="e.g. Business insurance · annual policy" onCommit={(d) => setLine(l.id, { desc: d })} />
                       <div className="mt-1 flex items-center gap-1">
                         <CodePicker label={`Cost account for ${name}`} value={l.code} codes={codes} disabled={locked} onChange={(c) => setLine(l.id, { code: c })} />
-                        {l.found && <span className="text-[10px] text-[#4A5878]">found in the ledger</span>}
+                        {l.found && (
+                          <span className="text-[10px] text-[#4A5878]">
+                            found in the ledger
+                            {l.url && (
+                              <>
+                                {' · '}
+                                <a href={l.url} target="_blank" rel="noreferrer" className="text-[#1D4E89] underline">
+                                  {l.ref || 'Open in Xero'}
+                                </a>
+                              </>
+                            )}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="p-1.5 align-top">{date(l.invoice_date, `Invoice date of ${name}`, (d) => setLine(l.id, { invoice_date: d }))}</td>
@@ -223,7 +263,11 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                               )
                             }
                           >
-                            Posted {ukDate(l.invoice_date ?? '')} and reads like it covers time after {ukDate(pe)}. Check the invoice for the period it covers.
+                            {l.ai?.summary
+                              ? `${l.ai.summary}${l.ai.from && l.ai.to ? ` Reads as covering ${ukDate(l.ai.from)} to ${ukDate(l.ai.to)}.` : ''}`
+                              : aiReading
+                                ? 'Reading the description…'
+                                : `Posted ${ukDate(l.invoice_date ?? '')} and reads like it covers time after ${ukDate(pe)}. Check the invoice for the period it covers.`}
                           </SuggestionRow>
                         ) : (
                           <div className="text-[11px] text-[#4A5878]">
