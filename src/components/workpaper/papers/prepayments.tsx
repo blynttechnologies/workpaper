@@ -36,8 +36,12 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
 
   const setLine = (id: string, patch: Partial<PrepLine>) => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.id === id ? { ...l, ...patch } : l)) });
   const scan = () => {
-    const r = findPrepaidCosts(result.engagementId, pe, minimum, live().prepayments ?? []);
-    save({ prepayments: [...(live().prepayments ?? []), ...r.found], scanned_at: new Date().toISOString(), scan: { scanned: r.scanned, small: r.small, small_p: r.smallTotal.toString() } });
+    // live(), not the render's value: the amount box commits on blur, just before this click
+    const minimum = asPence(live().min_p ?? '10000');
+    // Undecided suggestions now under the amount are dropped; decided and hand-added lines stay
+    const kept = ((live().prepayments ?? []) as PrepLine[]).filter((l) => !(l.found && !l.decision && asPence(l.net_p) < minimum));
+    const r = findPrepaidCosts(result.engagementId, pe, minimum, kept);
+    save({ prepayments: [...kept, ...r.found], scanned_at: new Date().toISOString(), scan: { scanned: r.scanned, small: r.small, small_p: r.smallTotal.toString() } });
     setNote(
       `${r.scanned} cost${r.scanned === 1 ? '' : 's'} in the year scanned; ${r.found.length} new one${r.found.length === 1 ? '' : 's'} read like they run past the year end.${r.small ? ` ${r.small} under ${formatPence(minimum)} (${formatPence(r.smallTotal)}) left out.` : ''} Enter the period covered from each invoice.`
     );
