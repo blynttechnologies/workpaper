@@ -724,67 +724,68 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           <table className="w-full text-[11px]">
             <thead>
               <tr>
-                <th className={`${th} text-left`}>Posted</th>
-                <th className={`${th} text-left`}>Item</th>
-                <th className={`${th} text-left`}>AI summary</th>
-                <th className={`${th} text-left`}>Period covered</th>
+                <th className={`${th} text-left`}>Cost</th>
                 <th className={`${th} text-left`}>Account</th>
                 <th className={`${th} text-right`}>Amount</th>
-                <th className={`${th} text-left`}>Decision</th>
+                <th className={`${th} text-right`}>Belongs to this year?</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF1F6]">
-              {items.map((i) => (
-                <tr key={i.id} className={i.decision ? '' : 'bg-[#FFF8E6]'}>
-                  <td className="p-2">{ukDate(i.date)}</td>
-                  <td className="p-2">
-                    <div className="font-semibold">{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="underline">{i.contact || i.desc}</a> : i.contact || i.desc}</div>
-                    {i.contact && <div className="text-[10px] text-[#4A5878]">{i.desc}</div>}
-                  </td>
-                  <td className="p-2 max-w-[220px] text-[10px] leading-snug text-[#4A5878]">
-                    {i.ai?.summary ? (
-                      <span className="flex items-start gap-1">
-                        <Sparkles className="w-3 h-3 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" /> {i.ai.summary}
-                      </span>
-                    ) : aiReading ? (
-                      'Reading…'
-                    ) : (
-                      '–'
-                    )}
-                  </td>
-                  <td className="p-2 whitespace-nowrap">{i.ai?.from && i.ai.to ? (i.ai.from === i.ai.to ? ukDate(i.ai.from) : `${ukDate(i.ai.from)} to ${ukDate(i.ai.to)}`) : i.ai ? 'Not stated' : '–'}</td>
-                  <td className="p-2">
-                    <CodePicker label={`Account for ${i.contact || i.desc}`} value={i.code} codes={codes} disabled={locked || !!i.decision} onChange={(c) => setItem(i.id, { code: c })} />
-                  </td>
-                  <td className="p-2 text-right font-mono">{formatPence(asPence(i.amount_p), { symbol: '' })}</td>
-                  <td className="p-2">
-                    {i.decision ? (
-                      <span className="flex items-center gap-2">
-                        <Pill tone={i.decision === 'not_liability' ? 'plain' : 'info'}>{{ accrue: 'Accrued', creditor: 'Added to creditors', not_liability: 'Not this year' }[i.decision]}</Pill>
-                        {!locked && (
-                          <button type="button" className="text-[10px] text-[#1D4E89] underline" onClick={() => setItem(i.id, { decision: undefined })}>
-                            Undo
-                          </button>
-                        )}
-                      </span>
-                    ) : (
-                      !locked && (
-                        <span className="flex gap-1">
-                          <button type="button" className={btnPrimary} onClick={() => setItem(i.id, { decision: 'accrue' })}>
-                            Accrue
-                          </button>
-                          <button type="button" className={btnSecondary} onClick={() => setItem(i.id, { decision: 'creditor' })}>
-                            Add to creditors
-                          </button>
-                          <button type="button" className={btnSecondary} onClick={() => setItem(i.id, { decision: 'not_liability' })}>
-                            Not this year
-                          </button>
+              {items.map((i) => {
+                const period = i.ai?.from && i.ai.to ? (i.ai.from === i.ai.to ? ukDate(i.ai.from) : `${ukDate(i.ai.from)} to ${ukDate(i.ai.to)}`) : '';
+                const choice = 'px-2 py-0.5 text-[10px] font-bold rounded-[6px] whitespace-nowrap';
+                return (
+                  <tr key={i.id} className={i.decision ? '' : 'bg-[#FFFBF0]'}>
+                    <td className="p-2 align-top">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-semibold">{i.url ? <a href={i.url} target="_blank" rel="noreferrer" className="underline">{i.contact || i.desc}</a> : i.contact || i.desc}</span>
+                        <span className="text-[10px] text-[#7E8DA6]">
+                          {ukDate(i.date)}
+                          {i.contact && i.desc ? ` · ${i.desc}` : ''}
+                          {period ? ` · covers ${period}` : ''}
                         </span>
-                      )
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      </div>
+                      {i.ai?.summary ? (
+                        <div className="mt-0.5 flex items-start gap-1 text-[10px] leading-snug text-[#4A5878]">
+                          <Sparkles className="w-3 h-3 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" /> {i.ai.summary}
+                        </div>
+                      ) : (
+                        aiReading && <div className="mt-0.5 text-[10px] text-[#7E8DA6]">Reading…</div>
+                      )}
+                    </td>
+                    <td className="p-2 align-top">
+                      <CodePicker label={`Account for ${i.contact || i.desc}`} value={i.code} codes={codes} disabled={locked || !!i.decision} onChange={(c) => setItem(i.id, { code: c })} />
+                    </td>
+                    <td className="p-2 align-top text-right font-mono whitespace-nowrap">{formatPence(asPence(i.amount_p), { symbol: '' })}</td>
+                    <td className="p-2 align-top text-right">
+                      {i.decision ? (
+                        <span className="inline-flex items-center gap-2">
+                          <Pill tone={i.decision === 'not_liability' ? 'plain' : 'info'}>{{ accrue: 'Accrued', creditor: 'Added to creditors', not_liability: 'Not this year' }[i.decision]}</Pill>
+                          {!locked && (
+                            <button type="button" className="text-[10px] text-[#1D4E89] underline" onClick={() => setItem(i.id, { decision: undefined })}>
+                              Undo
+                            </button>
+                          )}
+                        </span>
+                      ) : (
+                        !locked && (
+                          <span className="inline-flex gap-1">
+                            <button type="button" title="Yes: post an accrual" className={`${choice} bg-[#122654] hover:bg-[#1D4E89] text-white`} onClick={() => setItem(i.id, { decision: 'accrue' })}>
+                              Accrue
+                            </button>
+                            <button type="button" title="Yes: add the bill to trade creditors" className={`${choice} border border-[#D3DCEE] bg-white text-[#122654] hover:border-[#122654]`} onClick={() => setItem(i.id, { decision: 'creditor' })}>
+                              Creditor
+                            </button>
+                            <button type="button" title="No: it belongs to next year" className={`${choice} border border-[#D3DCEE] bg-white text-[#122654] hover:border-[#122654]`} onClick={() => setItem(i.id, { decision: 'not_liability' })}>
+                              No
+                            </button>
+                          </span>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
