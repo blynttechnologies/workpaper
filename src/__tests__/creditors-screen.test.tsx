@@ -10,7 +10,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}, dropFiles?: (files: File[], rowId: string | null) => void, swapEvidence?: (a: string, b: string) => void) {
+function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attachTo: (id: string) => void = () => {}, dropFiles?: (files: File[], rowId: string | null) => void, swapEvidence?: (a: string, b: string) => void, removeFile?: (a: Attachment) => void) {
   db.seed(true);
   const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
   const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'K-10') ?? db.addWorkpaper(eng.id, 'K-10')!;
@@ -33,6 +33,7 @@ function setup(suppliers: any[], files: Record<string, Attachment[]> = {}, attac
       live={() => wp.data_json}
       dropFiles={dropFiles}
       swapEvidence={swapEvidence}
+      removeFile={removeFile}
     />
   );
   return { saved, wp };
@@ -153,6 +154,20 @@ describe('trade creditors AI statement reading', () => {
     fireEvent.click(screen.getByText('Move it to Protran Services Limited'));
     expect(swaps).toEqual([['sup_rml', 'sup_pro']]);
     expect(saved.at(-1)!.suppliers.find((x: any) => x.id === 'sup_rml')).toMatchObject({ statement_p: '', ai_statement: undefined });
+  });
+
+  it('deletes an attached statement from the row', () => {
+    const removed: string[] = [];
+    setup(
+      [{ id: 'sup_rml', name: 'Raymond Martin Langley', ledger_p: '20833', statement_p: '', paid_after_p: '0' }],
+      { sup_rml: [{ id: 'att_1', filename: 'protran.pdf' } as Attachment] },
+      () => {},
+      undefined,
+      undefined,
+      (a) => removed.push(a.id)
+    );
+    fireEvent.click(screen.getByLabelText('Delete protran.pdf'));
+    expect(removed).toEqual(['att_1']);
   });
 });
 
