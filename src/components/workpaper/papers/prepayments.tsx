@@ -38,12 +38,15 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
   const scan = () => {
     // live(), not the render's value: the amount box commits on blur, just before this click
     const minimum = asPence(live().min_p ?? '10000');
-    // Undecided suggestions now under the amount are dropped; decided and hand-added lines stay
-    const kept = ((live().prepayments ?? []) as PrepLine[]).filter((l) => !(l.found && !l.decision && asPence(l.net_p) < minimum));
+    // Ledger suggestions now under the amount are dropped, added or not. Hand-added lines stay, and so does a
+    // suggestion someone has worked on: its period entered or its invoice attached
+    const all = (live().prepayments ?? []) as PrepLine[];
+    const kept = all.filter((l) => !(l.found && asPence(l.net_p) < minimum && !l.end && l.method !== 'all' && !filesFor(l.id).length));
+    const dropped = all.length - kept.length;
     const r = findPrepaidCosts(result.engagementId, pe, minimum, kept);
     save({ prepayments: [...kept, ...r.found], scanned_at: new Date().toISOString(), scan: { scanned: r.scanned, small: r.small, small_p: r.smallTotal.toString() } });
     setNote(
-      `${r.scanned} cost${r.scanned === 1 ? '' : 's'} in the year scanned; ${r.found.length} new one${r.found.length === 1 ? '' : 's'} read like they run past the year end.${r.small ? ` ${r.small} under ${formatPence(minimum)} (${formatPence(r.smallTotal)}) left out.` : ''} Enter the period covered from each invoice.`
+      `${r.scanned} cost${r.scanned === 1 ? '' : 's'} in the year scanned; ${r.found.length} new one${r.found.length === 1 ? '' : 's'} read like they run past the year end.${r.small ? ` ${r.small} under ${formatPence(minimum)} (${formatPence(r.smallTotal)}) left out.` : ''}${dropped ? ` ${dropped} taken off the list.` : ''} Enter the period covered from each invoice.`
     );
   };
   const add = () => save({ prepayments: [...(live().prepayments ?? []), { id: newId('prep'), desc: '', code: '', net_p: '0', method: 'months', start: addDays(pe, -30) }] });
