@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import { asPence, formatPence } from '@/lib/money';
 import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
@@ -94,7 +94,7 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
       </div>
       {note && <div className="-mt-2 text-[11px] text-[#0B6B52]">{note}</div>}
 
-      <div className="overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
+      <div className="overflow-x-auto bg-white border border-[#E3E7EF] rounded-[12px]">
         <table className="w-full text-xs text-[#122654]">
           <thead className="bg-[#F5F8FD]">
             <tr>
@@ -111,19 +111,43 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
             const rows = shown.filter((v) => v.i.account === account);
             const listing = tot(`${account}_listing`);
             const ledger = tot(`${account}_ledger`);
+            const folded = isOpen(`account:${account}`);
+            const count = views.filter((v) => v.i.account === account).length;
             return (
               <tbody key={account} className="divide-y divide-[#E3E7EF]">
-                <tr className="bg-[#F5F8FD]/70">
-                  <td />
-                  <td colSpan={2} className="p-2 font-bold">
-                    {account} {chartName(account)} <span className="font-normal text-[#4A5878]">{views.filter((v) => v.i.account === account).length} items</span>
+                <tr>
+                  <td className="p-1.5">
+                    <button
+                      type="button"
+                      aria-expanded={!folded}
+                      aria-label={`${folded ? 'Show' : 'Hide'} the items on ${account}`}
+                      onClick={() => toggle(`account:${account}`)}
+                      className="p-1 rounded-[6px] text-[#122654] hover:bg-[#F5F8FD]"
+                    >
+                      {folded ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
                   </td>
-                  <td colSpan={4} className="p-2 text-right text-[11px]">
-                    Ledger <strong className="font-mono">{money(ledger)}</strong> · Listing <strong className="font-mono">{money(listing)}</strong>{' '}
-                    <Pill tone={listing === ledger ? 'good' : 'bad'}>{listing === ledger ? 'Agrees' : 'Differs'}</Pill>
+                  <td colSpan={2} className="p-2">
+                    <span className="text-[13px] font-bold">
+                      {account} {chartName(account)}
+                    </span>{' '}
+                    <span className="text-[#4A5878]">
+                      ({count} item{count === 1 ? '' : 's'})
+                    </span>
+                  </td>
+                  <td colSpan={4} className="p-2">
+                    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                      <span>
+                        Ledger: <strong className="font-mono">{money(ledger)}</strong>
+                      </span>
+                      <span>
+                        Listing: <strong className="font-mono">{money(listing)}</strong>
+                      </span>
+                      <Pill tone={listing === ledger ? 'good' : 'bad'}>{listing === ledger ? 'Agrees' : 'Differs'}</Pill>
+                    </div>
                   </td>
                 </tr>
-                {rows.map((v) => {
+                {!folded && rows.map((v) => {
                   const i = v.i;
                   const name = i.desc || 'New item';
                   const showSuggestion = v.suggestion && !i.decision;
@@ -283,7 +307,7 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
                     </React.Fragment>
                   );
                 })}
-                {!locked && (
+                {!locked && !folded && (
                   <tr>
                     <td />
                     <td colSpan={6} className="p-1.5">
@@ -296,16 +320,25 @@ export function OtherDebtorsSchedule({ data, result, locked, save, filesFor, att
               </tbody>
             );
           })}
-          <tfoot className="border-t-2 border-[#122654]/20 font-bold">
+          <tfoot className="bg-[#F5F8FD] border-t border-[#E3E7EF] font-bold">
             <tr>
               <td />
-              <td className="p-2" colSpan={2}>
+              <td className="p-2.5 text-[13px]" colSpan={2}>
                 Total other debtors
               </td>
-              <td colSpan={4} className="p-2 text-right text-[11px]">
-                Ledger <span className="font-mono">{money(tot('ledger'))}</span> · Listing <span className="font-mono">{money(tot('listing'))}</span> ·{' '}
-                <span className={tot('difference') === 0n ? 'text-[#0B6B52]' : 'text-[#B42318]'}>{tot('difference') === 0n ? 'Difference nil' : `Difference ${formatPence(tot('difference'))}`}</span> · After adjustments{' '}
-                <span className="font-mono">{money(tot('adjusted'))}</span>
+              <td colSpan={4} className="p-2.5">
+                <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
+                  <span>
+                    Ledger: <span className="font-mono">{money(tot('ledger'))}</span>
+                  </span>
+                  <span>
+                    Listing: <span className="font-mono">{money(tot('listing'))}</span>
+                  </span>
+                  <span className={tot('difference') === 0n ? 'text-[#0B6B52]' : 'text-[#B42318]'}>
+                    Difference: <span className="font-mono">{tot('difference') === 0n ? 'nil' : formatPence(tot('difference'))}</span>
+                  </span>
+                  <Pill tone="plain">{tot('moved') + tot('written') === 0n ? 'No adjustment' : `After adjustments ${money(tot('adjusted'))}`}</Pill>
+                </div>
               </td>
             </tr>
           </tfoot>

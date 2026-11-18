@@ -25,7 +25,7 @@ export function Tiles({ items }: { items: { label: string; value: React.ReactNod
   return (
     <div className={`grid grid-cols-2 gap-3 ${items.length >= 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
       {items.map((t) => (
-        <div key={t.label} className="p-3 bg-white border border-[#E3E7EF] rounded-[12px] min-w-0">
+        <div key={t.label} className={`p-3 border rounded-[12px] min-w-0 ${t.tone === 'bad' ? 'bg-[#FFF5F3] border-[#F5C6BC]' : 'bg-white border-[#E3E7EF]'}`}>
           <div className="text-xs text-[#4A5878]">{t.label}</div>
           <div className={`mt-0.5 text-lg font-bold ${toneText[t.tone ?? 'plain']}`}>{t.value}</div>
           {t.sub !== undefined && <div className="mt-0.5 text-[11px] text-[#4A5878]">{t.sub}</div>}
@@ -88,9 +88,9 @@ export function FilterChips<K extends string>({ options, value, onChange }: { op
           type="button"
           aria-pressed={value === o.key}
           onClick={() => onChange(o.key)}
-          className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${value === o.key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE]'}`}
+          className={`px-3 py-1 rounded-full text-xs font-semibold border ${value === o.key ? 'bg-[#122654] text-white border-[#122654]' : 'bg-white text-[#122654] border-[#D3DCEE] hover:border-[#122654]'}`}
         >
-          {o.label} {o.count}
+          {o.label} ({o.count})
         </button>
       ))}
     </div>
