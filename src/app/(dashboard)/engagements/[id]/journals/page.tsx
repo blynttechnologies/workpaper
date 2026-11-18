@@ -4,7 +4,7 @@ import { ask } from '@/components/ui/ask';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { AlertCircle, Check, ChevronDown, ChevronRight, ExternalLink, Paperclip, Plus, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { AlertCircle, Calendar, Check, CheckCheck, ChevronDown, ChevronRight, Clock, ExternalLink, FileText, MoreHorizontal, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Undo2, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { formatPence, toPence } from '@/lib/money';
 import { TEMPLATES } from '@/lib/workpapers/templates';
@@ -39,16 +39,16 @@ const STATUS_LABEL: Record<Adjustment['status'], string> = {
 };
 const STATUS_STYLE: Record<Adjustment['status'], string> = {
   proposed: 'bg-[#FFF4DB] text-[#6B4700]',
-  accepted: 'bg-[#EAF5FC] text-[#1D4E89]',
+  accepted: 'bg-[#E6F4EF] text-[#0B6B52]',
   approved: 'bg-[#E6F4EF] text-[#0B6B52]',
   posted: 'bg-[#E6F4EF] text-[#0B6B52]',
-  reversed: 'bg-[#F5F8FD] text-[#4A5878]',
+  reversed: 'bg-[#EAF5FC] text-[#1D4E89]',
   rejected: 'bg-[#F5F8FD] text-[#4A5878]',
   in_ledger: 'bg-[#0B6B52] text-white',
 };
 const TABS: ['all' | Adjustment['status'], string][] = [
   ['all', 'All'],
-  ['proposed', 'Draft'],
+  ['proposed', 'Drafts'],
   ['accepted', 'Accepted'],
   ['approved', 'Approved'],
   ['posted', 'Posted'],
@@ -73,6 +73,7 @@ const pence = (s: string) => {
   }
 };
 const total = (j: Adjustment) => j.lines.reduce((a, l) => a + BigInt(l.debit_p), 0n);
+const dateOf = (j: Adjustment) => j.date ?? j.created_at.slice(0, 10);
 
 /** The schedules whose lead codes a journal touches, e.g. "K-20, P-10". */
 const schedulesTouched = (codes: string[]) =>
@@ -108,13 +109,21 @@ export default function JournalsPage() {
   const [form, setForm] = useState<null | { source?: string }>(() => (search.get('propose') ? { source: search.get('propose')! } : null));
   const [sending, setSending] = useState<Adjustment | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [day, setDay] = useState('');
+  // The row "…" menu, placed fixed at its button so the table's scroll box doesn't clip it
+  const [menu, setMenu] = useState<{ id: string; top: number; right: number } | null>(null);
   const accounts = db.accountsFor(engagementId);
 
   const journals = useMemo(
     () => db.adjustments.filter((a) => a.engagement_id === engagementId).sort((a, b) => a.ref.localeCompare(b.ref)),
     [engagementId, rev] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const shown = journals.filter((j) => tab === 'all' || j.status === tab);
+  const q = query.trim().toLowerCase();
+  const shown = journals.filter(
+    (j) => (tab === 'all' || j.status === tab) && (!day || dateOf(j) === day) && (!q || `${j.ref} ${j.narrative} ${j.source_schedule ?? ''}`.toLowerCase().includes(q))
+  );
+  const dates = [...new Set(journals.map(dateOf))].sort();
   const totals = useMemo(() => {
     const t = registerTotals(engagementId);
     return { profit: t.profit_p, netAssets: t.net_assets_p };
@@ -190,42 +199,69 @@ export default function JournalsPage() {
   // The select column only shows when there is something this user can bulk-approve
   const anySelectable = canApprove && journals.some((j) => (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by !== actor.id);
 
+  /** What this user can do to a journal: the first "main" one is the row's button, the rest go in its "…" menu. */
+  const actionsFor = (j: Adjustment) => {
+    if (locked) return [];
+    const waiting = j.status === 'proposed' || j.status === 'accepted';
+    const done = j.status === 'approved' || j.status === 'posted';
+    return [
+      canApprove && waiting && j.proposed_by !== actor.id && { label: 'Approve', icon: Check, run: () => act(j, 'approve'), main: true },
+      canSelfApprove && waiting && j.proposed_by === actor.id && { label: 'Approve my own…', icon: Check, run: () => selfApprove(j), main: true, title: 'You proposed this journal. Approving it yourself needs a reason.' },
+      canApprove && done && (!j.ledger || ['DELETED', 'VOIDED'].includes(j.ledger.status)) && { label: 'Send to Xero', icon: Send, run: () => setSending(j), main: true },
+      j.status === 'proposed' && { label: 'Accept', icon: CheckCheck, run: () => act(j, 'accept'), main: true },
+      j.status === 'proposed' && { label: 'Reject', icon: X, run: () => reject(j) },
+      done && { label: 'Reverse', icon: RotateCcw, run: () => reverse(j), title: 'Cancel this journal with an opposite entry' },
+      ['proposed', 'accepted', 'rejected'].includes(j.status) && { label: 'Delete', icon: Trash2, run: () => remove(j), danger: true },
+    ].filter((a) => !!a) as { label: string; icon: typeof Check; run: () => void; main?: boolean; danger?: boolean; title?: string }[];
+  };
+  const menuJournal = menu && journals.find((j) => j.id === menu.id);
+  const menuItems = menuJournal ? actionsFor(menuJournal).filter((a, i) => !(i === 0 && a.main)) : [];
+
+  const cards = [
+    { label: 'Drafts', value: drafts, icon: FileText, tone: 'bg-[#FFF4DB] text-[#8A5A00]' },
+    { label: 'To approve', value: toApprove, icon: Clock, tone: 'bg-[#FDECEA] text-[#B8432F]' },
+    { label: 'Approved', value: count('approved') + count('posted') + count('in_ledger'), icon: Check, tone: 'bg-[#E6F4EF] text-[#0B6B52]' },
+    { label: 'Reversed', value: count('reversed'), icon: Undo2, tone: 'bg-[#EAF5FC] text-[#1D4E89]' },
+  ];
+
   return (
     <div className="flex flex-col gap-5">
       <PreviewModal file={preview} onClose={() => setPreview(null)} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#122654]">Journals</h1>
-          <p className="text-xs text-[#4A5878] mt-1">Every adjustment in this file. Accepted, approved and posted journals are in the adjusted trial balance.</p>
+          <h1 className="text-2xl font-bold text-[#122654]">Journals</h1>
+          <p className="text-sm text-[#4A5878] mt-1">Create, review and approve journal adjustments.</p>
+          <p className="text-xs text-[#4A5878] mt-1">
+            Effect on profit <span className={`font-mono font-semibold ${totals.profit < 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(totals.profit)}</span>
+            {' · '}net assets <span className={`font-mono font-semibold ${totals.netAssets < 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(totals.netAssets)}</span>
+          </p>
         </div>
         <div className="flex gap-2">
           {canApprove && selected.size > 0 && (
-            <button type="button" disabled={busy} onClick={approveSelected} className="inline-flex items-center gap-1.5 min-h-[38px] px-4 bg-[#0B6B52] text-white text-xs font-bold rounded-[10px] cursor-pointer disabled:opacity-60">
-              <Check className="w-3.5 h-3.5" /> Approve selected ({selected.size})
+            <button type="button" disabled={busy} onClick={approveSelected} className="inline-flex items-center gap-1.5 min-h-[42px] px-4 bg-[#0B6B52] text-white text-sm font-bold rounded-[10px] cursor-pointer disabled:opacity-60">
+              <Check className="w-4 h-4" /> Approve selected ({selected.size})
             </button>
           )}
           {!locked && (
-            <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-1.5 min-h-[38px] px-4 bg-[#122654] text-white text-xs font-bold rounded-[10px] cursor-pointer">
-              <Plus className="w-3.5 h-3.5" /> New journal
+            <button type="button" onClick={() => setForm({})} className="inline-flex items-center gap-2 min-h-[42px] px-5 bg-[#122654] text-white text-sm font-bold rounded-[10px] cursor-pointer hover:bg-[#1D4E89]">
+              <Plus className="w-4 h-4" /> New journal
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {[
-          ['Effect on profit', totals.profit],
-          ['Effect on net assets', totals.netAssets],
-        ].map(([label, v]) => (
-          <div key={label as string} className="bg-white border border-[#E3E7EF] rounded-[12px] p-4">
-            <p className="text-[11px] font-semibold text-[#4A5878]">{label as string}</p>
-            <p className={`text-lg font-bold font-mono ${(v as bigint) < 0n ? 'text-[#B8432F]' : 'text-[#122654]'}`}>{formatPence(v as bigint)}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {cards.map((c) => (
+          <div key={c.label} className="flex items-center gap-4 bg-white border border-[#E3E7EF] rounded-[14px] p-4">
+            <span className={`flex items-center justify-center w-11 h-11 rounded-[10px] shrink-0 ${c.tone}`}>
+              <c.icon className="w-5 h-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-[#122654]">{c.label}</p>
+              <p className="text-2xl font-bold text-[#122654] leading-tight">{c.value}</p>
+            </div>
           </div>
         ))}
-        <div className="bg-white border border-[#E3E7EF] rounded-[12px] p-4">
-          <p className="text-[11px] font-semibold text-[#4A5878]">Waiting</p>
-          <p className="text-sm text-[#122654]">{drafts || toApprove ? `${drafts} draft · ${toApprove} to approve` : 'Nothing waiting'}</p>
-        </div>
       </div>
 
       {notice && (
@@ -234,47 +270,64 @@ export default function JournalsPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1" role="tablist" aria-label="Status">
-        {/* Only statuses that have journals, so the filter isn't a row of zeros */}
-        {TABS.filter(([k]) => k === 'all' || k === tab || count(k) > 0).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`px-3 py-1.5 text-xs font-semibold rounded-full cursor-pointer ${tab === k ? 'bg-[#122654] text-white' : 'bg-white border border-[#D3DCEE] text-[#122654]'}`}>
-            {label} ({count(k)})
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2 mr-auto" role="tablist" aria-label="Status">
+          {/* Only statuses that have journals, so the filter isn't a row of zeros */}
+          {TABS.filter(([k]) => k === 'all' || k === tab || count(k) > 0).map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`px-4 py-2 text-sm font-semibold rounded-full cursor-pointer ${tab === k ? 'bg-[#122654] text-white' : 'bg-white border border-[#D3DCEE] text-[#122654] hover:border-[#1D4E89]/40'}`}>
+              {label} ({count(k)})
+            </button>
+          ))}
+        </div>
+        <label className="relative flex-1 min-w-[200px] max-w-sm">
+          <span className="sr-only">Search journals</span>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A5878]" />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search journals…" className="w-full min-h-[40px] pl-9 pr-3 text-sm bg-white border border-[#D3DCEE] rounded-[10px] text-[#122654] placeholder:text-[#4A5878]" />
+        </label>
+        <label className="relative">
+          <span className="sr-only">Date</span>
+          <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A5878]" />
+          <select value={day} onChange={(e) => setDay(e.target.value)} className="min-h-[40px] pl-9 pr-3 text-sm bg-white border border-[#D3DCEE] rounded-[10px] text-[#122654] cursor-pointer">
+            <option value="">All dates</option>
+            {dates.map((d) => (
+              <option key={d} value={d}>{ukDate(d)}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <div className="bg-white border border-[#E3E7EF] rounded-[12px] overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-[#F5F8FD] text-[10px] uppercase tracking-wider text-[#4A5878]">
+      <div className="bg-white border border-[#E3E7EF] rounded-[14px] overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-[#F5F8FD] text-xs font-semibold text-[#4A5878]">
             <tr>
-              {anySelectable && <th className="py-2.5 px-3 w-8"><span className="sr-only">Select</span></th>}
-              <th className="py-2.5 px-3">Ref</th>
-              <th className="py-2.5 px-3">Date</th>
-              <th className="py-2.5 px-3">Type</th>
-              <th className="py-2.5 px-3">Narrative</th>
-              <th className="py-2.5 px-3">Status</th>
-              <th className="py-2.5 px-3">Preparer</th>
-              <th className="py-2.5 px-3">Approver</th>
-              <th className="py-2.5 px-3 text-right">Amount</th>
-              <th className="py-2.5 px-3"><span className="sr-only">Actions</span></th>
+              {anySelectable && <th className="py-3 px-3 w-8"><span className="sr-only">Select</span></th>}
+              <th className="py-3 px-4">Ref</th>
+              <th className="py-3 px-3">Date</th>
+              <th className="py-3 px-3">Description</th>
+              <th className="py-3 px-3 text-right">Amount</th>
+              <th className="py-3 px-3">Status</th>
+              <th className="py-3 px-4">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3E7EF] text-[#122654]">
             {!shown.length && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-[#4A5878]">
-                  {journals.length ? 'No journals with this status.' : locked ? 'No journals in this file.' : 'No journals yet. Use New journal to add an adjustment.'}
+                <td colSpan={7} className="py-8 text-center text-[#4A5878]">
+                  {journals.length ? 'No journals match.' : locked ? 'No journals in this file.' : 'No journals yet. Use New journal to add an adjustment.'}
                 </td>
               </tr>
             )}
             {shown.map((j) => {
               const approvable = canApprove && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by !== actor.id;
-              const ownApprovable = canSelfApprove && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by === actor.id;
+              const ownWaiting = (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by === actor.id;
+              const actions = actionsFor(j);
+              const primary = actions[0]?.main ? actions[0] : null;
+              const more = actions.length - (primary ? 1 : 0);
               const open = openId === j.id;
               return (
                 <Fragment key={j.id}>
-                <tr className="align-top hover:bg-[#FAFBFD]">
-                  {anySelectable && <td className="py-2.5 px-3">
+                <tr className={`align-top ${open ? '' : 'hover:bg-[#FAFBFD]'}`}>
+                  {anySelectable && <td className="py-4 px-3">
                     {approvable && (
                       <input
                         type="checkbox"
@@ -289,137 +342,119 @@ export default function JournalsPage() {
                       />
                     )}
                   </td>}
-                  <td className="py-2.5 px-3">
-                    <button type="button" onClick={() => setOpenId(open ? null : j.id)} aria-expanded={open} title={open ? 'Hide the entries' : 'Show the debits and credits'} className="inline-flex items-center gap-1 font-mono font-bold whitespace-nowrap cursor-pointer hover:text-[#1D4E89]">
-                      {open ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />} {j.ref}
+                  <td className="py-4 px-4">
+                    <button type="button" onClick={() => setOpenId(open ? null : j.id)} aria-expanded={open} title={open ? 'Hide the entries' : 'Show the debits and credits'} className="inline-flex items-center gap-2 font-bold whitespace-nowrap cursor-pointer hover:text-[#1D4E89]">
+                      {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />} {j.ref}
                     </button>
                   </td>
-                  <td className="py-2.5 px-3 whitespace-nowrap">{ukDate(j.date ?? j.created_at.slice(0, 10))}</td>
-                  <td className="py-2.5 px-3">{TYPES.find((t) => t[0] === j.type)?.[1] ?? 'Adjusting'}</td>
-                  <td className="py-2.5 px-3 max-w-[280px] break-words">
-                    <span className="block line-clamp-2" title={j.narrative}>{j.narrative}</span>
+                  <td className="py-4 px-3 whitespace-nowrap">{ukDate(dateOf(j))}</td>
+                  <td className="py-4 px-3 max-w-[420px] break-words">
+                    <span className="block line-clamp-2 font-medium" title={j.narrative}>{j.narrative}</span>
                     {/* One short line here; the calculation and the reasons are in the opened row */}
-                    <span className="block text-[11px] text-[#4A5878]">
-                      {[j.source_schedule && `From ${j.source_schedule}`, j.reject_reason && 'Rejected', j.self_approval_reason && 'Self-approved', j.auto_reverse && 'Auto-reverses'].filter(Boolean).join(' · ')}
+                    <span className="block text-xs text-[#4A5878] mt-0.5">
+                      {[j.source_schedule && `From ${j.source_schedule}`, j.reject_reason && 'Rejected', j.self_approval_reason && 'Self-approved', j.auto_reverse && 'Auto-reverses', ownWaiting && !canSelfApprove && 'Needs another approver'].filter(Boolean).join(' · ')}
                     </span>
-                    {j.ledger && (
-                      <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline">
-                        <ExternalLink className="w-3 h-3" />
-                        {j.status === 'in_ledger'
-                          ? 'In Xero and the trial balance'
-                          : j.ledger.status === 'DRAFT'
-                            ? 'Draft in Xero'
-                            : j.ledger.status === 'POSTED'
-                              ? 'Posted in Xero'
-                              : `Xero: ${j.ledger.status.toLowerCase()}`}
-                      </a>
-                    )}
-                    {(j.evidence ?? []).map((e) => (
-                      <button key={e.file_key} type="button" onClick={() => setPreview(evidenceFile(e))} className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline mr-2">
-                        <Paperclip className="w-3 h-3" /> {e.filename}
-                      </button>
-                    ))}
                   </td>
-                  <td className="py-2.5 px-3">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
+                  <td className="py-4 px-3 text-right font-mono whitespace-nowrap">{formatPence(total(j))}</td>
+                  <td className="py-4 px-3">
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-[6px] whitespace-nowrap ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
                   </td>
-                  <td className="py-2.5 px-3">{j.proposed_by_name}</td>
-                  <td className="py-2.5 px-3">{j.approved_by_name ?? '—'}</td>
-                  <td className="py-2.5 px-3 text-right font-mono">{formatPence(total(j))}</td>
-                  <td className="py-2.5 px-3">
-                    {!locked && (
-                      <div className="flex flex-wrap justify-end gap-1.5">
-                        {j.status === 'proposed' && (
-                          <>
-                            <button type="button" disabled={busy} onClick={() => act(j, 'accept')} className="px-2 py-1 rounded bg-[#EAF5FC] text-[#1D4E89] font-semibold cursor-pointer">Accept</button>
-                            <button type="button" disabled={busy} onClick={() => reject(j)} className="px-2 py-1 rounded bg-[#F5F8FD] text-[#4A5878] font-semibold cursor-pointer">Reject</button>
-                          </>
-                        )}
-                        {approvable && (
-                          <button type="button" disabled={busy} onClick={() => act(j, 'approve')} className="px-2 py-1 rounded bg-[#E6F4EF] text-[#0B6B52] font-semibold cursor-pointer">Approve</button>
-                        )}
-                        {ownApprovable && (
-                          <button type="button" disabled={busy} onClick={() => selfApprove(j)} title="You proposed this journal. Approving it yourself needs a reason." className="px-2 py-1 rounded bg-[#E6F4EF] text-[#0B6B52] font-semibold cursor-pointer">
-                            Approve my own…
-                          </button>
-                        )}
-                        {/* Your own journal and no way to approve it: say why, and what to do */}
-                        {!ownApprovable && (j.status === 'proposed' || j.status === 'accepted') && j.proposed_by === actor.id && (
-                          <span className="max-w-[220px] text-right text-[10px] text-[#6B4700]">
-                            You proposed this, so another reviewer must approve it.
-                            {['partner', 'admin'].includes(actor.role) && (
-                              <>
-                                {' '}Working alone? Turn on{' '}
-                                <Link href="/settings" className="underline font-semibold">
-                                  approving your own journals
-                                </Link>{' '}
-                                in Settings.
-                              </>
-                            )}
-                          </span>
-                        )}
-                        {canApprove && (j.status === 'approved' || j.status === 'posted') && (!j.ledger || ['DELETED', 'VOIDED'].includes(j.ledger.status)) && (
-                          <button type="button" disabled={busy} onClick={() => setSending(j)} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#122654] text-white font-semibold cursor-pointer">
-                            <Send className="w-3 h-3" /> Send to Xero
-                          </button>
-                        )}
-                        {(j.status === 'approved' || j.status === 'posted') && (
-                          <button type="button" disabled={busy} onClick={() => reverse(j)} title="Cancel this journal with an opposite entry" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#F5F8FD] text-[#122654] font-semibold cursor-pointer">
-                            <RotateCcw className="w-3 h-3" /> Reverse
-                          </button>
-                        )}
-                        {['proposed', 'accepted', 'rejected'].includes(j.status) && (
-                          <button type="button" disabled={busy} onClick={() => remove(j)} aria-label={`Delete ${j.ref}`} className="p-1 rounded text-[#4A5878] hover:text-[#B8432F] cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    )}
+                  <td className="py-3 px-4">
+                    <div className="flex items-center justify-end gap-2">
+                      {primary && (
+                        <button type="button" disabled={busy} onClick={primary.run} title={primary.title} className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 bg-[#122654] text-white text-sm font-semibold rounded-[8px] whitespace-nowrap cursor-pointer hover:bg-[#1D4E89] disabled:opacity-60">
+                          <primary.icon className="w-4 h-4" /> {primary.label}
+                        </button>
+                      )}
+                      {more > 0 && (
+                        <button
+                          type="button"
+                          aria-label={`More actions for ${j.ref}`}
+                          aria-haspopup="menu"
+                          aria-expanded={menu?.id === j.id}
+                          onClick={(e) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setMenu(menu?.id === j.id ? null : { id: j.id, top: r.bottom + 4, right: window.innerWidth - r.right });
+                          }}
+                          className="flex items-center justify-center w-9 h-9 border border-[#D3DCEE] rounded-[8px] text-[#122654] cursor-pointer hover:bg-[#F5F8FD]"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
                 {open && (
-                  <tr className="bg-[#FAFBFD]">
-                    {anySelectable && <td />}
-                    <td colSpan={9} className="px-3 pb-3 pt-0">
-                      <div className="max-w-2xl space-y-0.5 pb-1.5 text-[11px] text-[#4A5878] break-words">
-                        <p className="text-[#122654]">{j.narrative}</p>
-                        {j.calculation && <p>Calculation: {j.calculation}</p>}
-                        {j.reject_reason && <p>Rejected: {j.reject_reason}</p>}
-                        {j.self_approval_reason && <p className="text-[#8A5A00]">Self-approved. Reason: “{j.self_approval_reason}”</p>}
-                        {j.auto_reverse && <p>Reverses itself on the first day of the next period.</p>}
-                        {j.ledger && j.status !== 'in_ledger' && (
-                          <p>
-                            {j.ledger.status === 'DRAFT'
-                              ? 'Draft in Xero: approve it there.'
-                              : j.ledger.status === 'POSTED'
-                                ? 'Posted in Xero: in the trial balance from the next pull.'
-                                : `Xero says ${j.ledger.status.toLowerCase()}: send it again if needed.`}
+                  <tr>
+                    <td colSpan={7} className="px-4 pb-4 pt-0">
+                      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] bg-[#F5F8FD] border border-[#E3E7EF] rounded-[12px] p-4 text-sm">
+                        <div className="space-y-1 break-words text-[#4A5878] md:pr-5 md:border-r md:border-[#D3DCEE]">
+                          <p className="font-bold text-[#122654]">Narrative</p>
+                          <p className="text-[#122654]">{j.narrative}</p>
+                          {j.calculation && <p className="text-xs">Calculation: {j.calculation}</p>}
+                          {j.reject_reason && <p className="text-xs">Rejected: {j.reject_reason}</p>}
+                          {j.self_approval_reason && <p className="text-xs text-[#8A5A00]">Self-approved. Reason: “{j.self_approval_reason}”</p>}
+                          {j.auto_reverse && <p className="text-xs">Reverses itself on the first day of the next period.</p>}
+                          <p className="text-xs pt-1">
+                            {TYPES.find((t) => t[0] === j.type)?.[1] ?? 'Adjusting'} · Prepared by {j.proposed_by_name}
+                            {j.approved_by_name && ` · Approved by ${j.approved_by_name}`}
                           </p>
+                          {ownWaiting && !canSelfApprove && (
+                            <p className="text-xs text-[#6B4700]">
+                              You proposed this, so another reviewer must approve it.
+                              {['partner', 'admin'].includes(actor.role) && (
+                                <>
+                                  {' '}Working alone? Turn on{' '}
+                                  <Link href="/settings" className="underline font-semibold">
+                                    approving your own journals
+                                  </Link>{' '}
+                                  in Settings.
+                                </>
+                              )}
+                            </p>
+                          )}
+                          {(j.evidence ?? []).map((e) => (
+                            <button key={e.file_key} type="button" onClick={() => setPreview(evidenceFile(e))} className="flex items-center gap-1 text-xs text-[#1D4E89] hover:underline cursor-pointer">
+                              <Paperclip className="w-3 h-3" /> {e.filename}
+                            </button>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="font-bold text-[#122654] mb-2">Accounts ({j.lines.length})</p>
+                          <ul className="divide-y divide-[#E3E7EF] bg-white rounded-[8px]">
+                            {j.lines.map((l) => {
+                              const dr = BigInt(l.debit_p);
+                              return (
+                                <li key={l.id} className="flex items-center gap-3 px-3 py-2">
+                                  <span className="font-mono font-semibold w-12 shrink-0">{l.blynt_code}</span>
+                                  <span className="flex-1 min-w-0">
+                                    {accounts.find((a) => a.code === l.blynt_code)?.name}
+                                    {l.narrative && <span className="block text-xs text-[#4A5878] truncate" title={l.narrative}>{l.narrative}</span>}
+                                  </span>
+                                  <span className="font-mono">{formatPence(dr || BigInt(l.credit_p))}</span>
+                                  <span className="w-14 text-center text-xs font-semibold px-2 py-0.5 rounded-[6px] bg-[#E3E7EF] text-[#4A5878]">{dr ? 'Debit' : 'Credit'}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                        {j.ledger && (
+                          <div className="md:pl-2 space-y-1">
+                            <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-semibold text-[#1D4E89] hover:underline">
+                              <ExternalLink className="w-4 h-4" /> View in Xero
+                            </a>
+                            <p className="text-xs text-[#4A5878] max-w-[200px]">
+                              {j.status === 'in_ledger'
+                                ? 'In Xero and the trial balance.'
+                                : j.ledger.status === 'DRAFT'
+                                  ? 'Draft in Xero: approve it there.'
+                                  : j.ledger.status === 'POSTED'
+                                    ? 'Posted in Xero: in the trial balance from the next pull.'
+                                    : `Xero says ${j.ledger.status.toLowerCase()}: send it again if needed.`}
+                            </p>
+                          </div>
                         )}
                       </div>
-                      <table className="w-full max-w-2xl text-[11px]">
-                        <thead className="text-[10px] uppercase tracking-wider text-[#4A5878]">
-                          <tr>
-                            <th className="py-1.5 text-left">Account</th>
-                            <th className="py-1.5 text-left">Description</th>
-                            <th className="py-1.5 text-right">Debit</th>
-                            <th className="py-1.5 text-right">Credit</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#E3E7EF]">
-                          {j.lines.map((l) => (
-                            <tr key={l.id}>
-                              <td className="py-1.5 pr-3">
-                                <span className="font-mono mr-1.5">{l.blynt_code}</span>
-                                {accounts.find((a) => a.code === l.blynt_code)?.name}
-                              </td>
-                              <td className="py-1.5 pr-3 text-[#4A5878]">{l.narrative}</td>
-                              <td className="py-1.5 text-right font-mono">{BigInt(l.debit_p) ? formatPence(BigInt(l.debit_p)) : ''}</td>
-                              <td className="py-1.5 text-right font-mono">{BigInt(l.credit_p) ? formatPence(BigInt(l.credit_p)) : ''}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
                     </td>
                   </tr>
                 )}
@@ -428,7 +463,34 @@ export default function JournalsPage() {
             })}
           </tbody>
         </table>
+        <p className="px-4 py-3 border-t border-[#E3E7EF] text-xs text-[#4A5878]">
+          Showing {shown.length} of {journals.length} journal{journals.length === 1 ? '' : 's'}
+        </p>
       </div>
+
+      {menu && menuJournal && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onWheel={() => setMenu(null)} aria-hidden="true" />
+          <div role="menu" style={{ top: menu.top, right: menu.right }} className="fixed z-50 min-w-[170px] bg-white border border-[#E3E7EF] rounded-[10px] shadow-lg py-1 text-sm">
+            {menuItems.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                role="menuitem"
+                disabled={busy}
+                title={a.title}
+                onClick={() => {
+                  setMenu(null);
+                  a.run();
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left cursor-pointer hover:bg-[#F5F8FD] disabled:opacity-60 ${a.danger ? 'text-[#B8432F]' : 'text-[#122654]'}`}
+              >
+                <a.icon className="w-4 h-4" /> {a.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {sending && (
         <SendToXero
