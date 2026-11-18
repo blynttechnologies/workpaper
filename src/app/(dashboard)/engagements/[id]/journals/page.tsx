@@ -297,22 +297,21 @@ export default function JournalsPage() {
                   <td className="py-2.5 px-3 whitespace-nowrap">{ukDate(j.date ?? j.created_at.slice(0, 10))}</td>
                   <td className="py-2.5 px-3">{TYPES.find((t) => t[0] === j.type)?.[1] ?? 'Adjusting'}</td>
                   <td className="py-2.5 px-3 max-w-[280px] break-words">
-                    <span className="block">{j.narrative}</span>
-                    {j.source_schedule && <span className="block text-[11px] text-[#4A5878]">From {j.source_schedule}{j.calculation ? `: ${j.calculation}` : ''}</span>}
-                    {j.reverses_id && <span className="block text-[11px] text-[#4A5878]">Reverses {db.adjustments.find((a) => a.id === j.reverses_id)?.ref ?? 'a prior journal'}</span>}
-                    {j.reject_reason && <span className="block text-[11px] text-[#4A5878]">Rejected: {j.reject_reason}</span>}
-                    {j.self_approval_reason && <span className="block text-[11px] text-[#8A5A00]">Self-approved. Reason: “{j.self_approval_reason}”</span>}
-                    {j.auto_reverse && <span className="block text-[11px] text-[#1D4E89]">Auto-reverses next period</span>}
+                    <span className="block line-clamp-2" title={j.narrative}>{j.narrative}</span>
+                    {/* One short line here; the calculation and the reasons are in the opened row */}
+                    <span className="block text-[11px] text-[#4A5878]">
+                      {[j.source_schedule && `From ${j.source_schedule}`, j.reject_reason && 'Rejected', j.self_approval_reason && 'Self-approved', j.auto_reverse && 'Auto-reverses'].filter(Boolean).join(' · ')}
+                    </span>
                     {j.ledger && (
                       <a href={j.ledger.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-[#1D4E89] hover:underline">
                         <ExternalLink className="w-3 h-3" />
                         {j.status === 'in_ledger'
-                          ? 'Posted in Xero and in the trial balance'
+                          ? 'In Xero and the trial balance'
                           : j.ledger.status === 'DRAFT'
-                            ? 'Draft in Xero: approve it there'
+                            ? 'Draft in Xero'
                             : j.ledger.status === 'POSTED'
-                              ? 'Posted in Xero: in the trial balance from the next pull'
-                              : `Xero says ${j.ledger.status.toLowerCase()}: send it again if needed`}
+                              ? 'Posted in Xero'
+                              : `Xero: ${j.ledger.status.toLowerCase()}`}
                       </a>
                     )}
                     {(j.evidence ?? []).map((e) => (
@@ -382,6 +381,22 @@ export default function JournalsPage() {
                   <tr className="bg-[#FAFBFD]">
                     {anySelectable && <td />}
                     <td colSpan={9} className="px-3 pb-3 pt-0">
+                      <div className="max-w-2xl space-y-0.5 pb-1.5 text-[11px] text-[#4A5878] break-words">
+                        <p className="text-[#122654]">{j.narrative}</p>
+                        {j.calculation && <p>Calculation: {j.calculation}</p>}
+                        {j.reject_reason && <p>Rejected: {j.reject_reason}</p>}
+                        {j.self_approval_reason && <p className="text-[#8A5A00]">Self-approved. Reason: “{j.self_approval_reason}”</p>}
+                        {j.auto_reverse && <p>Reverses itself on the first day of the next period.</p>}
+                        {j.ledger && j.status !== 'in_ledger' && (
+                          <p>
+                            {j.ledger.status === 'DRAFT'
+                              ? 'Draft in Xero: approve it there.'
+                              : j.ledger.status === 'POSTED'
+                                ? 'Posted in Xero: in the trial balance from the next pull.'
+                                : `Xero says ${j.ledger.status.toLowerCase()}: send it again if needed.`}
+                          </p>
+                        )}
+                      </div>
                       <table className="w-full max-w-2xl text-[11px]">
                         <thead className="text-[10px] uppercase tracking-wider text-[#4A5878]">
                           <tr>

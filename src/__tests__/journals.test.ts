@@ -66,6 +66,7 @@ describe('manual journals (JNL-01)', () => {
     const rev = journalAction(reviewer, j.id, { action: 'reverse' });
     expect(db.adjustments.find((a) => a.id === j.id)!.status).toBe('reversed');
     expect(rev.reverses_id).toBe(j.id);
+    expect(rev.ledger ?? rev.self_approval_reason ?? rev.reversed_by_id).toBeUndefined(); // nothing carried over from the original
     expect(creditors()).toBe(before + 50000n); // the reversal cancels it
 
     const k = createJournal(preparer, ENG, accrual());
