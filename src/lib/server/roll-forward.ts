@@ -383,17 +383,23 @@ export class RollForwardService {
     }
 
     // Carry permanent documents (DOC-02)
+    // A file in the bin is not carried: it was deleted, and a copy of it in the new year would be clutter
     const permanentDocs = db.attachments.filter(
-      (a) => a.engagement_id === priorEng.id && (a.is_permanent || a.folder === 'permanent')
+      (a) => a.engagement_id === priorEng.id && (a.is_permanent || a.folder === 'permanent') && !a.deleted_at
     );
     for (const pDoc of permanentDocs) {
       const rolledDocId = `att_rolled_${pDoc.id}_${newEngId}`;
       if (!db.attachments.some((a) => a.id === rolledDocId)) {
+        // The file stays on the paper it supports: the same paper in the new year, when that paper came across.
+        // Its row links, category, description and archived state are copied as they are.
+        const pyRef = priorWps.find((w) => w.id === pDoc.workpaper_id)?.ref;
+        const newWpId = pyRef ? `wp_${newEngId}_${pyRef.replace('-', '').toLowerCase()}` : null;
         db.attachments.push({
           ...pDoc,
           id: rolledDocId,
           engagement_id: newEngId,
-          workpaper_id: null, // Link available in new period
+          workpaper_id: newWpId && db.workpapers.some((w) => w.id === newWpId) ? newWpId : null,
+          links: (pDoc.links ?? []).map((l) => ({ ...l, attachment_id: rolledDocId })),
         });
         permanentDocsCarried.push({ id: pDoc.id, filename: pDoc.filename });
       }
