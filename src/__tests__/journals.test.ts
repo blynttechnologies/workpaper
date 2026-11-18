@@ -76,6 +76,28 @@ describe('manual journals (JNL-01)', () => {
   });
 });
 
+describe('reversals saved before the fix', () => {
+  it('loading a save drops the approval and Xero state a reversal copied, and keeps its own', () => {
+    const j = createJournal(preparer, ENG, accrual());
+    journalAction(reviewer, j.id, { action: 'approve' });
+    const xero = (id: string) => ({ provider: 'xero' as const, id, status: 'DRAFT', sent_at: '', sent_by: '' });
+    j.ledger = xero('mj_1');
+    const revId = journalAction(reviewer, j.id, { action: 'reverse' }).id;
+    // loading replaces the saved objects, so read them back each time
+    const get = (id: string) => db.adjustments.find((a) => a.id === id)!;
+    Object.assign(get(revId), { ledger: xero('mj_1'), self_approval_reason: 'copied', reject_reason: 'copied' });
+    db.importState(db.exportState());
+    expect(get(revId).ledger ?? get(revId).self_approval_reason ?? get(revId).reject_reason).toBeUndefined();
+    expect(get(j.id).ledger?.id).toBe('mj_1'); // the original keeps its own
+
+    // sent to Xero and self-approved in its own right: kept
+    Object.assign(get(revId), { ledger: xero('mj_2'), self_approval_reason: 'mine', approved_by: get(revId).proposed_by });
+    db.importState(db.exportState());
+    expect(get(revId).ledger?.id).toBe('mj_2');
+    expect(get(revId).self_approval_reason).toBe('mine');
+  });
+});
+
 describe('proposed journals (JNL-02 framework)', () => {
   it('a proposal stays in Draft and changes nothing until accepted; rejecting needs a reason', () => {
     const before = creditors();
