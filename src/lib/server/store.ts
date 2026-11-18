@@ -111,6 +111,11 @@ export async function query<T = Record<string, unknown>>(text: string, params: u
   return res.rows as T[];
 }
 
+// The workspace row as last read from or written to the database, kept as text between requests.
+// Every request still starts from its own fresh copy (one JSON.parse of this text), but the row itself,
+// several megabytes, is fetched again only when another save has moved its version on.
+let cached: { version: number; stamp: string; json: string } | null = null;
+
 export async function readState(): Promise<StoredState> {
   if (!hasDatabase()) {
     if (localFile && fs.existsSync(localFile)) {
@@ -122,12 +127,21 @@ export async function readState(): Promise<StoredState> {
     }
     return memoryState;
   }
-  const rows = await query<{ version: number; data: Record<string, unknown[]> }>(
-    'SELECT version, data FROM workspace_state WHERE id = $1',
-    [WORKSPACE_ID]
-  );
-  if (rows.length === 0) return { version: 0, data: null };
-  return { version: rows[0].version, data: rows[0].data };
+  // updated_at is compared as well as the version, so a row restored by hand is never mistaken for the cached one
+  const head = await query<{ version: number; stamp: string }>('SELECT version, updated_at::text AS stamp FROM workspace_state WHERE id = $1', [WORKSPACE_ID]);
+  if (head.length === 0) {
+    cached = null;
+    return { version: 0, data: null };
+  }
+  if (cached?.version !== head[0].version || cached.stamp !== head[0].stamp) {
+    const rows = await query<{ version: number; stamp: string; json: string }>(
+      'SELECT version, updated_at::text AS stamp, data::text AS json FROM workspace_state WHERE id = $1',
+      [WORKSPACE_ID]
+    );
+    if (rows.length === 0) return { version: 0, data: null };
+    cached = rows[0];
+  }
+  return { version: cached.version, data: JSON.parse(cached.json) };
 }
 
 /** Writes state if the stored version still equals baseVersion. Returns the new version, or null on conflict. */
@@ -147,16 +161,18 @@ export async function writeState(baseVersion: number, data: Record<string, unkno
   const json = JSON.stringify(data);
   const rows =
     baseVersion === 0
-      ? await query<{ version: number }>(
+      ? await query<{ version: number; stamp: string }>(
           `INSERT INTO workspace_state (id, version, data) VALUES ($1, 1, $2::jsonb)
-           ON CONFLICT (id) DO NOTHING RETURNING version`,
+           ON CONFLICT (id) DO NOTHING RETURNING version, updated_at::text AS stamp`,
           [WORKSPACE_ID, json]
         )
-      : await query<{ version: number }>(
+      : await query<{ version: number; stamp: string }>(
           `UPDATE workspace_state SET version = version + 1, data = $2::jsonb, updated_at = now()
-           WHERE id = $1 AND version = $3 RETURNING version`,
+           WHERE id = $1 AND version = $3 RETURNING version, updated_at::text AS stamp`,
           [WORKSPACE_ID, json, baseVersion]
         );
+  // What was just saved is what the row now holds: the next request need not fetch it back
+  cached = rows.length ? { version: rows[0].version, stamp: rows[0].stamp, json } : null;
   return rows.length ? rows[0].version : null;
 }
 
@@ -165,7 +181,8 @@ let serverVersion = 0;
 
 export async function syncIn() {
   const state = await readState();
-  if (state.data) db.importState(JSON.parse(JSON.stringify(state.data)));
+  // From the database the data is already this request's own copy; the in-memory fallback is shared, so it is copied
+  if (state.data) db.importState(hasDatabase() ? state.data : JSON.parse(JSON.stringify(state.data)));
   serverVersion = state.version;
   // First run, or users added without a password: store their hashes straight away
   if (ensureCredentials()) await syncOut();
