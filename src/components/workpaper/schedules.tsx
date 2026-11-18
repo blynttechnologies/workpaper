@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import React, { useState } from 'react';
 import Link from 'next/link';
@@ -323,11 +324,7 @@ export function ReconciliationSchedule({ data, result, locked, save, filesFor, a
                             </button>
                           )
                         )}
-                        {note && (
-                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#B8432F]">
-                            <AlertTriangle className="w-3 h-3 shrink-0" /> {note}
-                          </div>
-                        )}
+                        {note && <Notice inline className="mt-0.5">{note}</Notice>}
                         {!locked && (statementEntered(a) || files.length > 0 || items > 0) && accounts.length > 1 && (
                           <label className="mt-0.5 flex items-center gap-1 text-[11px] text-[#4A5878]">
                             <AlertTriangle className="w-3 h-3 shrink-0 text-[#8A5A00]" />
@@ -878,7 +875,7 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
           )}
         </div>
         {data.refreshed_at && <div className="text-xs text-[#4A5878]">Aged from the ledger at {peLabel} · refreshed {ukDate(String(data.refreshed_at).slice(0, 10))}</div>}
-        {note && <div className={`text-xs ${note.kind === 'ok' ? 'text-[#0B6B52]' : 'text-[#B42318]'}`}>{note.text}</div>}
+        {note && <Notice tone={note.kind} inline>{note.text}</Notice>}
       </div>
 
       <div className="overflow-x-auto bg-white border border-[#E3E7EF] rounded-[12px]">

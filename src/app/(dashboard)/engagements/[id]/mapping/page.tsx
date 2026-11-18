@@ -108,7 +108,7 @@ export default function AccountMappingPage() {
             : `Nothing new to learn: all ${out.confirmed} confirmed lines are already known.`,
       });
     } catch {
-      setCorrectionToast({ message: 'Could not reach the server. Try again.' });
+      setCorrectionToast({ message: 'Could not reach Blynt. Check your connection and try again.' });
     } finally {
       setLearning(false);
       setTimeout(() => setCorrectionToast(null), 6000);

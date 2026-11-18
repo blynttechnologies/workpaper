@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { db } from '@/lib/server/db';
 import { services } from '@/lib/server/services';
 import { getActor } from '@/lib/session';
@@ -199,11 +200,7 @@ export default function ReviewNotesHubPage() {
         ))}
       </div>
 
-      {actionError && (
-        <div role="alert" className="flex items-center gap-2 p-3 rounded-lg text-sm border bg-[#FFF1EE] border-[#FF7A66]/40 text-[#A23A27]">
-          <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" /> {actionError}
-        </div>
-      )}
+      {actionError && <Notice>{actionError}</Notice>}
 
       {/* Sign-off and lock */}
       {mode === 'signoff' && (

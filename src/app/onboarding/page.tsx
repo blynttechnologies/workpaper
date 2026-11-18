@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, Pencil, Plus, X, Zap } from 'lucide-react';
 import { BlyntLogo } from '@/components/ui/BlyntLogo';
@@ -335,7 +336,7 @@ export default function OnboardingPage() {
                 <div className="sm:w-1/2">
                   <Q htmlFor="crn" required>Companies House number</Q>
                   <input id="crn" className={inputCls} value={p.company_number} onChange={setP('company_number')} placeholder={sf.companyPlaceholder(p.jurisdiction)} aria-invalid={Boolean(crnError)} />
-                  {crnError && <p className="text-xs text-[#B8432F] mt-1">{crnError}</p>}
+                  {crnError && <Notice inline className="mt-1">{crnError}</Notice>}
                 </div>
               )}
               <Q required>Who supervises your practice?</Q>
@@ -426,11 +427,7 @@ export default function OnboardingPage() {
 
           <Changes lines={changes[step]} />
 
-          {error && (
-            <div role="alert" className="mt-6 p-3 rounded-[10px] bg-[#FFF4DB] border border-[#6B4700]/20 text-[#6B4700] text-xs font-medium">
-              {error}
-            </div>
-          )}
+          {error && <Notice className="mt-6">{error}</Notice>}
 
           <div className="mt-8 flex items-center gap-3">
             {step > 0 && (

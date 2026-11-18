@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import { db } from '@/lib/server/db';
 import { getActor } from '@/lib/session';
@@ -56,7 +57,7 @@ export function ChangePeriodDialog({ engagement, onClose, onSaved }: { engagemen
           </label>
         </div>
 
-        {error && <p role="alert" className="text-[#B42318] font-medium">{error}</p>}
+        {error && <Notice inline>{error}</Notice>}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="min-h-[36px] px-3 font-bold cursor-pointer">Cancel</button>

@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 
@@ -53,7 +54,7 @@ export function BackupCodesCard() {
       if (res.ok) setCodes(body.backup_codes);
       else setError(body.error || 'Could not create backup codes. Try again.');
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -75,11 +76,7 @@ export function BackupCodesCard() {
           {busy ? 'Creating…' : 'Create new backup codes'}
         </button>
       </div>
-      {error && (
-        <p role="alert" className="text-[11px] font-medium text-[#B42318] flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-        </p>
-      )}
+      {error && <Notice inline>{error}</Notice>}
       {codes && (
         <>
           <p className="text-[11px] font-semibold text-[#6B4700]">Save these now. They won&apos;t be shown again.</p>

@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { ask } from '@/components/ui/ask';
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -121,7 +122,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
           : `${read || `Xero shows no payments out of the bank from ${ukDate(body.from)} to ${ukDate(body.to)}.`} Nothing was paid out. If that looks wrong, check the banks are up to date in Xero.`,
       });
     } catch {
-      setNote({ ok: false, text: 'Could not reach the server to check the Xero bank. Check your internet connection and try again.' });
+      setNote({ ok: false, text: 'Could not reach Blynt to check the Xero bank. Check your connection and try again.' });
     } finally {
       setChecking(false);
     }
@@ -188,7 +189,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         else problem = body.note || `The AI could not read a balance from ${att.filename}. Enter it from the statement.`;
       } else problem = body.error || 'Could not read the statement.';
     } catch {
-      problem = 'Could not reach the server to read the statement. Try again.';
+      problem = 'Could not reach Blynt to read the statement. Check your connection and try again.';
     }
     // A balance someone typed is never overwritten
     const blank = !(live().suppliers ?? []).find((s: Supplier) => s.id === id)?.statement_p;
@@ -394,19 +395,14 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
         </div>
       )}
       {note && (
-        <div role={note.ok ? 'status' : 'alert'} className={`flex items-start gap-2 px-3 py-2 rounded-[8px] border text-xs ${note.ok ? 'border-[#B7E4D4] bg-[#F0FAF6] text-[#0B6B52]' : 'border-[#F3C2BC] bg-[#FEF3F2] text-[#B42318]'}`}>
-          <span className="flex-1">
+        <Notice tone={note.ok ? 'ok' : 'error'} onClose={() => setNote(null)}>
             {note.text}{' '}
             {note.link && (
               <Link href={note.link.href} className="font-bold underline">
                 {note.link.label}
               </Link>
             )}
-          </span>
-          <button type="button" aria-label="Dismiss message" onClick={() => setNote(null)} className="font-bold leading-none">
-            ×
-          </button>
-        </div>
+          </Notice>
       )}
 
       <div className="@container overflow-x-auto border border-[#E3E7EF] rounded-[12px]">
@@ -710,11 +706,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
               : `The ledger has nothing after ${peLabel} yet, so there was nothing to search. Pull from Xero again or import the later transactions, then search again.`}
           </div>
         )}
-        {aiNote && (
-          <div role="alert" className="mb-2 text-[11px] text-[#B42318]">
-            {aiNote}
-          </div>
-        )}
+        {aiNote && <Notice inline className="mb-2">{aiNote}</Notice>}
         {!locked && !aiReading && items.some((i) => !i.ai) && (
           <button type="button" className={`${link} mb-2 inline-flex items-center gap-1`} onClick={() => readCosts(items.filter((i) => !i.ai).map((i) => i.id))}>
             <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Read with AI

@@ -1,7 +1,8 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
-import { AlertCircle, Check, CheckCircle2, Loader2, Save } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, Save } from 'lucide-react';
 import { db } from '@/lib/server/db';
 import { useCompany } from '@/context/CompanyContext';
 import { packForClient } from '@/lib/workpapers/templates';
@@ -105,7 +106,7 @@ export function ClientProfileForm({ client }: { client: Client }) {
       setResult(body.papers ?? []);
       refreshCompanyData();
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -235,11 +236,7 @@ export function ClientProfileForm({ client }: { client: Client }) {
         <span className="text-[10px] text-[#7E8DA6]">Open engagements update to match. Papers already started are kept.</span>
       </div>
 
-      {error && (
-        <p role="alert" className="text-[11px] font-medium text-[#B42318] flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-        </p>
-      )}
+      {error && <Notice inline>{error}</Notice>}
       {result && (
         <div role="status" className="p-3 rounded-[10px] bg-[#E6F4EF] border border-[#0B6B52]/20 text-xs text-[#122654] space-y-1">
           <p className="font-semibold text-[#0B6B52] flex items-center gap-1.5">

@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Plus } from 'lucide-react';
@@ -46,7 +47,7 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
         </button>
       </div>
 
-      {error && <p role="alert" className="mb-3 text-xs text-[#B8432F]">{error}</p>}
+      {error && <Notice inline className="mb-3">{error}</Notice>}
       {/* Say why Archive and Delete are greyed out, and where the role is changed */}
       {!manager && cards.length > 0 && (
         <p id="workflow-role-hint" className="mb-3 text-[11px] text-[#6B4700]">

@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
 
@@ -43,7 +44,7 @@ export function AiPaperActions({ workpaperId, readOnly, onUseDraft, onDone }: { 
           </button>
         )}
       </div>
-      {message && <p className="text-[11px] text-[#3F2A9E]">{message}</p>}
+      {message && <Notice tone="info" inline>{message}</Notice>}
       {draft && onUseDraft && (
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] text-[#122654] whitespace-pre-wrap bg-white rounded-lg p-2 border border-[#DDD6FA]">{draft}</p>

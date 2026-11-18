@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -314,7 +315,7 @@ function NewEngagementWizard() {
                     <div className="sm:col-span-3 sm:w-1/2">
                       <Q htmlFor="crn">Companies House number</Q>
                       <input id="crn" className={inputCls} value={details.company_no} onChange={setD('company_no')} placeholder={sf.companyPlaceholder(details.jurisdiction)} aria-invalid={Boolean(crnError)} />
-                      {crnError && <p className="text-[11px] text-[#B8432F] mt-1">{crnError}</p>}
+                      {crnError && <Notice inline className="mt-1">{crnError}</Notice>}
                     </div>
                   )}
                   <div className="sm:col-span-3">
@@ -327,7 +328,7 @@ function NewEngagementWizard() {
                     <option value="scotland">Scotland</option>
                     <option value="northern_ireland">Northern Ireland</option>
                   </select>
-                  {postcodeError && <p className="sm:col-span-3 text-[11px] text-[#B8432F] mt-1">{postcodeError}</p>}
+                  {postcodeError && <Notice inline className="sm:col-span-3 mt-1">{postcodeError}</Notice>}
                 </div>
 
                 <div className={`${section} grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3`}>
@@ -337,7 +338,7 @@ function NewEngagementWizard() {
                     {vat && (
                       <div className="mt-2 max-w-[220px]">
                         <input id="vat" aria-label="VAT number" className={inputCls} value={details.vat_number} onChange={setD('vat_number')} placeholder="VAT number, e.g. GB123456789" aria-invalid={Boolean(vatError)} />
-                        {vatError && <p className="text-[11px] text-[#B8432F] mt-1">{vatError}</p>}
+                        {vatError && <Notice inline className="mt-1">{vatError}</Notice>}
                       </div>
                     )}
                   </div>
@@ -404,11 +405,7 @@ function NewEngagementWizard() {
 
             {hint && <p className="mt-5 text-[11px] text-[#4A5878]">{hint}</p>}
 
-            {error && (
-              <div role="alert" className="mt-5 p-2.5 rounded-lg bg-[#FFF4DB] border border-[#6B4700]/20 text-[#6B4700] text-xs font-medium">
-                {error}
-              </div>
-            )}
+            {error && <Notice className="mt-5">{error}</Notice>}
 
             <div className="mt-6 pt-4 border-t border-[#EEF2F9] flex items-center justify-between gap-3">
               {step > 0 ? (

@@ -1,11 +1,11 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Eye,
   EyeOff,
-  AlertCircle,
   Clock,
 } from 'lucide-react';
 import { AuthBrandPanel } from '@/components/layout/AuthBrandPanel';
@@ -71,7 +71,7 @@ export default function LoginPage() {
       setFailedAttempts((prev) => prev + 1);
       setErrorMessage(body.error || 'Sign in failed. Please try again.');
     } catch {
-      setErrorMessage('Could not reach the server. Please try again.');
+      setErrorMessage('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -140,15 +140,7 @@ export default function LoginPage() {
           </div>
           )}
 
-          {errorMessage && (
-            <div
-              role="alert"
-              className="p-3 mb-4 rounded-[10px] bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-center gap-2"
-            >
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+          {errorMessage && <Notice className="mb-4">{errorMessage}</Notice>}
 
           {!mfaStep ? (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">

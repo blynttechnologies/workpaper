@@ -1,8 +1,9 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { KeyRound, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { KeyRound, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { AuthBrandPanel } from '@/components/layout/AuthBrandPanel';
 
 const inputClass =
@@ -33,7 +34,7 @@ export default function ForgotPasswordPage() {
         setSent(true);
       } else setError('Could not send the link. Try again.');
     } catch {
-      setError('Could not reach the server. Try again.');
+      setError('Could not reach Blynt. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
@@ -88,12 +89,7 @@ export default function ForgotPasswordPage() {
                 </p>
               </div>
 
-              {error && (
-                <div role="alert" className="p-3 mb-4 rounded-[10px] bg-[#FDECEA] border border-[#B42318]/30 text-[#B42318] text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+              {error && <Notice className="mb-4">{error}</Notice>}
 
               <form onSubmit={submit} className="flex flex-col gap-4">
                 <div>

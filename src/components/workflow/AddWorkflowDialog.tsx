@@ -1,5 +1,6 @@
 'use client';
 
+import { Notice } from '@/components/ui/Notice';
 import { useState } from 'react';
 import { Pencil, Plus, X } from 'lucide-react';
 import { db } from '@/lib/server/db';
@@ -47,7 +48,7 @@ export function AddWorkflowDialog({ engagementIds, firmId, onClose, onAdded }: {
         ) : (
           <div className="px-5 pb-5 space-y-3 overflow-y-auto">
             {open.length === 0 ? (
-              <p className="text-[#B8432F]" role="alert">Every year for this client is locked. Unlock one to add a workflow.</p>
+              <Notice inline>Every year for this client is locked. Unlock one to add a workflow.</Notice>
             ) : (
               <>
                 {open.length > 1 && (
@@ -61,7 +62,7 @@ export function AddWorkflowDialog({ engagementIds, firmId, onClose, onAdded }: {
                     </select>
                   </label>
                 )}
-                {error && <p role="alert" className="text-[#B8432F]">{error}</p>}
+                {error && <Notice inline>{error}</Notice>}
                 <ul className="border border-[#E3E7EF] rounded-xl divide-y divide-[#E3E7EF] overflow-hidden">
                   {workflowOptions(firmId).map((o) => (
                     <li key={o.key} className="flex items-center">
@@ -145,7 +146,7 @@ function WorkflowEditor({ firmId, option, onDone }: { firmId: string; option: Wo
         </div>
       </fieldset>
       <p className="text-[#4A5878]">Changing a workflow does not alter years it was already added to.</p>
-      {error && <p role="alert" className="text-[#B8432F]">{error}</p>}
+      {error && <Notice inline>{error}</Notice>}
       <div className="flex items-center justify-between pt-1">
         {existing ? <button type="button" onClick={remove} className="font-semibold text-[#B8432F] hover:underline cursor-pointer">Delete workflow</button> : <span />}
         <div className="flex gap-3">
