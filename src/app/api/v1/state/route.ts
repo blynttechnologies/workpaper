@@ -29,7 +29,9 @@ async function save(req: Request) {
   try {
     await syncIn();
     const actor = getActorFromRequest(req);
-    const body = await req.json();
+    // The browser gzips its save to stay under Lambda's 6 MB request limit; the closing-tab beacon still sends plain JSON
+    const body =
+      req.headers.get('content-type') === 'application/gzip' ? await new Response(req.body!.pipeThrough(new DecompressionStream('gzip'))).json() : await req.json();
     if (Number(body.version) !== currentVersion()) {
       return jsonResponse({ conflict: true, ...view(actor) }, 409);
     }

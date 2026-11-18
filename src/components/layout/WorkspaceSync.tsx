@@ -69,14 +69,20 @@ async function load() {
   applyState(await res.json());
 }
 
+// A whole workspace as plain JSON outgrows the 6 MB a Lambda request may be, and the save is then refused before it reaches the app
+// shortcut: gzip buys roughly ten times the room; when the gzipped save nears 4 MB, save only what changed instead of the whole workspace
+async function packed(json: string): Promise<{ body: BodyInit; type: string }> {
+  if (typeof CompressionStream === 'undefined') return { body: json, type: 'application/json' };
+  return { body: await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'))).blob(), type: 'application/gzip' };
+}
+
+let saveFailing = false;
+
 async function saveIfChanged() {
   const current = snapshot();
   if (current === lastSaved) return;
-  const res = await nativeFetch(STATE_URL, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version, data: JSON.parse(current) }),
-  });
+  const { body, type } = await packed(JSON.stringify({ version, data: JSON.parse(current) }));
+  const res = await nativeFetch(STATE_URL, { method: 'PUT', headers: { 'Content-Type': type }, body });
   if (res.status === 409 || res.status === 403) {
     // Someone else saved first, or the server refused a change this user may not make: take the saved copy
     const body = await res.json();
@@ -88,6 +94,11 @@ async function saveIfChanged() {
   if (res.ok) {
     version = (await res.json()).version;
     lastSaved = current;
+    saveFailing = false;
+  } else if (res.status !== 401 && !saveFailing) {
+    // Said once per run of failures: the save is tried again every 1.5 seconds
+    saveFailing = true;
+    window.alert(`Your changes are not being saved (the server answered ${res.status}). Refreshing the page will lose them. Tell your administrator.`);
   }
 }
 
