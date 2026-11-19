@@ -16,6 +16,9 @@ import type { PaperCheck } from './engine';
 /** The paper's two tabs by name. A check or a row says which it is about, and the screen names its tabs from here so the two cannot drift. */
 export const PREP_TABS = { prep: 'Prepayments', accrued: 'Accrued income' } as const;
 
+/** The first few names and how many more, so a long list does not fill the review panel: "A, B, C and 15 more". */
+export const named = (names: string[], sep = ', ') => (names.length > 4 ? `${names.slice(0, 3).join(sep)} and ${names.length - 3} more` : names.join(sep));
+
 export interface PrepLine {
   id: string;
   desc: string;
@@ -199,9 +202,9 @@ export function reviewPrepayments(ctx: PaperContext): string {
     const due = vs.filter((v) => v.counted && v.prepaid > 0n);
     const noInvoice = due.filter((v) => !ctx.files(v.l.id));
     return [
-      { id: `${pre}found_reviewed`, view, label: t.reviewed, detail: undecided.length ? `Decide on ${undecided.map((v) => v.l.desc).join(', ')}.` : t.search || t.decided, passed: !t.search && !undecided.length },
-      { id: `${pre}worked`, view, label: t.worked, detail: unworked.length ? `Enter the period covered and the account for ${unworked.map((v) => v.l.desc).join(', ')}.` : 'Every line has its period, so its part is calculated.', passed: !unworked.length },
-      { id: `${pre}evidence`, view, label: `${t.invoice} (${due.length - noInvoice.length}/${due.length})`, detail: noInvoice.length ? `Attach the invoice for ${noInvoice.map((v) => v.l.desc).join(', ')}.` : 'Every line has its invoice.', passed: !noInvoice.length },
+      { id: `${pre}found_reviewed`, view, label: t.reviewed, detail: undecided.length ? `Decide on ${named(undecided.map((v) => v.l.desc))}.` : t.search || t.decided, passed: !t.search && !undecided.length },
+      { id: `${pre}worked`, view, label: t.worked, detail: unworked.length ? `Enter the period covered and the account for ${named(unworked.map((v) => v.l.desc))}.` : 'Every line has its period, so its part is calculated.', passed: !unworked.length },
+      { id: `${pre}evidence`, view, label: `${t.invoice} (${due.length - noInvoice.length}/${due.length})`, detail: noInvoice.length ? `Attach the invoice for ${named(noInvoice.map((v) => v.l.desc))}.` : 'Every line has its invoice.', passed: !noInvoice.length },
     ];
   };
   const [reviewed, worked, evidence] = lineChecks(PREP_TABS.prep, '', prepViews, {

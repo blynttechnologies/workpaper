@@ -8,7 +8,7 @@ import { evaluatePaper } from '../lib/workpapers/engine';
 import { journalCheck, journalSig, openItems, pair } from '../lib/workpapers/common';
 import { creditorsJournal, supplierView } from '../lib/workpapers/creditors';
 import { otherItemView } from '../lib/workpapers/other-debtors';
-import { accruedPart, prepaidPart, prepView } from '../lib/workpapers/prepayments';
+import { accruedPart, named, prepaidPart, prepView } from '../lib/workpapers/prepayments';
 import { stockView } from '../lib/workpapers/stock';
 import { accountsDue } from '../lib/workpapers/statutory';
 
@@ -69,6 +69,11 @@ describe('other debtors', () => {
 });
 
 describe('prepayments', () => {
+  it('names the first few lines and counts the rest, so a long list does not fill the review panel', () => {
+    expect(named(['A', 'B', 'C', 'D'])).toBe('A, B, C, D');
+    expect(named(['A', 'B', 'C', 'D', 'E'], ' · ')).toBe('A · B · C and 2 more');
+  });
+
   it('works out the prepaid part by days, by months and in full', () => {
     const l = { id: 'x', desc: '', code: '4700', net_p: '192000' };
     expect(prepaidPart({ ...l, method: 'days', start: '2025-06-14', end: '2026-06-13' }, '2026-03-31')).toBe((192000n * 74n + 182n) / 365n);
