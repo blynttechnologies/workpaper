@@ -10,7 +10,7 @@ import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, th, Tiles } from '../kit';
 import { addDays, expenseCodes } from '@/lib/workpapers/common';
-import { accruedIncome, findPrepaidCosts, lastYear, prepaymentsJournal, prepView, type PrepLine } from '@/lib/workpapers/prepayments';
+import { accruedIncome, findPrepaidCosts, lastYear, prepaymentsJournal, prepView, withinYear, type PrepLine } from '@/lib/workpapers/prepayments';
 
 export function PrepaymentsSchedule({ data, result, locked, save, filesFor, attachTo, preview, tickFor, live, dropFiles }: ScheduleProps) {
   const [note, setNote] = useState<string | null>(null);
@@ -27,7 +27,10 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
     },
   };
   const minimum = asPence(data.min_p ?? '10000');
-  const views = ((data.prepayments ?? []) as PrepLine[]).map((l) => prepView(l, pe));
+  // Costs the AI read as wholly within the year stay off the list unless asked for; they keep their line, so a new search does not bring them back
+  const [showWithin, setShowWithin] = useState(false);
+  const within = ((data.prepayments ?? []) as PrepLine[]).filter((l) => withinYear(l, pe)).length;
+  const views = ((data.prepayments ?? []) as PrepLine[]).filter((l) => showWithin || !withinYear(l, pe)).map((l) => prepView(l, pe));
   const accrued = accruedIncome(result.engagementId);
   const ly = lastYear(ctx);
   const lines = prepaymentsJournal(ctx, data);
@@ -72,7 +75,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
     );
   };
   const add = () => save({ prepayments: [...(live().prepayments ?? []), { id: newId('prep'), desc: '', code: '', net_p: '0', method: 'months', start: addDays(pe, -30) }] });
-  const pending = views.filter((v) => v.l.found && !v.l.decision);
+  const pending = views.filter((v) => v.l.found && !v.l.decision && !withinYear(v.l, pe));
   const counted = views.filter((v) => v.counted && v.prepaid > 0n);
   const date = (v: string | undefined, label: string, onChange: (d: string) => void) => (
     <input type="date" aria-label={label} value={v ?? ''} disabled={locked} onChange={(e) => onChange(e.target.value)} className="w-[110px] px-1.5 py-1 text-[11px] border border-[#D3DCEE] rounded-[6px] disabled:bg-[#F5F8FD]" />
@@ -97,7 +100,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
       <SuggestBanner
         count={pending.length}
         locked={locked}
-        onAccept={() => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.found && !l.decision ? { ...l, decision: 'add' } : l)) })}
+        onAccept={() => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.found && !l.decision && !withinYear(l, pe) ? { ...l, decision: 'add' } : l)) })}
         decided={views.filter((v) => v.l.found && v.l.decision).length}
         onUndo={() => save({ prepayments: (live().prepayments ?? []).map((l: PrepLine) => (l.found && l.decision ? { ...l, decision: undefined } : l)) })}
         text={`${pending.map((v) => v.l.desc).join(' · ')} read like costs that run past the year end. Enter the period from each invoice so the prepaid part is right.`}
@@ -143,6 +146,14 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
       </div>
       {note && <Notice tone="ok" inline>{note}</Notice>}
       {aiNote && <Notice inline>{aiNote}</Notice>}
+      {tab === 'prep' && within > 0 && (
+        <div className="text-[10px] text-[#4A5878]">
+          {within} cost{within === 1 ? '' : 's'} the AI read as wholly within the year left out.{' '}
+          <button type="button" className="text-[#1D4E89] underline" onClick={() => setShowWithin(!showWithin)}>
+            {showWithin ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      )}
       {!locked && !aiReading && tab === 'prep' && views.some((v) => unread(v.l)) && (
         <button type="button" className="self-start text-[10px] text-[#1D4E89] underline inline-flex items-center gap-1" onClick={() => readCosts(views.filter((v) => unread(v.l)).map((v) => v.l.id))}>
           <Sparkles className="w-3 h-3 text-[#B8432F]" aria-hidden="true" /> Read with AI

@@ -84,6 +84,25 @@ describe('prepayments screen', () => {
     expect(search()).toHaveLength(1);
   });
 
+  it('leaves out a cost the AI read as wholly within the year', () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'C-20') ?? db.addWorkpaper(eng.id, 'C-20')!;
+    const line = (id: string, to: string) => ({ id, desc: id, code: '4600', net_p: '87647', method: 'days', start: '2025-01-27', found: true, ai: { from: '2025-01-27', to, summary: `${id} reading` } });
+    wp.data_json = { ...wp.data_json, scanned_at: '2026-01-01T00:00:00.000Z', prepayments: [line('weekly_rent', eng.period_end), line('annual_licence', '2099-01-26')] };
+    const view = () => render(<PrepaymentsSchedule data={wp.data_json} result={evaluatePaper(wp)!} locked={false} save={(p) => Object.assign(wp.data_json, p)} filesFor={() => []} attachTo={() => {}} preview={() => {}} tickFor={() => null} live={() => wp.data_json} />);
+    view();
+    expect(screen.queryByText('weekly_rent')).toBeNull();
+    expect(screen.getByText('annual_licence')).toBeTruthy();
+    // The review does not ask for a decision on it either
+    expect(evaluatePaper(wp)!.checks.find((c) => c.id === 'found_reviewed')!.detail).toBe('Decide on annual_licence.');
+    // It can still be looked at, and accepting the suggestions does not add it
+    fireEvent.click(screen.getByText('Show'));
+    expect(screen.getByText('weekly_rent')).toBeTruthy();
+    fireEvent.click(screen.getByText(/^Accept/));
+    expect(wp.data_json.prepayments.map((l: any) => l.decision)).toEqual([undefined, 'add']);
+  });
+
   it('undoes the decided suggestions in one go, keeping what was entered', () => {
     db.seed(true);
     const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;

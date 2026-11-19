@@ -59,6 +59,9 @@ export function prepView(l: PrepLine, periodEnd: string) {
   return { l, counted, worked, prepaid, span };
 }
 
+/** A found cost the AI read as ending on or before the period end: wholly in the year, so it is not offered as a prepayment. */
+export const withinYear = (l: PrepLine, periodEnd: string) => !!l.found && !l.decision && !!l.ai?.to && l.ai.to <= periodEnd;
+
 /** Costs in the last year before the period end that read like they run past it. */
 export function findPrepaidCosts(engagementId: string, periodEnd: string, minimum: bigint, existing: PrepLine[]) {
   const from = addDays(periodEnd, -365);
@@ -114,7 +117,7 @@ export function prepaymentsJournal(ctx: Pick<PaperContext, 'priorId' | 'engageme
 
 export function reviewPrepayments(ctx: PaperContext): string {
   const { data, totals, checks, anchors, periodEnd } = ctx;
-  const views = ((data.prepayments ?? []) as PrepLine[]).map((l) => prepView(l, periodEnd));
+  const views = ((data.prepayments ?? []) as PrepLine[]).filter((l) => !withinYear(l, periodEnd)).map((l) => prepView(l, periodEnd));
   const counted = views.filter((v) => v.counted);
   const prepaid = counted.reduce((a, v) => a + v.prepaid, 0n);
   const accrued = accruedIncome(ctx.engagementId).reduce((a, i) => a + asPence(i.amount_p), 0n);
