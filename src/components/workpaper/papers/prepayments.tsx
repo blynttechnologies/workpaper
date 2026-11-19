@@ -8,10 +8,12 @@ import { ukDate } from '@/lib/dates';
 import { db } from '@/lib/server/db';
 import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
-import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, th, Tiles } from '../kit';
+import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, Suggested, th, Tiles } from '../kit';
 import { addDays, expenseCodes, inLead } from '@/lib/workpapers/common';
 import { ACCRUED_WINDOW, accruedIncome, accruedLines, findAccruedSales, findPrepaidCosts, lastYear, nextYear, PREP_TABS, prepaymentsJournal, prepView, withinYear, type PrepLine } from '@/lib/workpapers/prepayments';
 import { REVENUE_CODES } from '@/lib/workpapers/revenue';
+import { SCHEDULE_DECISIONS } from '@/lib/types/models';
+import { scheduleRule } from '@/lib/server/schedule-learning';
 
 type Tab = 'prep' | 'accrued';
 const s = (n: number) => (n === 1 ? '' : 's');
@@ -20,6 +22,7 @@ const s = (n: number) => (n === 1 ? '' : 's');
 const KINDS = {
   prep: {
     key: 'prepayments',
+    type: 'prepayment',
     at: 'scanned_at',
     scan: 'scan',
     api: 'ai-prepaid-costs',
@@ -30,8 +33,8 @@ const KINDS = {
     all: 'All after the year end',
     account: 'Cost account',
     placeholder: 'e.g. Business insurance · annual policy',
-    add: 'Add as prepayment',
-    not: 'Not a prepayment',
+    add: SCHEDULE_DECISIONS.prepayment.add,
+    not: SCHEDULE_DECISIONS.prepayment.not,
     added: 'Added as a prepayment.',
     left: 'Not a prepayment, left in costs.',
     total: 'Total prepayments',
@@ -43,6 +46,7 @@ const KINDS = {
   },
   accrued: {
     key: 'accrued_income',
+    type: 'accrued_sales',
     at: 'accrued_scanned_at',
     scan: 'accrued_scan',
     api: 'ai-accrued-sales',
@@ -53,8 +57,8 @@ const KINDS = {
     all: 'All before the year end',
     account: 'Income account',
     placeholder: 'e.g. March retainer · invoiced in April',
-    add: 'Add as accrued income',
-    not: 'Not accrued income',
+    add: SCHEDULE_DECISIONS.accrued_sales.add,
+    not: SCHEDULE_DECISIONS.accrued_sales.not,
     added: 'Added as accrued income.',
     left: "Not accrued income, left in next year's sales.",
     total: 'Total accrued income',
@@ -102,7 +106,8 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
   // Every change below is to the lines of the tab on screen
   const stored = () => (live()[k.key] ?? []) as PrepLine[];
   const setLine = (id: string, patch: Partial<PrepLine>) => save({ [k.key]: stored().map((l) => (l.id === id ? { ...l, ...patch } : l)) });
-  // The AI reads each cost or sale still to decide: the period it covers when the description says, and which year it belongs to. It never decides.
+  // The AI reads each cost or sale still to decide: the period it covers when the description says, and which year it belongs to. With the
+  // learned rules and the confidence gate that gives a suggested decision, kept on the line with the reading. It never decides.
   // Kept for each tab, as a read on one can still be running when the other is opened
   const [reading, setReading] = useState<Partial<Record<Tab, boolean>>>({});
   const [aiNotes, setAiNotes] = useState<Partial<Record<Tab, string>>>({});
@@ -119,7 +124,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
       const res = await fetch(`/api/v1/engagements/${encodeURIComponent(result.engagementId)}/${k.api}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'The AI could not read these. Try again.');
-      const read = new Map<string, NonNullable<PrepLine['ai']>>((body.items ?? []).map((x: { id: string; from: string; to: string; summary: string }) => [x.id, { from: x.from, to: x.to, summary: x.summary }]));
+      const read = new Map<string, NonNullable<PrepLine['ai']>>((body.items ?? []).map(({ id, ...ai }: { id: string } & NonNullable<PrepLine['ai']>) => [id, ai]));
       save({ [k.key]: stored().map((l) => (read.has(l.id) ? { ...l, ai: read.get(l.id) } : l)) });
     } catch (e) {
       setAiNote((e as Error).message);
@@ -147,7 +152,14 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
   // A line added by hand for accrued income starts as the month before the year end, so the whole sale is accrued until the period is changed
   const add = () => save({ [k.key]: [...stored(), { id: newId(tab === 'prep' ? 'prep' : 'acc'), desc: '', code: '', net_p: '0', start: addDays(pe, -30), ...(tab === 'prep' ? { method: 'months' } : { method: 'days', end: pe }) }] });
   const open = (l: PrepLine) => !!l.found && !l.decision && !k.hidden(l, pe);
-  const pending = views.filter((v) => open(v.l));
+  // Accepting takes each line's suggestion where the gate found it Ready; one under that waits for a person. A line the gate has not seen is added, as before
+  // A rule learned since the line was read comes before the suggestion kept on it: where the two differ the line waits too
+  const ruled = (l: PrepLine) => (eng && l.ai?.supplier ? scheduleRule(eng.firm_id, eng.client_id, k.type, l.ai.supplier)?.target_value : undefined);
+  const ready = (l: PrepLine) => open(l) && (!l.ai?.gate || (l.ai.gate === 'ready' && (ruled(l) ?? l.ai.classification) === l.ai.classification));
+  const pending = views.filter((v) => ready(v.l));
+  // Accepting marks these as not, so the banner says so and does not name them as ones to add
+  const nots = pending.filter((v) => v.l.ai?.classification === 'not').length;
+  const adds = pending.filter((v) => v.l.ai?.classification !== 'not');
   const prepPending = prepViews.filter((v) => v.l.found && !v.l.decision && !withinYear(v.l, pe));
   const counted = prepViews.filter((v) => v.counted && v.prepaid > 0n);
   const accCounted = accViews.filter((v) => v.counted && v.prepaid > 0n);
@@ -176,11 +188,11 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
       <SuggestBanner
         count={pending.length}
         locked={locked}
-        onAccept={() => save({ [k.key]: stored().map((l) => (open(l) ? { ...l, decision: 'add' } : l)) })}
+        onAccept={() => save({ [k.key]: stored().map((l) => (ready(l) ? { ...l, decision: l.ai?.classification === 'not' ? 'not' : 'add' } : l)) })}
         decided={views.filter((v) => v.l.found && v.l.decision).length}
         onUndo={() => save({ [k.key]: stored().map((l) => (l.found && l.decision ? { ...l, decision: undefined } : l)) })}
         // Every sale after the year end is listed for accrued income, too many to name here
-        text={tab === 'prep' ? `${pending.map((v) => v.l.desc).join(' · ')} ${k.banner}` : k.banner}
+        text={`${tab === 'prep' ? (adds.length ? `${adds.map((v) => v.l.desc).join(' · ')} ${k.banner}` : '') : k.banner}${nots ? ` ${nots} will be marked "${k.not}" and left out of the journal.` : ''}`}
       />
 
       <div className="flex flex-col gap-2 p-3 bg-white border border-[#E3E7EF] rounded-[12px]">
@@ -344,20 +356,22 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                           <div className="px-3 py-2 rounded-[8px] bg-[#F5F8FD] text-[11px] text-[#122654] flex flex-col sm:flex-row sm:items-center gap-2">
                             <div className="flex-1 flex items-start gap-1.5">
                               <Sparkles className="w-3.5 h-3.5 mt-px shrink-0 text-[#B8432F]" aria-hidden="true" />
-                              <span>
+                              <span className="flex flex-col gap-0.5">
                                 {l.ai?.summary
                                   ? `${l.ai.summary}${l.ai.from && l.ai.to ? ` Reads as covering ${ukDate(l.ai.from)} to ${ukDate(l.ai.to)}.` : ''}`
                                   : aiReading
                                     ? 'Reading the description…'
                                     : k.unread(l.invoice_date ?? '', pe)}
+                                <Suggested type={k.type} ai={l.ai} />
                               </span>
                             </div>
                             {!locked && (
                               <div className="flex items-center gap-1.5 shrink-0">
-                                <button type="button" className={btnPrimary} onClick={() => setLine(l.id, { decision: 'add' })}>
+                                {/* The suggested decision is the main button */}
+                                <button type="button" className={l.ai?.classification === 'not' ? btnSecondary : btnPrimary} onClick={() => setLine(l.id, { decision: 'add' })}>
                                   {k.add}
                                 </button>
-                                <button type="button" className={btnSecondary} onClick={() => setLine(l.id, { decision: 'not' })}>
+                                <button type="button" className={l.ai?.classification === 'not' ? btnPrimary : btnSecondary} onClick={() => setLine(l.id, { decision: 'not' })}>
                                   {k.not}
                                 </button>
                               </div>

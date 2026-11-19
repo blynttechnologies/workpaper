@@ -5,6 +5,7 @@ import { db } from './db';
 import { TbSnapshotDiff, UserRole, AccountMapping, Workpaper, Comment, Attachment, BlyntAccount, AnchorJson, AttachmentCategory, AiDocumentSummary } from '../types/models';
 import { asPence } from '../money';
 import { runGated, learnFromCorrection, recordDecision, GatedResult } from './gate';
+import { learnFromScheduleDecisions } from './schedule-learning';
 import { matchBlyntAccount } from '../mapping/auto-mapper';
 import { structureForCompanyType } from '../practice-structure';
 import { getStatutoryDetails } from '../mapping/auto-mapper';
@@ -558,6 +559,12 @@ export const services = {
       });
 
     db.logAudit(firmId, actor, 'UPDATE_WORKPAPER', 'workpapers', wp.id, before, wp);
+    // A decision on a schedule line the AI read is logged and learned from. The save itself never waits on that
+    try {
+      learnFromScheduleDecisions({ ...actor, firmId }, wp, before.data_json);
+    } catch (err) {
+      console.error('Schedule learning failed', err);
+    }
     return wp;
   },
 

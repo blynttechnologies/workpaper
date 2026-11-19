@@ -53,8 +53,11 @@ describe("debtors open at the period end, as Xero's Aged Receivables shows them"
   });
 
   it('ages each customer by days past due at the period end, and keeps decisions', () => {
-    const lines = agedFromOpenItems(items, PE, [{ id: 'keep', desc: 'Black Rock Tyres', current_p: '0', d30_p: '0', d60_p: '0', d90_p: '0', after_date_p: '0', decision: 'provide', provision_p: '120000' }]);
+    const ai = { percent: 40, amount_p: '48000', reason: 'Long overdue.', classification: 'provide', confidence: 88, gate: 'check' as const, source: 'ai' as const, supplier: 'Black Rock Tyres' };
+    const lines = agedFromOpenItems(items, PE, [{ id: 'keep', desc: 'Black Rock Tyres', current_p: '0', d30_p: '0', d60_p: '0', d90_p: '0', after_date_p: '0', decision: 'provide', provision_p: '120000', ai }]);
     const brt = lines.find((l) => l.desc === 'Black Rock Tyres')!;
+    // The AI's answer stays with the customer too, so a later change of mind is still learned from
+    expect(brt.ai).toEqual(ai);
     // INV-0900 is over a year overdue; INV-1500 falls due on the period end, so it is 1 to 30 overdue,
     // and INV-1501 after it; the credit note is aged by its own date, 16 days before the period end, as Xero does
     expect(brt).toMatchObject({ id: 'keep', d90_p: '120000', current_p: '80000', d30_p: String(50000 - 10000), d60_p: '0', after_date_p: '50000', decision: 'provide' });

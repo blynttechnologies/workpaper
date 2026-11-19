@@ -2,7 +2,7 @@ import { db } from '../server/db';
 import { asPence, formatPence } from '../money';
 import { addDays, chartCodeOf, daysBetween, journalCheck, journalInLedger, ledgerFor, pair, type JLine, type PaperContext } from './common';
 import { REVENUE_CODES } from './revenue';
-import type { LedgerTransaction } from '../types/models';
+import type { LedgerTransaction, ScheduleGate } from '../types/models';
 import type { PaperCheck } from './engine';
 
 /**
@@ -30,7 +30,7 @@ export interface PrepLine {
   url?: string; // the record in Xero
   ref?: string; // its invoice number
   /** The AI's reading of the description: the period it covers when that can be told, and a line on whether it runs past the year end. */
-  ai?: { from: string; to: string; summary: string };
+  ai?: { from: string; to: string; summary: string } & Partial<ScheduleGate>;
 }
 
 const LOOKS_PREPAID = /insurance|annual|subscription|licen[cs]e|renewal|in advance|quarter|booking|deposit for|rent/i;

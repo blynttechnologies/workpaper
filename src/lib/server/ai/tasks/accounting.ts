@@ -1,4 +1,5 @@
 import { AiError, type Part, type TaskDef } from '../types';
+import { SCHEDULE_DECISIONS, type ScheduleOutputType } from '../../../types/models';
 
 /**
  * Accounting, risk, reporting, workflow and research tasks. Each gets facts worked out by Workpaper's own
@@ -258,12 +259,13 @@ export interface ProvisionInput {
 export interface ProvisionOutput {
   percent: number;
   reason: string;
+  confidence: number;
 }
 
 export const suggestProvisionTask: TaskDef<ProvisionInput, ProvisionOutput> = {
   id: 'suggest_provision',
   module: 'debtors',
-  version: '2026-11-15',
+  version: '2026-11-19',
   system: BASE,
   build: (d) => [
     json('customer_balance', d),
@@ -274,13 +276,15 @@ export const suggestProvisionTask: TaskDef<ProvisionInput, ProvisionOutput> = {
         'there is objective evidence the amount will not be collected). Weigh how long each invoice was overdue at the period end, ' +
         'what was received after the period end, each invoice\'s payment history and any part payments. Give the whole-number ' +
         'percentage (0 to 100) of still_due_p to provide, and a reason of one or two sentences naming the evidence, for a reviewer to ' +
-        'check. Use 0 when the evidence points to collection and 100 when it points to none.',
+        'check. Use 0 when the evidence points to collection and 100 when it points to none. And confidence: a whole number from ' +
+        '0 to 100 for how sure the evidence makes you that a provision is, or is not, needed for this customer; low when it could ' +
+        'go either way.',
     },
   ],
   schema: {
     type: 'object',
-    properties: { percent: { type: 'integer' }, reason: { type: 'string' } },
-    required: ['percent', 'reason'],
+    properties: { percent: { type: 'integer' }, reason: { type: 'string' }, confidence: { type: 'integer' } },
+    required: ['percent', 'reason', 'confidence'],
     additionalProperties: false,
   },
   maxTokens: 2000,
@@ -296,13 +300,41 @@ export interface AfterDateCostsInput {
   supplier_history: { supplier: string; posted: string; description: string; amount_p: string }[];
 }
 export interface AfterDateCostsOutput {
-  items: { id: string; covers_from: string; covers_to: string; summary: string }[];
+  items: { id: string; covers_from: string; covers_to: string; summary: string; classification: string; confidence: number }[];
 }
+
+// Each reading task classifies into its own schedule's decisions, the values stored on the schedule's lines
+const readingSchema = (type: ScheduleOutputType) => ({
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          covers_from: { type: 'string' },
+          covers_to: { type: 'string' },
+          summary: { type: 'string' },
+          classification: { type: 'string', enum: Object.keys(SCHEDULE_DECISIONS[type]) },
+          confidence: { type: 'integer' },
+        },
+        required: ['id', 'covers_from', 'covers_to', 'summary', 'classification', 'confidence'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['items'],
+  additionalProperties: false,
+});
+const CONFIDENCE =
+  ' And confidence: a whole number from 0 to 100 for how sure the evidence makes you of that classification; keep it under 50 ' +
+  'when it cannot be told, and never raise it to seem helpful.';
 
 export const reviewAfterDateCostsTask: TaskDef<AfterDateCostsInput, AfterDateCostsOutput> = {
   id: 'review_after_date_costs',
   module: 'creditors',
-  version: '2026-11-17',
+  version: '2026-11-19',
   system: BASE,
   build: (d) => [
     json('costs_posted_after_period_end', d),
@@ -314,26 +346,16 @@ export const reviewAfterDateCostsTask: TaskDef<AfterDateCostsInput, AfterDateCos
         'id with: covers_from and covers_to, the period the goods or services cover as YYYY-MM-DD, only when the description or the ' +
         "supplier's billing pattern in supplier_history shows it (for example a week number, a month, a quarter or a date range); " +
         'leave both as empty strings when it cannot be told. And summary: one short sentence, at most 25 words, saying whether it ' +
-        'looks like this year, next year or cannot be told, naming the evidence, and what to check on the bill when unsure. Do not guess dates.',
+        'looks like this year, next year or cannot be told, naming the evidence, and what to check on the bill when unsure. Do not guess dates. ' +
+        'And classification, your best reading of it: "accrue" when the goods or services were received on or before period_end and ' +
+        'the bill is dated after it, "creditor" when the description shows the bill itself is dated on or before period_end and was ' +
+        'only posted late, "not_liability" when it is a cost of the next year.' +
+        CONFIDENCE,
     },
   ],
-  schema: {
-    type: 'object',
-    properties: {
-      items: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: { id: { type: 'string' }, covers_from: { type: 'string' }, covers_to: { type: 'string' }, summary: { type: 'string' } },
-          required: ['id', 'covers_from', 'covers_to', 'summary'],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ['items'],
-    additionalProperties: false,
-  },
-  maxTokens: 8000,
+  schema: readingSchema('after_date_cost'),
+  // Room for 60 costs with their classification and confidence
+  maxTokens: 12000,
   effort: 'low',
 };
 
@@ -344,7 +366,8 @@ export const reviewPrepaidCostsTask: TaskDef<AfterDateCostsInput, AfterDateCosts
   ...reviewAfterDateCostsTask,
   id: 'review_prepaid_costs',
   module: 'prepayments',
-  version: '2026-11-18',
+  version: '2026-11-19',
+  schema: readingSchema('prepayment'),
   build: (d) => [
     json('costs_posted_in_the_year', d),
     {
@@ -356,7 +379,10 @@ export const reviewPrepaidCostsTask: TaskDef<AfterDateCostsInput, AfterDateCosts
         'supplier_history shows it (for example a named month, a quarter, a date range, or a yearly charge the supplier bills once a ' +
         'year); leave both as empty strings when it cannot be told. And summary: one short sentence, at most 25 words, saying whether ' +
         'it looks like it runs past the period end, falls wholly within the year (for example a monthly charge or a one-off stay), ' +
-        'or cannot be told, naming the evidence, and what to check on the invoice when unsure. Do not guess dates.',
+        'or cannot be told, naming the evidence, and what to check on the invoice when unsure. Do not guess dates. And ' +
+        'classification, your best reading of it: "add" when part of the cost runs past period_end, so it is a prepayment, "not" ' +
+        'when it falls wholly within the year.' +
+        CONFIDENCE,
     },
   ],
 };
@@ -366,7 +392,8 @@ export const reviewAccruedSalesTask: TaskDef<AfterDateCostsInput, AfterDateCosts
   ...reviewAfterDateCostsTask,
   id: 'review_accrued_sales',
   module: 'prepayments',
-  version: '2026-11-19',
+  version: '2026-11-19b',
+  schema: readingSchema('accrued_sales'),
   build: (d) => [
     json('sales_invoiced_after_period_end', d),
     {
@@ -380,7 +407,9 @@ export const reviewAccruedSalesTask: TaskDef<AfterDateCostsInput, AfterDateCosts
         'month, a week number, a quarter, a date range, or a customer invoiced in arrears every month); leave both as empty strings ' +
         'when it cannot be told. And summary: one short sentence, at most 25 words, saying whether it looks like work done before ' +
         'the period end, work of the next year, or cannot be told, naming the evidence, and what to check on the invoice when ' +
-        'unsure. Do not guess dates.',
+        'unsure. Do not guess dates. And classification, your best reading of it: "add" when the work was done or the goods ' +
+        'supplied on or before period_end, so it is accrued income, "not" when it is a sale of the next year.' +
+        CONFIDENCE,
     },
   ],
 };

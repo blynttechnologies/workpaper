@@ -104,6 +104,55 @@ describe('prepayments screen', () => {
     expect(wp.data_json.prepayments.map((l: any) => l.decision)).toEqual([undefined, 'add']);
   });
 
+  it("shows each line's suggestion from the rules and the gate, and accepting all takes only the Ready ones, as suggested", async () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'C-20') ?? db.addWorkpaper(eng.id, 'C-20')!;
+    const line = (id: string, ai?: Record<string, any>) => ({ id, desc: id, code: '4600', net_p: '87647', method: 'days', start: '2025-01-27', found: true, ...(ai ? { ai: { from: '', to: '', summary: `${id} reading`, supplier: id, ...ai } } : {}) });
+    wp.data_json = {
+      ...wp.data_json,
+      scanned_at: '2026-01-01T00:00:00.000Z',
+      prepayments: [
+        line('ready_add', { classification: 'add', confidence: 95, gate: 'ready', source: 'ai' }),
+        line('ruled_not', { classification: 'not', confidence: 100, gate: 'ready', source: 'rule', rule_id: 'rule_1' }),
+        line('unsure', { classification: 'add', confidence: 75, gate: 'check', source: 'ai' }),
+        line('unread'),
+      ],
+    };
+    render(<PrepaymentsSchedule data={wp.data_json} result={evaluatePaper(wp)!} locked={false} save={(p) => Object.assign(wp.data_json, p)} filesFor={() => []} attachTo={() => {}} preview={() => {}} tickFor={() => null} live={() => wp.data_json} />);
+    // The one the gate wants checked is not offered in bulk
+    expect(screen.getByText('3 suggestions ready')).toBeTruthy();
+    // The banner names the ones accepting would add, and says what happens to the other
+    expect(screen.getByText(/ready_add · unread read like costs that run past the year end.* 1 will be marked "Not a prepayment" and left out of the journal\./)).toBeTruthy();
+    expect(screen.getByText(/AI 75% sure/)).toBeTruthy();
+    expect(screen.getAllByText('Check')).toHaveLength(1);
+    expect(screen.getByText(/learned rule/)).toBeTruthy();
+    // A read keeps what the route says of each line: the reading, the suggestion and where it came from
+    const reading = { from: '', to: '', summary: 'Monthly charge.', classification: 'not', confidence: 96, gate: 'ready', source: 'ai', supplier: 'Unread Ltd', model: 'm' };
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'unread', ...reading }] }) });
+    fireEvent.click(screen.getByText('Read with AI'));
+    await waitFor(() => expect(wp.data_json.prepayments[3].ai).toEqual(reading));
+    fireEvent.click(screen.getByText(/^Accept/));
+    expect(wp.data_json.prepayments.map((l: any) => l.decision)).toEqual(['add', 'not', undefined, 'not']);
+  });
+
+  it('does not accept in bulk a suggestion that a rule learned since now contradicts', () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'C-20') ?? db.addWorkpaper(eng.id, 'C-20')!;
+    const line = (id: string) => ({ id, desc: id, code: '4600', net_p: '87647', method: 'days', start: '2025-01-27', found: true, ai: { from: '', to: '', summary: 's', supplier: 'Acme', classification: 'add', confidence: 95, gate: 'ready', source: 'ai' } });
+    wp.data_json = { ...wp.data_json, scanned_at: '2026-01-01T00:00:00.000Z', prepayments: [line('first'), line('second')] };
+    // The person said no to the first line from this supplier, which taught the rule; the second still carries the earlier reading
+    db.learned_rules = [{ id: 'rule_acme', firm_id: eng.firm_id, client_id: eng.client_id, supplier_name: 'Acme', type: 'prepayment', scope: 'client', pattern: 'supplier:acme', target_value: 'not', created_by: 'usr_admin', created_by_name: 'Admin', created_at: '', times_used: 0, active: true }];
+    wp.data_json.prepayments[0].decision = 'not';
+    render(<PrepaymentsSchedule data={wp.data_json} result={evaluatePaper(wp)!} locked={false} save={(p) => Object.assign(wp.data_json, p)} filesFor={() => []} attachTo={() => {}} preview={() => {}} tickFor={() => null} live={() => wp.data_json} />);
+    expect(screen.queryByText(/suggestions? ready/)).toBeNull();
+    expect(wp.data_json.prepayments[1].decision).toBeUndefined();
+    // It is still there to decide by hand
+    fireEvent.click(screen.getByRole('button', { name: 'Add as prepayment' }));
+    expect(wp.data_json.prepayments[1].decision).toBe('add');
+  });
+
   it('undoes the decided suggestions in one go, keeping what was entered', () => {
     db.seed(true);
     const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;

@@ -729,7 +729,8 @@ export interface AiOutputMeta {
 }
 
 export type RuleScope = 'supplier' | 'client' | 'practice';
-export type RuleType = 'mapping' | 'extraction' | 'tagging' | 'proposal' | 'review' | 'na_choice';
+// A schedule's rules carry its own type, so a rule learned on one schedule is never matched on another
+export type RuleType = 'mapping' | 'extraction' | 'tagging' | 'proposal' | 'review' | 'na_choice' | ScheduleOutputType;
 
 export interface LearnedRule {
   id: string;
@@ -753,7 +754,7 @@ export interface AiActionLogItem {
   id: string;
   firm_id: string;
   engagement_id: string;
-  output_type: 'mapping' | 'extraction' | 'journal' | 'finding' | 'note' | 'commentary';
+  output_type: 'mapping' | 'extraction' | 'journal' | 'finding' | 'note' | 'commentary' | ScheduleOutputType;
   item_ref?: string;
   inputs_used: string;
   confidence: number;
@@ -763,6 +764,52 @@ export interface AiActionLogItem {
   decided_by_name: string;
   decided_at: string;
   rejection_reason?: string;
+}
+
+/**
+ * The AI readings on schedule lines that a person then decides on, one per AI task that reads a schedule:
+ *   prepayment       review_prepaid_costs      C-20 data.prepayments        PrepLine.ai
+ *   accrued_sales    review_accrued_sales      C-20 data.accrued_income     PrepLine.ai
+ *   after_date_cost  review_after_date_costs   K-10 data.search.items       SearchItem.ai
+ *   provision        suggest_provision         C-10 data.lines              DebtorLine.ai
+ * Each is an output type of the confidence gate and a rule type of the rules library (gate.ts).
+ * These ids are stored on rules and in the AI action log: the labels can change, the ids cannot.
+ */
+export type ScheduleOutputType = 'prepayment' | 'accrued_sales' | 'after_date_cost' | 'provision';
+
+/** The name each schedule goes by on screen. */
+export const SCHEDULE_OUTPUT_LABELS: Record<ScheduleOutputType, string> = {
+  prepayment: 'Prepayment',
+  accrued_sales: 'Accrued income',
+  after_date_cost: 'Search for unrecorded liabilities',
+  provision: 'Provision',
+};
+
+/**
+ * The decisions a person can make on each schedule, as stored on its lines, with the wording the schedule shows.
+ * The AI classifies into these and a learned rule's target is one of them, so nothing outside a schedule's own
+ * list is ever suggested on it.
+ */
+export const SCHEDULE_DECISIONS: Record<ScheduleOutputType, Record<string, string>> = {
+  prepayment: { add: 'Add as prepayment', not: 'Not a prepayment' },
+  accrued_sales: { add: 'Add as accrued income', not: 'Not accrued income' },
+  after_date_cost: { accrue: 'Accrue', creditor: 'Creditor', not_liability: 'Not this year' },
+  // A provision's amount is never part of the classification: the person sets it
+  provision: { provide: 'Provide', no_provision: 'No provision' },
+};
+
+/** What the gate made of one schedule reading; kept on the line beside the reading so the decision can be compared with it. */
+export interface ScheduleGate {
+  classification: string | null; // the suggested decision, one of SCHEDULE_DECISIONS for its schedule
+  confidence: number; // 0-100
+  gate: 'ready' | 'check' | 'exception';
+  source: 'rule' | 'ai' | 'none';
+  rule_id?: string;
+  // What the AI itself read when a learned rule answered instead, so the two can be compared
+  ai_classification?: string;
+  ai_confidence?: number;
+  supplier: string; // the supplier or customer on its own, as rules are matched on it
+  model?: string;
 }
 
 export interface AiReviewFinding {
