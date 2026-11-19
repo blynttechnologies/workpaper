@@ -101,6 +101,12 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
   const lines = prepaymentsJournal(ctx, data);
   const tot = (key: string) => result.totals[key] ?? 0n;
   const tbAgrees = tot('tb_final') === tot('total');
+  // 7300 holds prepayments and accrued income together, so the TB after journals is tied to the two; each tile names the other
+  const tbLine = (withOther: string) => (
+    <div className={tbAgrees ? 'font-bold text-[#0B6B52]' : ''}>
+      TB {formatPence(tot('tb_final'))} · {tbAgrees ? `✓ Agrees${withOther}` : `differs by ${formatPence(tot('tb_final') - tot('total'))}`}
+    </div>
+  );
   // Income accounts by the rule the search uses, so a practice's own account under one of them can be picked too
   const codes = tab === 'prep' ? expenseCodes() : db.blynt_accounts.filter((a) => REVENUE_CODES.some((c) => inLead(a.code, c))).map((a) => ({ code: a.code, name: a.name }));
 
@@ -179,14 +185,20 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
             sub: (
               <>
                 {counted.length} items · last year {formatPence(ly.total)}
-                {/* 7300 holds prepayments and accrued income together, so the TB after journals is tied to the two */}
-                <div className={tbAgrees ? 'font-bold text-[#0B6B52]' : ''}>
-                  TB {formatPence(tot('tb_final'))} · {tbAgrees ? `✓ Agrees${tot('accrued') ? ' with accrued income' : ''}` : `differs by ${formatPence(tot('tb_final') - tot('total'))}`}
-                </div>
+                {tbLine(tot('accrued') ? ' with accrued income' : '')}
               </>
             ),
           },
-          { label: 'Accrued income', value: formatPence(tot('accrued')), sub: accCounted.length ? `${accCounted.length + accrued.length} items · ${accrued.length} from the Revenue paper` : 'from the Revenue paper' },
+          {
+            label: 'Accrued income',
+            value: formatPence(tot('accrued')),
+            sub: (
+              <>
+                {accCounted.length ? `${accCounted.length + accrued.length} items · ${accrued.length} from the Revenue paper` : 'from the Revenue paper'}
+                {tbLine(tot('prepaid') ? ' with prepayments' : '')}
+              </>
+            ),
+          },
           { label: 'Costs scanned', value: data.scan ? String(data.scan.scanned) : '–', sub: data.scan ? `${prepPending.length} to decide · ${data.scan.small} under ${formatPence(minimum)} left out` : 'search the ledger below' },
           {
             label: "Last year's prepayments",
