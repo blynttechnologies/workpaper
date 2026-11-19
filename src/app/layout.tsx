@@ -6,6 +6,8 @@ import { WorkspaceSync } from '@/components/layout/WorkspaceSync';
 import { CompanyProvider } from '@/context/CompanyContext';
 import { LocaleProvider } from '@/context/LocaleContext';
 import { InactivityHandler } from '@/components/layout/InactivityHandler';
+import { NewVersionWatch } from '@/components/layout/NewVersionWatch';
+import { buildId } from '@/lib/server/build-id';
 
 // Brand font (brand kit v1): Inter, five weights, self-hosted from the kit's files (SIL OFL)
 const inter = localFont({
@@ -46,6 +48,7 @@ export default function RootLayout({
           <LocaleProvider>
             <CompanyProvider>
               <InactivityHandler />
+              <NewVersionWatch build={buildId()} />
               {children}
             </CompanyProvider>
           </LocaleProvider>

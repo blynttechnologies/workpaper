@@ -145,6 +145,9 @@ async function saveOnce(): Promise<boolean | void> {
   }
 }
 
+/** True while this browser holds edits the server has not confirmed as saved. */
+export const hasUnsavedChanges = () => started && snapshot() !== lastSaved;
+
 // Run sync work one step at a time so saves and reloads never overlap
 function serial<T>(task: () => Promise<T>): Promise<T> {
   const run = queue.then(task, task);
