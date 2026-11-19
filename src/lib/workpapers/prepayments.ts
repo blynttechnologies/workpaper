@@ -185,7 +185,7 @@ export function reviewPrepayments(ctx: PaperContext): string {
   const ly = lastYear(ctx);
   const draft = ctx.tb('7300').draft;
   const lines = prepaymentsJournal(ctx, data);
-  Object.assign(totals, { prepaid, accrued, total: prepaid + accrued, last_year: ly.total, tb_draft: draft });
+  Object.assign(totals, { prepaid, accrued, total: prepaid + accrued, last_year: ly.total, tb_draft: draft, tb_final: ctx.tb('7300').final });
   prepViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Prepayment', view: PREP_TABS.prep }));
   accViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Accrued income', view: PREP_TABS.accrued }));
 
