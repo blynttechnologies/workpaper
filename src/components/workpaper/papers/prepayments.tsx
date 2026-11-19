@@ -10,7 +10,7 @@ import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, Suggested, th, Tiles } from '../kit';
 import { addDays, expenseCodes, inLead } from '@/lib/workpapers/common';
-import { ACCRUED_WINDOW, accruedIncome, accruedLines, findAccruedSales, findPrepaidCosts, lastYear, nextYear, PREP_TABS, prepaymentsJournal, prepView, withinYear, type PrepLine } from '@/lib/workpapers/prepayments';
+import { ACCRUED_WINDOW, accruedIncome, accruedLines, findAccruedSales, findPrepaidCosts, lastYear, named, nextYear, PREP_TABS, prepaymentsJournal, prepView, withinYear, type PrepLine } from '@/lib/workpapers/prepayments';
 import { REVENUE_CODES } from '@/lib/workpapers/revenue';
 import { SCHEDULE_DECISIONS } from '@/lib/types/models';
 import { scheduleRule } from '@/lib/server/schedule-learning';
@@ -192,7 +192,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
         decided={views.filter((v) => v.l.found && v.l.decision).length}
         onUndo={() => save({ [k.key]: stored().map((l) => (l.found && l.decision ? { ...l, decision: undefined } : l)) })}
         // Every sale after the year end is listed for accrued income, too many to name here
-        text={`${tab === 'prep' ? (adds.length ? `${adds.map((v) => v.l.desc).join(' · ')} ${k.banner}` : '') : k.banner}${nots ? ` ${nots} will be marked "${k.not}" and left out of the journal.` : ''}`}
+        text={`${tab === 'prep' ? (adds.length ? `${named(adds.map((v) => v.l.desc), ' · ')} ${k.banner}` : '') : k.banner}${nots ? ` ${nots} will be marked "${k.not}" and left out of the journal.` : ''}`}
       />
 
       <div className="flex flex-col gap-2 p-3 bg-white border border-[#E3E7EF] rounded-[12px]">
