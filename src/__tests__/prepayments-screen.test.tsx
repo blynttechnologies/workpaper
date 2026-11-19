@@ -285,5 +285,10 @@ describe('accrued income tab', () => {
     revenue.data_json.cutoff.items.push({ id: 'tx_march_renumbered', date: day(pe, 10), contact: 'Brightside', desc: 'March retainer', amount_p: '120000', code: '1000', decision: 'accrue' });
     expect(prepaymentsJournal(ctx as any, wp.data_json)).toEqual([]);
     expect(evaluatePaper(wp)!.totals.accrued).toBe(80000n + 120000n);
+    // Once 7300 in the TB holds what the schedule does, the tie passes
+    const { total, tb_final } = evaluatePaper(wp)!.totals;
+    db.account_mappings.push({ id: 'm_7300_tie', engagement_id: wp.engagement_id, source_code: 'TIE', source_name: 'Prepayments', source_type: 'Current assets', balance_p: (total - tb_final).toString(), blynt_code: '7300', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
+    expect(evaluatePaper(wp)!.totals.tb_final).toBe(total);
+    expect(check('tb')).toMatchObject({ passed: true, detail: expect.stringContaining('in the schedule and in the TB after journals') });
   });
 });
