@@ -30,11 +30,15 @@ export interface PaperCheck {
   detail: string;
   passed: boolean;
   explanation?: string;
+  /** The tab of the paper this is about, by the tab's name; absent when it is about the whole paper */
+  view?: string;
 }
 
 export interface Anchor {
   id: string;
   label: string;
+  /** The tab of the paper this row is on, as for a check */
+  view?: string;
 }
 
 export interface PaperResult {

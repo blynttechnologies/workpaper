@@ -2108,9 +2108,12 @@ export function PayrollSchedule({ data, result, locked, save, filesFor, attachTo
         ]}
       />
       <div className="flex items-center justify-between border-b border-[#E3E7EF] pb-2">
-        <div className="flex gap-2">
+        {/* Marked as tabs so a comment left on one keeps to it, as on the other papers */}
+        <div className="flex gap-2" role="tablist" aria-label="View">
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'months'}
             onClick={() => setTab('months')}
             className={`px-3 py-1.5 rounded-[8px] font-bold ${tab === 'months' ? 'bg-[#122654] text-white' : 'bg-[#F5F8FD] text-[#4A5878]'}`}
           >
@@ -2118,6 +2121,8 @@ export function PayrollSchedule({ data, result, locked, save, filesFor, attachTo
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'summary'}
             onClick={() => setTab('summary')}
             className={`px-3 py-1.5 rounded-[8px] font-bold ${tab === 'summary' ? 'bg-[#122654] text-white' : 'bg-[#F5F8FD] text-[#4A5878]'}`}
           >

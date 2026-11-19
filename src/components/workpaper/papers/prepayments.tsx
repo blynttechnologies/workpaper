@@ -10,7 +10,7 @@ import { MoneyInput, TextInput, RowFiles } from '../parts';
 import type { ScheduleProps } from '../schedules';
 import { btnAdd, btnPrimary, btnSecondary, CodePicker, JournalPanel, money, newId, Pill, SuggestBanner, th, Tiles } from '../kit';
 import { addDays, expenseCodes, inLead } from '@/lib/workpapers/common';
-import { ACCRUED_WINDOW, accruedIncome, accruedLines, findAccruedSales, findPrepaidCosts, lastYear, nextYear, prepaymentsJournal, prepView, withinYear, type PrepLine } from '@/lib/workpapers/prepayments';
+import { ACCRUED_WINDOW, accruedIncome, accruedLines, findAccruedSales, findPrepaidCosts, lastYear, nextYear, PREP_TABS, prepaymentsJournal, prepView, withinYear, type PrepLine } from '@/lib/workpapers/prepayments';
 import { REVENUE_CODES } from '@/lib/workpapers/revenue';
 
 type Tab = 'prep' | 'accrued';
@@ -188,14 +188,16 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
         <div role="tablist" aria-label="Schedule" className="flex gap-1">
           {(
             [
-              ['prep', `Prepayments (${prepViews.length})`],
-              ['accrued', `Accrued income (${accViews.length + accrued.length})`],
+              ['prep', `${PREP_TABS.prep} (${prepViews.length})`],
+              ['accrued', `${PREP_TABS.accrued} (${accViews.length + accrued.length})`],
             ] as const
           ).map(([t, label]) => (
             <button
               key={t}
               type="button"
               role="tab"
+              // The name without the count, which a comment left on this tab is kept under
+              data-tab-name={PREP_TABS[t]}
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={`px-3 py-2 text-xs border-b-2 -mb-px whitespace-nowrap ${tab === t ? 'font-bold border-[#FF7A66] text-[#122654]' : 'font-semibold border-transparent text-[#4A5878] hover:text-[#122654]'}`}

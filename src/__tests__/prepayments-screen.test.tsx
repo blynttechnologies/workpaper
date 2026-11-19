@@ -216,7 +216,11 @@ describe('accrued income tab', () => {
     expect(wp.data_json.accrued_income.map((l: any) => l.decision)).toEqual(['add', undefined]);
     // No period yet, so nothing is accrued and the review asks for it
     expect(evaluatePaper(wp)!.totals.accrued).toBe(80000n);
-    expect(evaluatePaper(wp)!.checks.find((c) => c.id === 'worked')!.passed).toBe(false);
+    // It is the accrued tab's own check that fails, so the review panel shows it on that tab and not on Prepayments
+    const check = (id: string) => evaluatePaper(wp)!.checks.find((c) => c.id === id)!;
+    expect(check('acc_worked')).toMatchObject({ passed: false, view: 'Accrued income' });
+    expect(check('worked')).toMatchObject({ passed: true, view: 'Prepayments' });
+    expect(check('mapped').view).toBeUndefined();
     Object.assign(wp.data_json.accrued_income[0], { start: day(pe, -9), end: day(pe, 10) });
     // 10 of the 20 days fall up to the year end
     const r = evaluatePaper(wp)!;

@@ -27,14 +27,30 @@ export type CommentType = Comment['type'];
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 export const rowKey = (tr: HTMLTableRowElement) => norm(Array.from(tr.cells).slice(0, 2).map((c) => c.textContent ?? '').join(' '));
-/** The tabs open on the paper now. */
-export const openTabs = (paper: HTMLElement) => Array.from(paper.querySelectorAll('[role="tab"][aria-selected="true"]')).map((t) => norm(t.textContent ?? '')).filter(Boolean);
+/** A tab's name without a count after it: "Prepayments (40)" is "Prepayments". For pins saved with the count, and for showing a name. */
+export const tabName = (s: string) => norm(s).replace(/\s*\(\d+\)$/, '');
+
+/** The paper's own tabs (a director, a schedule): the ones open now, and all of them. */
+export interface PaperTabs {
+  open: string[];
+  all: string[];
+}
+export function paperTabs(paper: HTMLElement): PaperTabs {
+  const tabs = Array.from(paper.querySelectorAll('[role="tab"]'));
+  // A tab whose label carries a count that changes as lines are added gives its name in data-tab-name. Others are known by their label
+  // as it is: a loan named "HSBC loan (2021)" is not the one named "HSBC loan (2023)"
+  const names = (ts: Element[]) => ts.map((t) => t.getAttribute('data-tab-name') ?? norm(t.textContent ?? '')).filter(Boolean);
+  return { open: names(tabs.filter((t) => t.getAttribute('aria-selected') === 'true')), all: names(tabs) };
+}
+/** Whether something left on some tabs of the paper belongs on the tabs open now. A tab that has gone from the paper hides nothing, so its comments are not lost. */
+export const onOpenTabs = (view: string[] | undefined, tabs: PaperTabs) =>
+  !view?.length || view.map((v) => (tabs.all.includes(v) ? v : tabName(v))).every((v) => tabs.open.includes(v) || !tabs.all.includes(v));
 
 export const isPin = (a: unknown): a is PinAnchor => !!a && (a as PinAnchor).kind === 'pin' && typeof (a as PinAnchor).x === 'number';
 
 /** The anchor for a click on the paper. */
 export function anchorAt(paper: HTMLElement, target: HTMLElement, clientX: number, clientY: number): PinAnchor {
-  const tabs = openTabs(paper);
+  const tabs = paperTabs(paper).open;
   const view = tabs.length ? { view: tabs } : {};
   const on = (label: string) => (tabs.length ? `${label} · ${tabs.join(' · ')}` : label);
   const tr = target.closest('tr');
@@ -51,10 +67,7 @@ export function anchorAt(paper: HTMLElement, target: HTMLElement, clientX: numbe
 /** Where a pin sits on the paper now, or null when its row has gone. */
 export function placeOf(paper: HTMLElement, a: PinAnchor): { left: number; top: number } | null {
   // Left on another tab of the paper: hidden until that tab is open again
-  if (a.view?.length) {
-    const open = openTabs(paper);
-    if (!a.view.every((v) => open.includes(v))) return null;
-  }
+  if (!onOpenTabs(a.view, paperTabs(paper))) return null;
   const p = paper.getBoundingClientRect();
   if (a.row) {
     const tr = Array.from(paper.querySelectorAll('tr')).find((t) => rowKey(t) === a.row);
@@ -126,6 +139,7 @@ export function CommentPins({
   onOpen,
   onPost,
   onStopPlacing,
+  onTabs,
 }: {
   paper: React.RefObject<HTMLDivElement | null>;
   comments: Comment[];
@@ -135,6 +149,8 @@ export function CommentPins({
   onOpen: (id: string) => void;
   onPost: (anchor: PinAnchor, type: CommentType, body: string, keep: CommentKeep) => void;
   onStopPlacing: () => void;
+  /** Told the paper's tabs at the start and each time one is switched, added or removed */
+  onTabs: (tabs: PaperTabs) => void;
 }) {
   const pinned = comments.filter((c) => c.status === 'open' && isPin(c.anchor_json));
   const [places, setPlaces] = useState<Record<string, { left: number; top: number } | null>>({});
@@ -149,6 +165,23 @@ export function CommentPins({
     ro.observe(el);
     return () => ro.disconnect();
   }, [paper]);
+  // A tab is switched inside the paper, which the page does not hear of: follow it, so the pins and the side panel keep to the tab on screen
+  useEffect(() => {
+    const el = paper.current;
+    if (!el) return;
+    let last = '';
+    const read = () => {
+      const now = paperTabs(el);
+      if (JSON.stringify(now) === last) return;
+      last = JSON.stringify(now);
+      setTick((t) => t + 1);
+      onTabs(now);
+    };
+    read();
+    const mo = new MutationObserver(read);
+    mo.observe(el, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['aria-selected'] });
+    return () => mo.disconnect();
+  }, [paper, onTabs]);
   useEffect(() => {
     const el = paper.current;
     if (!el) return;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { anchorAt, placeOf, isPin, initials } from '../components/workpaper/comment-pins';
+import { anchorAt, placeOf, isPin, initials, onOpenTabs, paperTabs } from '../components/workpaper/comment-pins';
 
 const rect = (left: number, top: number, width: number, height: number) => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
 
@@ -44,6 +44,28 @@ describe('comment pins', () => {
     sri.setAttribute('aria-selected', 'false');
     chand.setAttribute('aria-selected', 'true');
     expect(placeOf(el, a)).toBeNull();
+  });
+
+  it('knows a tab by its name, not its count, and shows what was left on a tab that has gone', () => {
+    const el = paper();
+    const tabs = document.createElement('div');
+    tabs.innerHTML = '<button role="tab" data-tab-name="Prepayments" aria-selected="true">Prepayments (40)</button><button role="tab" data-tab-name="Accrued income" aria-selected="false">Accrued income (2)</button>';
+    el.prepend(tabs);
+    el.querySelector('tr')!.getBoundingClientRect = () => rect(100, 150, 800, 40);
+    const a = anchorAt(el, el.querySelector('b') as HTMLElement, 700, 160);
+    expect(a.view).toEqual(['Prepayments']);
+    // A line is added: the tab is still the same tab. A pin saved with the count in its tab's name is found too
+    tabs.firstElementChild!.textContent = 'Prepayments (41)';
+    expect(placeOf(el, a)).not.toBeNull();
+    expect(onOpenTabs(['Prepayments (40)'], paperTabs(el))).toBe(true);
+    expect(onOpenTabs(['Accrued income'], paperTabs(el))).toBe(false);
+    // Nothing left on a tab that is no longer on the paper is hidden for good; the whole paper's shows everywhere
+    expect(onOpenTabs(['A director who left'], paperTabs(el))).toBe(true);
+    expect(onOpenTabs(undefined, paperTabs(el))).toBe(true);
+    // A tab named by its label keeps a number in brackets: two loans that differ only by it are two tabs
+    tabs.innerHTML = '<button role="tab" aria-selected="true">HSBC loan (2021)</button><button role="tab" aria-selected="false">HSBC loan (2023)</button>';
+    expect(onOpenTabs(['HSBC loan (2021)'], paperTabs(el))).toBe(true);
+    expect(onOpenTabs(['HSBC loan (2023)'], paperTabs(el))).toBe(false);
   });
 
   it('off a row, keeps its place on the paper', () => {
