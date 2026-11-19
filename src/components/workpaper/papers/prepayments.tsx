@@ -128,7 +128,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
           <div className="ml-auto mb-1.5 flex flex-wrap items-center gap-2">
             <label className="flex items-center gap-1 text-[11px]">
               Ignore items under £
-              <span className="w-20">
+              <span className="w-24">
                 <MoneyInput label="Ignore items under" value={minimum.toString()} disabled={locked} allowNegative={false} onCommit={(p) => save({ min_p: p })} />
               </span>
             </label>
