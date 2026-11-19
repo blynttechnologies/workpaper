@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import { db } from '../lib/server/db';
 import { evaluatePaper } from '../lib/workpapers/engine';
 import { PrepaymentsSchedule } from '../components/workpaper/papers/prepayments';
+import { prepaymentsJournal } from '../lib/workpapers/prepayments';
 import type { Attachment } from '../lib/types/models';
 
 afterEach(cleanup);
@@ -158,5 +159,76 @@ describe('prepayments screen', () => {
     fireEvent.click(screen.getByText('Read with AI'));
     await waitFor(() => expect(wp.data_json.prepayments[0].ai).toEqual({ from: '2025-01-27', to: '2026-01-26', summary: 'Annual licence, so part runs past the year end.' }));
     expect(fetchMock).toHaveBeenCalledWith(`/api/v1/engagements/${eng.id}/ai-prepaid-costs`, expect.objectContaining({ body: JSON.stringify({ ids: ['open'] }) }));
+  });
+});
+
+describe('accrued income tab', () => {
+  const day = (pe: string, n: number) => new Date(Date.parse(pe) + n * 86_400_000).toISOString().slice(0, 10);
+  const setUp = () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    const pe = eng.period_end;
+    const wp = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'C-20') ?? db.addWorkpaper(eng.id, 'C-20')!;
+    const revenue = db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === 'I-10') ?? db.addWorkpaper(eng.id, 'I-10')!;
+    db.transactions = db.transactions.filter((t) => t.engagement_id !== eng.id);
+    db.account_mappings.push({ id: 'm_sal', engagement_id: eng.id, source_code: 'SAL', source_name: 'Sales', source_type: 'Revenue', balance_p: '0', blynt_code: '1000', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
+    const sale = (id: string, date: string, amount_p: string, description: string) =>
+      db.transactions.push({ id, engagement_id: eng.id, account_code: 'SAL', account_name: 'Sales', date, contact: 'Brightside', description, amount_p, vat_p: '0', gross_p: amount_p, source: 'Xero', external_url: `https://go.xero.com/${id}` } as any);
+    sale('tx_march', day(pe, 10), '-120000', 'March retainer');
+    sale('tx_on_revenue', day(pe, 12), '-80000', 'Job 41');
+    sale('tx_small', day(pe, 5), '-900', 'Postage recharged');
+    sale('tx_in_year', day(pe, -5), '-70000', 'February retainer');
+    sale('tx_late', day(pe, 90), '-60000', 'June retainer');
+    // The Revenue cut-off has already accrued one of them, under the row number it had before a new pull from Xero
+    revenue.data_json = { ...revenue.data_json, cutoff: { items: [{ id: 'tx_before_the_pull', date: day(pe, 12), contact: 'Brightside', desc: 'Job 41', amount_p: '80000', code: '1000', decision: 'accrue' }] } };
+    wp.data_json = { ...wp.data_json, min_p: '10000', prepayments: [], accrued_income: [] };
+    const view = () => render(<PrepaymentsSchedule data={wp.data_json} result={evaluatePaper(wp)!} locked={false} save={(p) => Object.assign(wp.data_json, p)} filesFor={() => []} attachTo={() => {}} preview={() => {}} tickFor={() => null} live={() => wp.data_json} />);
+    return { eng, pe, wp, revenue, view };
+  };
+
+  it('searches the ledger for sales invoiced after the year end and asks the AI to read them, like prepayments', async () => {
+    const { eng, pe, wp, view } = setUp();
+    view();
+    fireEvent.click(screen.getByRole('tab', { name: /^Accrued income/ }));
+    // What the Revenue paper accrued shows as it is
+    expect(screen.getByText('From Revenue')).toBeTruthy();
+    fireEvent.click(screen.getByText('Search the ledger'));
+    // Only the sale after the year end, over the amount, that Revenue has not decided; its period is left for the invoice to give
+    expect(wp.data_json.accrued_income).toEqual([{ id: 'acc_tx_march', desc: 'Brightside · March retainer', code: '1000', invoice_date: day(pe, 10), net_p: '120000', method: 'days', found: true, url: 'https://go.xero.com/tx_march' }]);
+    expect(wp.data_json.prepayments).toEqual([]);
+    expect(screen.getByText(/2 sales invoiced in the 60 days after the year end; 1 new one to check/)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith(`/api/v1/engagements/${eng.id}/ai-accrued-sales`, expect.objectContaining({ body: JSON.stringify({ ids: ['acc_tx_march'] }) }));
+    await waitFor(() => expect(screen.queryByText('Reading the description…')).toBeNull());
+  });
+
+  it('accrues the part earned by the year end in the journal, and not twice once the Revenue paper accrues the sale', () => {
+    const { pe, wp, revenue, view } = setUp();
+    wp.data_json.accrued_income = [
+      { id: 'acc_tx_march', desc: 'Brightside · March retainer', code: '1000', invoice_date: day(pe, 10), net_p: '120000', method: 'days', found: true, ai: { from: day(pe, -30), to: pe, summary: 'March retainer.' } },
+      { id: 'acc_tx_next', desc: 'Brightside · April retainer', code: '1000', invoice_date: day(pe, 20), net_p: '50000', method: 'days', found: true, ai: { from: day(pe, 1), to: day(pe, 30), summary: 'April retainer.' } },
+    ];
+    view();
+    fireEvent.click(screen.getByRole('tab', { name: /^Accrued income/ }));
+    // The sale the AI read as wholly next year is left out, and accepting does not add it
+    expect(screen.queryByText('Brightside · April retainer')).toBeNull();
+    expect(screen.getByText(/1 sale the AI read as wholly after the year end left out\./)).toBeTruthy();
+    fireEvent.click(screen.getByText('Add as accrued income'));
+    expect(wp.data_json.accrued_income.map((l: any) => l.decision)).toEqual(['add', undefined]);
+    // No period yet, so nothing is accrued and the review asks for it
+    expect(evaluatePaper(wp)!.totals.accrued).toBe(80000n);
+    expect(evaluatePaper(wp)!.checks.find((c) => c.id === 'worked')!.passed).toBe(false);
+    Object.assign(wp.data_json.accrued_income[0], { start: day(pe, -9), end: day(pe, 10) });
+    // 10 of the 20 days fall up to the year end
+    const r = evaluatePaper(wp)!;
+    expect(r.totals.accrued).toBe(80000n + 60000n);
+    const ctx = { engagementId: wp.engagement_id, priorId: null, periodEnd: pe, tb: () => ({ draft: 0n, adjustments: 0n, final: 0n, mapped: true }) };
+    expect(prepaymentsJournal(ctx as any, wp.data_json)).toEqual([
+      expect.objectContaining({ code: '7300', debit: 60000n, narrative: 'Brightside · March retainer: accrued income' }),
+      expect.objectContaining({ code: '1000', credit: 60000n }),
+    ]);
+    // The Revenue paper then accrues the same sale, renumbered by a new pull from Xero: it is posted by that journal, so this paper drops it
+    revenue.data_json.cutoff.items.push({ id: 'tx_march_renumbered', date: day(pe, 10), contact: 'Brightside', desc: 'March retainer', amount_p: '120000', code: '1000', decision: 'accrue' });
+    expect(prepaymentsJournal(ctx as any, wp.data_json)).toEqual([]);
+    expect(evaluatePaper(wp)!.totals.accrued).toBe(80000n + 120000n);
   });
 });

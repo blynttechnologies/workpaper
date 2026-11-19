@@ -7,7 +7,7 @@ vi.mock('../lib/server/ai/gateway', () => ({ run: (...a: unknown[]) => run(...a)
 
 import { db } from '../lib/server/db';
 import { searchAfterDate } from '../lib/workpapers/creditors';
-import { reviewAfterDateCosts, reviewPrepaidCosts } from '../lib/server/ai/services';
+import { reviewAccruedSales, reviewAfterDateCosts, reviewPrepaidCosts } from '../lib/server/ai/services';
 
 const actor = { id: 'usr_admin', name: 'Admin', role: 'admin' as const, firmId: 'firm_blynt_uk' };
 let engId = '';
@@ -74,6 +74,21 @@ describe("the AI's reading of costs posted after the period end", () => {
     expect(out.items).toEqual([{ id: 'prep_tx_p_2', from: day(-30), to: day(334), summary: 'Annual licence, so most of it runs past the year end.' }]);
     expect(run.mock.calls[0][0].id).toBe('review_prepaid_costs');
     expect(run.mock.calls[0][1].costs).toEqual([{ id: 'prep_tx_p_2', posted: day(-30), supplier: 'Acme', description: 'Annual licence', amount_p: '90000', account: expect.stringMatching(/^4600 /) }]);
+  });
+
+  it('reads the sales the accrued income search found: after the period end, from the income accounts, as positive amounts', async () => {
+    db.account_mappings.push({ id: 'm_sal', engagement_id: engId, source_code: 'SAL', source_name: 'Sales', source_type: 'Revenue', balance_p: '0', blynt_code: '1000', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
+    const sale = (id: string, date: string, description: string) => db.transactions.push({ id, engagement_id: engId, account_code: 'SAL', account_name: 'Sales', date, contact: 'Brightside', description, amount_p: '-120000', vat_p: '0', gross_p: '-120000', source: 'Xero' } as any);
+    sale('tx_s_1', day(10), 'March retainer');
+    sale('tx_s_0', day(-20), 'February retainer');
+    run.mockResolvedValue({ output: { items: [{ id: 'acc_tx_s_1', covers_from: day(-30), covers_to: day(0), summary: 'March retainer, so the work was done before the year end.' }] }, provider: 'anthropic', model: 'm' });
+    // tx_s_0 was invoiced in the year and tx_a_0 is a cost, so neither is read however it is asked for
+    const out = await reviewAccruedSales(actor, engId, { ids: ['acc_tx_s_1', 'acc_tx_s_0', 'acc_tx_a_0'] });
+    expect(out.items).toEqual([{ id: 'acc_tx_s_1', from: day(-30), to: day(0), summary: 'March retainer, so the work was done before the year end.' }]);
+    expect(run.mock.calls[0][0].id).toBe('review_accrued_sales');
+    expect(run.mock.calls[0][1].costs).toEqual([{ id: 'acc_tx_s_1', posted: day(10), supplier: 'Brightside', description: 'March retainer', amount_p: '120000', account: expect.stringMatching(/^1000 /) }]);
+    // What the customer was invoiced before, the same way round
+    expect(run.mock.calls[0][1].supplier_history).toEqual([{ supplier: 'Brightside', posted: day(-20), description: 'February retainer', amount_p: '120000' }]);
   });
 
   it('does not ask the AI when there is nothing to read', async () => {

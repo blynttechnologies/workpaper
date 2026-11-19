@@ -18,6 +18,7 @@ import {
   suggestProvisionTask,
   reviewAfterDateCostsTask,
   reviewPrepaidCostsTask,
+  reviewAccruedSalesTask,
   researchTask,
   type PaperInput,
 } from './tasks/accounting';
@@ -25,6 +26,7 @@ import type { UserRole } from '../../types/models';
 import { debtorView, type DebtorLine } from '../../workpapers/debtors';
 import { searchAfterDate } from '../../workpapers/creditors';
 import { chartCodeOf, chartName, ledgerFor } from '../../workpapers/common';
+import { REVENUE_CODES } from '../../workpapers/revenue';
 import { asPence } from '../../money';
 import { mappingExamples } from '../learning';
 import { vatFactsFor } from '../../tax';
@@ -317,11 +319,28 @@ export async function reviewPrepaidCosts(actor: Actor, engagementId: string, opt
   return readCosts(reviewPrepaidCostsTask, actor, engagementId, costs, channel);
 }
 
-async function readCosts(task: typeof reviewAfterDateCostsTask, actor: Actor, engagementId: string, costs: { id: string; date: string; contact: string; desc: string; amount_p: string; code: string }[], channel?: RunCtx['channel']) {
+/**
+ * The AI's reading of sales the accrued income search found, invoiced after the period end: the period the
+ * work covers when the description or the customer's billing shows it, and a line on whether it looks like
+ * work done before the period end. Read from the ledger here, not from the browser; nothing is saved and
+ * the person still decides. Sales are credits in the ledger, so the AI is given them as positive amounts.
+ * shortcut: reads the first 60 sales asked for, ask again for the rest.
+ */
+export async function reviewAccruedSales(actor: Actor, engagementId: string, opts: { ids: string[] }, channel?: RunCtx['channel']) {
+  const eng = engagementOf(engagementId);
+  const sales = ledgerFor(engagementId, REVENUE_CODES)
+    .filter((t) => t.date > eng.period_end && opts.ids.includes(`acc_${t.id}`))
+    .slice(0, AFTER_DATE_BATCH)
+    .map((t) => ({ id: `acc_${t.id}`, date: t.date, contact: t.contact, desc: t.description, amount_p: (-asPence(t.amount_p)).toString(), code: chartCodeOf(engagementId, t.account_code) ?? '1000' }));
+  return readCosts(reviewAccruedSalesTask, actor, engagementId, sales, channel, REVENUE_CODES, -1n);
+}
+
+/** `sign` turns the history's ledger amounts the same way as the rows read: -1 for sales, which the ledger holds as credits. */
+async function readCosts(task: typeof reviewAfterDateCostsTask, actor: Actor, engagementId: string, costs: { id: string; date: string; contact: string; desc: string; amount_p: string; code: string }[], channel?: RunCtx['channel'], historyCodes = ['2', '3', '4'], sign = 1n) {
   const eng = engagementOf(engagementId);
   if (!costs.length) return { items: [] };
   const suppliers = new Set(costs.map((i) => i.contact).filter(Boolean));
-  const history = ledgerFor(engagementId, ['2', '3', '4'])
+  const history = ledgerFor(engagementId, historyCodes)
     .filter((t) => t.date <= eng.period_end && suppliers.has(t.contact))
     .sort((a, b) => b.date.localeCompare(a.date));
   const seen = new Map<string, number>();
@@ -333,7 +352,7 @@ async function readCosts(task: typeof reviewAfterDateCostsTask, actor: Actor, en
       // The last six from each supplier are enough to show weekly, monthly or quarterly billing
       supplier_history: history
         .filter((t) => (seen.set(t.contact, (seen.get(t.contact) ?? 0) + 1), seen.get(t.contact)! <= 6))
-        .map((t) => ({ supplier: t.contact, posted: t.date, description: t.description, amount_p: t.amount_p })),
+        .map((t) => ({ supplier: t.contact, posted: t.date, description: t.description, amount_p: sign === 1n ? t.amount_p : (sign * asPence(t.amount_p)).toString() })),
     },
     ctxOf(actor, engagementId, channel)
   );
