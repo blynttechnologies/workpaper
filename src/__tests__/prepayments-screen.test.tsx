@@ -274,6 +274,8 @@ describe('accrued income tab', () => {
     // 10 of the 20 days fall up to the year end
     const r = evaluatePaper(wp)!;
     expect(r.totals.accrued).toBe(80000n + 60000n);
+    // The accrual is not in the TB until its journal is sent, so the tie to the TB is open and says why
+    expect(check('tb')).toMatchObject({ passed: false, detail: expect.stringContaining('until the journal is sent') });
     const ctx = { engagementId: wp.engagement_id, priorId: null, periodEnd: pe, tb: () => ({ draft: 0n, adjustments: 0n, final: 0n, mapped: true }) };
     expect(prepaymentsJournal(ctx as any, wp.data_json)).toEqual([
       expect.objectContaining({ code: '7300', debit: 60000n, narrative: 'Brightside · March retainer: accrued income' }),
