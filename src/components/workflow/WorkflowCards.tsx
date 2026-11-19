@@ -116,6 +116,8 @@ export function WorkflowCards({ engagementIds }: { engagementIds: string[] }) {
                   >
                     Continue working papers <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                   </Link>
+                  {/* relative z-10 keeps it above the card-wide link, like Archive and Delete */}
+                  <Link href={`/engagements/${wf.engagement_id}/mapping`} aria-label={`Mapping for ${wf.name}`} className="relative z-10 text-xs font-semibold text-[#4A5878] hover:text-[#122654]">Mapping</Link>
                   {eng.status !== 'locked' && (
                     <>
                       <button type="button" disabled={!manager} onClick={() => run(archiveWorkflow, wf.engagement_id, wf.id)} aria-label={`Archive ${wf.name}`} aria-describedby={manager ? undefined : 'workflow-role-hint'} className="relative z-10 text-xs font-semibold text-[#4A5878] hover:text-[#122654] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#4A5878]">Archive</button>
