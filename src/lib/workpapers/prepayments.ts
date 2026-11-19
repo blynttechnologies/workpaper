@@ -1,6 +1,6 @@
 import { db } from '../server/db';
 import { asPence, formatPence } from '../money';
-import { addDays, chartCodeOf, daysBetween, journalCheck, journalInLedger, ledgerFor, pair, type JLine, type PaperContext } from './common';
+import { addDays, chartCodeOf, inLead, daysBetween, journalCheck, journalInLedger, ledgerFor, pair, type JLine, type PaperContext } from './common';
 import { REVENUE_CODES } from './revenue';
 import type { LedgerTransaction, ScheduleGate } from '../types/models';
 import type { PaperCheck } from './engine';
@@ -142,7 +142,13 @@ export function lastYear(ctx: Pick<PaperContext, 'priorId' | 'engagementId'>) {
   const lines = ((wp?.data_json?.prepayments ?? []) as PrepLine[]).map((l) => prepView(l, priorEnd)).filter((v) => v.prepaid > 0n);
   const journalId = wp?.data_json?.journal?.id as string | undefined;
   const reversed = !!journalId && db.adjustments.some((a) => a.engagement_id === ctx.engagementId && a.reverses_id === journalId);
-  return { lines, total: lines.reduce((a, v) => a + v.prepaid, 0n), reversed, journalId };
+  // With no schedule from last year here, what the ledger held in prepayments a year earlier is the only figure for it
+  // It is on the lines of the latest trial balance, for the client's accounts mapped to prepayments
+  const snapshot = lines.length ? undefined : db.tb_snapshots.filter((s) => s.engagement_id === ctx.engagementId).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const mapped = new Set(db.account_mappings.filter((m) => m.engagement_id === ctx.engagementId && m.status === 'confirmed' && inLead(m.blynt_code, '7300')).map((m) => m.source_code));
+  const held = snapshot ? db.tb_lines.filter((l) => l.snapshot_id === snapshot.id && mapped.has(l.source_code) && l.comparative_p != null) : [];
+  const ledger = held.length ? held.reduce((a, l) => a + asPence(l.comparative_p!), 0n) : null;
+  return { lines, total: lines.reduce((a, v) => a + v.prepaid, 0n), reversed, journalId, ledger };
 }
 
 const revenueCutoff = (engagementId: string) => (db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'I-10')?.data_json?.cutoff?.items ?? []) as any[];
@@ -225,7 +231,9 @@ export function reviewPrepayments(ctx: PaperContext): string {
         ? 'Nothing from last year is left in prepayments.'
         : draft === ly.total
           ? `${formatPence(ly.total)} from last year is still in prepayments; the journal releases it to the same costs.`
-          : `Prepayments hold ${formatPence(draft)} before adjustments, which does not match last year's schedule (${formatPence(ly.total)}). Find what is posted there.`,
+          : ly.ledger !== null
+            ? `Prepayments hold ${formatPence(draft)} before adjustments; the ledger held ${formatPence(ly.ledger)} a year earlier. There is no schedule for last year here to release from, so find what is posted there.`
+            : `Prepayments hold ${formatPence(draft)} before adjustments, which does not match last year's schedule (${formatPence(ly.total)}). Find what is posted there.`,
     passed: releasedOk,
   });
   checks.push(evidence);

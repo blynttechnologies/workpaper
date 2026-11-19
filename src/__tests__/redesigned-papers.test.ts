@@ -8,7 +8,7 @@ import { evaluatePaper } from '../lib/workpapers/engine';
 import { journalCheck, journalSig, openItems, pair } from '../lib/workpapers/common';
 import { creditorsJournal, supplierView } from '../lib/workpapers/creditors';
 import { otherItemView } from '../lib/workpapers/other-debtors';
-import { accruedPart, named, prepaidPart, prepView } from '../lib/workpapers/prepayments';
+import { accruedPart, lastYear, named, prepaidPart, prepView } from '../lib/workpapers/prepayments';
 import { stockView } from '../lib/workpapers/stock';
 import { accountsDue } from '../lib/workpapers/statutory';
 
@@ -204,5 +204,26 @@ describe('investments (review point 15)', () => {
     eng.framework = 'FRS 102 Section 1A';
     const r = evaluatePaper(wp)!;
     expect(r.totals).toMatchObject({ property: 26000000n, gains: 1000000n, deferred_tax: 250000n });
+  });
+});
+
+describe("last year's prepayments", () => {
+  it('reads what the ledger held a year earlier when there is no schedule for last year', () => {
+    const eng = 'eng_no_prior';
+    const mapping = (source_code: string, status = 'confirmed') => db.account_mappings.push({ id: `m_${source_code}`, engagement_id: eng, source_code, source_name: 'Prepayments', source_type: 'Current Asset', balance_p: '0', blynt_code: '7300', status } as any);
+    const line = (snapshot_id: string, source_code: string, comparative_p?: string) => db.tb_lines.push({ id: `${snapshot_id}_${source_code}`, snapshot_id, source_code, source_name: '', source_type: '', debit_p: '0', credit_p: '0', ...(comparative_p ? { comparative_p } : {}) } as any);
+    db.tb_snapshots.push({ id: 'snap_old', engagement_id: eng, created_at: '2026-01-01T00:00:00Z' } as any, { id: 'snap_new', engagement_id: eng, created_at: '2026-02-01T00:00:00Z' } as any);
+    mapping('800');
+    mapping('801', 'suggested');
+    // The ledger gave no balance a year earlier: nothing to show
+    line('snap_new', '800');
+    expect(lastYear({ engagementId: eng, priorId: null })).toMatchObject({ total: 0n, ledger: null });
+    // It did: the latest trial balance, and only the accounts confirmed as prepayments
+    db.tb_lines.pop();
+    line('snap_new', '800', '19688819');
+    line('snap_new', '801', '500');
+    line('snap_new', '901', '1512211');
+    line('snap_old', '800', '1');
+    expect(lastYear({ engagementId: eng, priorId: null })).toMatchObject({ total: 0n, ledger: 19688819n });
   });
 });

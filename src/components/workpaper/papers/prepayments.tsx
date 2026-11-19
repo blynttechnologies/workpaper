@@ -184,7 +184,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
             value: formatPence(tot('prepaid')),
             sub: (
               <>
-                {counted.length} items · last year {formatPence(ly.total)}
+                {counted.length} items · last year {ly.ledger !== null ? `${formatPence(ly.ledger)} in the ledger` : formatPence(ly.total)}
                 {tbLine(tot('accrued') ? ' with accrued income' : '')}
               </>
             ),
