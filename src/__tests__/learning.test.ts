@@ -38,7 +38,8 @@ describe('learning from confirmed work', () => {
   it('runs once a night even though the nightly run fires every ten minutes', () => {
     const [a] = (globalThis as any).CODES as string[];
     confirm('721', 'Staff clothing', a, '2026-11-15T10:00:00Z');
-    const now = Date.parse('2026-11-15T22:00:00Z');
+    // From the real clock: each run is stamped in the audit log with the real time, so a fixed date here stops working once it has passed
+    const now = Date.now();
     expect(Object.keys(learnNightly(now))).toContain(FIRM);
     expect(Object.keys(learnNightly(now + 600_000))).not.toContain(FIRM);
     expect(Object.keys(learnNightly(now + 24 * 3_600_000))).toContain(FIRM);
