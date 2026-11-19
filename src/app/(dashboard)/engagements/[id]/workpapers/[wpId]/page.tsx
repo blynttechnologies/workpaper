@@ -74,7 +74,7 @@ import {
 } from '@/components/workpaper/schedules';
 import { AnalyticalSchedule } from '@/components/workpaper/review-schedules';
 import { CheckChips } from '@/components/workpaper/kit';
-import { Avatar, CommentPins, EditBox, isPin, KEEP_LABEL, TYPE_TONE, type CommentType, type PinAnchor } from '@/components/workpaper/comment-pins';
+import { Avatar, CommentPins, EditBox, isPin, KEEP_LABEL, onOpenTabs, TYPE_TONE, type CommentType, type PaperTabs, type PinAnchor } from '@/components/workpaper/comment-pins';
 import { ukDate } from '@/lib/dates';
 import { AiPaperActions } from '@/components/workpaper/AiPaperActions';
 
@@ -104,6 +104,8 @@ export default function WorkpaperPage() {
   const [editing, setEditing] = useState<{ id: string; replyId?: string; body: string } | null>(null);
   const [noteKeep, setNoteKeep] = useState<CommentKeep>('this_year');
   const paperRef = useRef<HTMLDivElement | null>(null);
+  // The paper's own tabs (a director, a schedule), so the side panel keeps to the tab on screen
+  const [ownTabs, setOwnTabs] = useState<PaperTabs>({ open: [], all: [] });
   const stopPinMode = useCallback(() => setPinMode(false), []);
   const [unreviewOpen, setUnreviewOpen] = useState(false);
   const [unreviewReason, setUnreviewReason] = useState('');
@@ -282,6 +284,15 @@ export default function WorkpaperPage() {
   const latestSignoff = (role: string) => signoffs.filter((s) => s.role === role && !s.stale_at).pop();
   const staleSignoffs = signoffs.filter((s) => s.stale_at);
   const anchorLabel = (row?: string) => (row ? result.anchors.find((a) => a.id === row)?.label ?? 'Removed row' : 'Whole paper');
+  // On a paper with tabs the side panel lists what belongs to the tab on screen. What is about the whole paper shows on every tab
+  const onTab = (view?: string) => onOpenTabs(view ? [view] : undefined, ownTabs);
+  const shownComments = comments.filter((c) => {
+    const a = c.anchor_json as { view?: string[]; row?: string } | undefined;
+    // A pin carries the tabs it was left on; a comment on a row belongs to that row's tab
+    return a?.view ? onOpenTabs(a.view, ownTabs) : onTab(result.anchors.find((x) => x.id === a?.row)?.view);
+  });
+  const openCount = (cs: typeof comments) => cs.filter((c) => c.status === 'open').length;
+  const commentsElsewhere = openCount(comments) - openCount(shownComments);
 
   // ---- Writes ----
   const saveData = (patch: Record<string, any>) => {
@@ -772,11 +783,12 @@ export default function WorkpaperPage() {
 
   const missingRefs = TEMPLATES.filter((tp) => !papers.some((p) => p.ref === tp.ref));
   const botDraft = !data.conclusion?.bot_dismissed && !conclusionText.trim() ? result.draftConclusion : '';
-  const reviewItems = result.checks.filter((c) => !c.passed);
+  const reviewItems = result.checks.filter((c) => !c.passed && onTab(c.view));
+  const reviewElsewhere = result.checks.filter((c) => !c.passed && !c.explanation && !onTab(c.view)).length;
   const railTabs = checksOnly
                   ? [
                       { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
-                      { id: 'comments' as const, label: `Comments (${comments.filter((c) => c.status === 'open').length})`, icon: MessageSquare },
+                      { id: 'comments' as const, label: `Comments (${openCount(shownComments)})`, icon: MessageSquare },
                       { id: 'evidence' as const, label: `Files (${attachments.length})`, icon: FileText },
                       { id: 'history' as const, label: 'History', icon: History },
                     ]
@@ -2030,6 +2042,7 @@ export default function WorkpaperPage() {
             onOpen={openThread}
             onPost={postPin}
             onStopPlacing={stopPinMode}
+            onTabs={setOwnTabs}
           />
         </div>
 
@@ -2196,9 +2209,10 @@ export default function WorkpaperPage() {
 
             {activeTab === 'ai_review' && checksOnly && (
               <div className="flex flex-col gap-2 text-xs text-[#122654]">
+                {reviewElsewhere > 0 && <p className="text-[11px] text-[#4A5878]">{reviewElsewhere} more to review on the paper's other tabs.</p>}
                 {reviewItems.length === 0 ? (
                   <div className="p-3 rounded-[10px] bg-[#E6F4EF] text-[#0B6B52] font-bold flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" /> Nothing to review: every check passes.
+                    <CheckCircle2 className="w-4 h-4" /> {reviewElsewhere > 0 ? 'Nothing to review on this tab.' : 'Nothing to review: every check passes.'}
                   </div>
                 ) : (
                   reviewItems.map((c) => (
@@ -2429,12 +2443,13 @@ export default function WorkpaperPage() {
                     {!pinMode && <kbd className="ml-1 px-1 rounded border border-[#D3DCEE] text-[9px] font-mono text-[#7E8DA6]">C</kbd>}
                   </button>
                 )}
-                {comments.length === 0 && (
+                {shownComments.length === 0 && (
                   <p className="text-[#4A5878]">
-                    No comments yet. Click <strong>Comment on the paper</strong>, then click any figure or row to leave one there.
+                    No comments {comments.length ? 'on this tab' : 'yet'}. Click <strong>Comment on the paper</strong>, then click any figure or row to leave one there.
                   </p>
                 )}
-                {[...comments]
+                {commentsElsewhere > 0 && <p className="text-[11px] text-[#4A5878]">{commentsElsewhere} more open on the paper's other tabs.</p>}
+                {[...shownComments]
                   .sort((a, b) => (a.status === b.status ? b.created_at.localeCompare(a.created_at) : a.status === 'open' ? -1 : 1))
                   .map((c) => {
                     const pinned = isPin(c.anchor_json);
@@ -2581,7 +2596,7 @@ export default function WorkpaperPage() {
                       </div>
                       <select aria-label="Comment on" value={noteAnchor} onChange={(e) => setNoteAnchor(e.target.value)} className="min-h-[32px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
                         <option value="paper">Whole paper</option>
-                        {result.anchors.map((a) => (
+                        {result.anchors.filter((a) => onTab(a.view)).map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.label}
                           </option>

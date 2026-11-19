@@ -3,6 +3,7 @@ import { asPence, formatPence } from '../money';
 import { addDays, chartCodeOf, daysBetween, journalCheck, journalInLedger, ledgerFor, pair, type JLine, type PaperContext } from './common';
 import { REVENUE_CODES } from './revenue';
 import type { LedgerTransaction } from '../types/models';
+import type { PaperCheck } from './engine';
 
 /**
  * Prepayments and accrued income (C-20): the prepaid part of each cost that runs past the
@@ -11,6 +12,9 @@ import type { LedgerTransaction } from '../types/models';
  * sales invoiced after the period end, with what the Revenue paper accrued shown beside it.
  * The journal reverses on the first day of next year.
  */
+
+/** The paper's two tabs by name. A check or a row says which it is about, and the screen names its tabs from here so the two cannot drift. */
+export const PREP_TABS = { prep: 'Prepayments', accrued: 'Accrued income' } as const;
 
 export interface PrepLine {
   id: string;
@@ -172,9 +176,6 @@ export function reviewPrepayments(ctx: PaperContext): string {
   const { data, totals, checks, anchors, periodEnd } = ctx;
   const prepViews = ((data.prepayments ?? []) as PrepLine[]).filter((l) => !withinYear(l, periodEnd)).map((l) => prepView(l, periodEnd));
   const accViews = accruedLines(ctx.engagementId, data).filter((l) => !nextYear(l, periodEnd)).map((l) => prepView(l, periodEnd, true));
-  // The checks below cover the lines of both tabs
-  const views = [...prepViews, ...accViews];
-  const counted = views.filter((v) => v.counted);
   const prepaid = prepViews.reduce((a, v) => a + v.prepaid, 0n);
   const fromRevenue = accruedIncome(ctx.engagementId).reduce((a, i) => a + asPence(i.amount_p), 0n);
   const accrued = fromRevenue + accViews.reduce((a, v) => a + v.prepaid, 0n);
@@ -182,8 +183,8 @@ export function reviewPrepayments(ctx: PaperContext): string {
   const draft = ctx.tb('7300').draft;
   const lines = prepaymentsJournal(ctx, data);
   Object.assign(totals, { prepaid, accrued, total: prepaid + accrued, last_year: ly.total, tb_draft: draft });
-  prepViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Prepayment' }));
-  accViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Accrued income' }));
+  prepViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Prepayment', view: PREP_TABS.prep }));
+  accViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Accrued income', view: PREP_TABS.accrued }));
 
   checks.push({
     id: 'mapped',
@@ -191,20 +192,26 @@ export function reviewPrepayments(ctx: PaperContext): string {
     detail: ctx.tb('7300').mapped ? 'The prepayments account in the trial balance feeds this paper.' : draft === 0n ? 'Nothing is in prepayments in the trial balance yet; the journal creates the balance.' : 'Map the client’s prepayments account to 730.',
     passed: ctx.tb('7300').mapped || draft === 0n,
   });
-  const undecided = views.filter((v) => v.l.found && !v.l.decision);
-  checks.push({
-    id: 'found_reviewed',
-    label: 'Costs past the year end reviewed',
-    detail: undecided.length ? `Decide on ${undecided.map((v) => v.l.desc).join(', ')}.` : data.scanned_at ? 'Every cost found in the ledger has a decision.' : 'Search the ledger for costs that run past the year end.',
-    passed: !!data.scanned_at && !undecided.length,
+  // Each tab's lines have their own three checks, so the review panel can keep to the tab on screen
+  const lineChecks = (view: string, pre: string, vs: typeof prepViews, t: { reviewed: string; decided: string; search: string; worked: string; invoice: string }): PaperCheck[] => {
+    const undecided = vs.filter((v) => v.l.found && !v.l.decision);
+    const unworked = vs.filter((v) => v.counted && (!v.worked || !v.l.code));
+    const due = vs.filter((v) => v.counted && v.prepaid > 0n);
+    const noInvoice = due.filter((v) => !ctx.files(v.l.id));
+    return [
+      { id: `${pre}found_reviewed`, view, label: t.reviewed, detail: undecided.length ? `Decide on ${undecided.map((v) => v.l.desc).join(', ')}.` : t.search || t.decided, passed: !t.search && !undecided.length },
+      { id: `${pre}worked`, view, label: t.worked, detail: unworked.length ? `Enter the period covered and the account for ${unworked.map((v) => v.l.desc).join(', ')}.` : 'Every line has its period, so its part is calculated.', passed: !unworked.length },
+      { id: `${pre}evidence`, view, label: `${t.invoice} (${due.length - noInvoice.length}/${due.length})`, detail: noInvoice.length ? `Attach the invoice for ${noInvoice.map((v) => v.l.desc).join(', ')}.` : 'Every line has its invoice.', passed: !noInvoice.length },
+    ];
+  };
+  const [reviewed, worked, evidence] = lineChecks(PREP_TABS.prep, '', prepViews, {
+    reviewed: 'Costs past the year end reviewed',
+    decided: 'Every cost found in the ledger has a decision.',
+    search: data.scanned_at ? '' : 'Search the ledger for costs that run past the year end.',
+    worked: 'Prepaid parts worked out',
+    invoice: 'Invoice on every line',
   });
-  const unworked = counted.filter((v) => !v.worked || !v.l.code);
-  checks.push({
-    id: 'worked',
-    label: 'Prepaid parts worked out',
-    detail: unworked.length ? `Enter the period covered and the account for ${unworked.map((v) => v.l.desc).join(', ')}.` : 'Every line has its period, so its part is calculated.',
-    passed: !unworked.length,
-  });
+  checks.push(reviewed, worked);
   const releasedOk = ly.reversed || draft === 0n || draft === ly.total;
   checks.push({
     id: 'released',
@@ -218,13 +225,17 @@ export function reviewPrepayments(ctx: PaperContext): string {
           : `Prepayments hold ${formatPence(draft)} before adjustments, which does not match last year's schedule (${formatPence(ly.total)}). Find what is posted there.`,
     passed: releasedOk,
   });
-  const noInvoice = counted.filter((v) => v.prepaid > 0n && !ctx.files(v.l.id));
-  checks.push({
-    id: 'evidence',
-    label: `Invoice on every line (${counted.filter((v) => v.prepaid > 0n).length - noInvoice.length}/${counted.filter((v) => v.prepaid > 0n).length})`,
-    detail: noInvoice.length ? `Attach the invoice for ${noInvoice.map((v) => v.l.desc).join(', ')}.` : 'Every line has its invoice.',
-    passed: !noInvoice.length,
-  });
+  checks.push(evidence);
+  // Accrued income needs no search of its own: sales the Revenue paper accrued may be all there is
+  checks.push(
+    ...lineChecks(PREP_TABS.accrued, 'acc_', accViews, {
+      reviewed: 'Sales after the year end reviewed',
+      decided: 'Every sale found in the ledger has a decision.',
+      search: '',
+      worked: 'Accrued parts worked out',
+      invoice: 'Invoice on every accrued line',
+    })
+  );
   const sent = journalCheck(data.journal, lines, 'Journal sent with reversal');
   // A journal in the ledger passes whatever changes after it. So say so when it already accrued a sale the Revenue paper has since accrued as well
   const kept = accruedLines(ctx.engagementId, data);
