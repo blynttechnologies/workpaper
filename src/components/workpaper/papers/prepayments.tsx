@@ -75,7 +75,7 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
   const pending = views.filter((v) => v.l.found && !v.l.decision);
   const counted = views.filter((v) => v.counted && v.prepaid > 0n);
   const date = (v: string | undefined, label: string, onChange: (d: string) => void) => (
-    <input type="date" aria-label={label} value={v ?? ''} disabled={locked} onChange={(e) => onChange(e.target.value)} className="w-[125px] px-1.5 py-1 text-[11px] border border-[#D3DCEE] rounded-[6px] disabled:bg-[#F5F8FD]" />
+    <input type="date" aria-label={label} value={v ?? ''} disabled={locked} onChange={(e) => onChange(e.target.value)} className="w-[110px] px-1.5 py-1 text-[11px] border border-[#D3DCEE] rounded-[6px] disabled:bg-[#F5F8FD]" />
   );
 
   return (
@@ -201,7 +201,8 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                       ) : (
                         <TextInput label="Item" value={l.desc} disabled={locked} placeholder="e.g. Business insurance · annual policy" onCommit={(d) => setLine(l.id, { desc: d })} />
                       )}
-                      <div className="mt-1 flex items-center gap-1">
+                      {/* The picker shrinks and the note drops under it when the column is narrow, so the table fits beside the review panel */}
+                      <div className="mt-1 flex flex-wrap items-center gap-1 [&>select]:w-full [&>select]:min-w-0">
                         <CodePicker label={`Cost account for ${name}`} value={l.code} codes={codes} disabled={locked} onChange={(c) => setLine(l.id, { code: c })} />
                         {l.found && <span className="text-[10px] text-[#4A5878]">found in the ledger{l.ref ? ` · ${l.ref}` : ''}</span>}
                       </div>
@@ -235,7 +236,8 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
                     </td>
                     <td className="p-2 align-top text-right font-mono font-bold">{money(v.prepaid)}</td>
                     <td className="p-2 align-top">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      {/* A long file name is cut short here (full name on hover), or it widens the table past the page */}
+                      <div className="flex items-center gap-2 flex-wrap [&_button]:max-w-[80px]">
                         {tickFor(l.id, name)}
                         <RowFiles files={filesFor(l.id)} onPreview={preview} onAttach={() => attachTo(l.id)} disabled={locked} label={`the invoice for ${name}`} />
                         {!locked && !l.found && (
