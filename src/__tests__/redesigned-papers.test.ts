@@ -8,7 +8,7 @@ import { evaluatePaper } from '../lib/workpapers/engine';
 import { journalCheck, journalSig, openItems, pair } from '../lib/workpapers/common';
 import { creditorsJournal, supplierView } from '../lib/workpapers/creditors';
 import { otherItemView } from '../lib/workpapers/other-debtors';
-import { prepaidPart } from '../lib/workpapers/prepayments';
+import { accruedPart, prepaidPart, prepView } from '../lib/workpapers/prepayments';
 import { stockView } from '../lib/workpapers/stock';
 import { accountsDue } from '../lib/workpapers/statutory';
 
@@ -76,6 +76,20 @@ describe('prepayments', () => {
     expect(prepaidPart({ ...l, net_p: '26400', method: 'months', start: '2025-10-01', end: '2026-09-30' }, '2026-03-31')).toBe(13200n);
     expect(prepaidPart({ ...l, net_p: '85000', method: 'all' }, '2026-03-31')).toBe(85000n);
     expect(prepaidPart({ ...l, method: 'days', start: '2025-01-01', end: '2025-12-31' }, '2026-03-31')).toBe(0n);
+  });
+
+  it('works out the accrued part of a sale invoiced after the year end: what was earned up to it', () => {
+    const l = { id: 'x', desc: '', code: '1000', net_p: '61000' };
+    // 1 March to 30 April is 61 days, 31 of them up to the year end
+    expect(accruedPart({ ...l, method: 'days', start: '2026-03-01', end: '2026-04-30' }, '2026-03-31')).toBe(31000n);
+    expect(prepView({ ...l, method: 'days', start: '2026-03-01', end: '2026-04-30' }, '2026-03-31', true).span).toBe('31 of 61 days up to the period end');
+    expect(accruedPart({ ...l, net_p: '240000', method: 'months', start: '2026-03-01', end: '2026-05-31' }, '2026-03-31')).toBe(80000n);
+    // Wholly before the year end is all accrued; wholly after it, or with no period yet, none
+    expect(accruedPart({ ...l, method: 'days', start: '2026-03-01', end: '2026-03-31' }, '2026-03-31')).toBe(61000n);
+    expect(accruedPart({ ...l, method: 'days', start: '2026-04-01', end: '2026-04-30' }, '2026-03-31')).toBe(0n);
+    expect(accruedPart({ ...l, method: 'months', start: '2026-03-20', end: '2026-03-31' }, '2026-03-15')).toBe(0n);
+    expect(accruedPart({ ...l, method: 'days' }, '2026-03-31')).toBe(0n);
+    expect(accruedPart({ ...l, method: 'all' }, '2026-03-31')).toBe(61000n);
   });
 });
 

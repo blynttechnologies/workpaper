@@ -361,6 +361,30 @@ export const reviewPrepaidCostsTask: TaskDef<AfterDateCostsInput, AfterDateCosts
   ],
 };
 
+/** The same input and answer again, for sales: invoices raised after the period end that may be for work done before it. */
+export const reviewAccruedSalesTask: TaskDef<AfterDateCostsInput, AfterDateCostsOutput> = {
+  ...reviewAfterDateCostsTask,
+  id: 'review_accrued_sales',
+  module: 'prepayments',
+  version: '2026-11-19',
+  build: (d) => [
+    json('sales_invoiced_after_period_end', d),
+    {
+      type: 'text',
+      text:
+        'These are sales invoices posted to the ledger after period_end. In this data each entry in costs is a sale (amount_p is its ' +
+        'net value), supplier is the customer, and supplier_history is what the same customers were invoiced up to period_end. An ' +
+        'accountant must decide whether each is accrued income: work done or goods supplied on or before period_end and invoiced ' +
+        'after it. For every sale, return its id with: covers_from and covers_to, the period the work or supply covers as ' +
+        "YYYY-MM-DD, only when the description or the customer's billing pattern in supplier_history shows it (for example a named " +
+        'month, a week number, a quarter, a date range, or a customer invoiced in arrears every month); leave both as empty strings ' +
+        'when it cannot be told. And summary: one short sentence, at most 25 words, saying whether it looks like work done before ' +
+        'the period end, work of the next year, or cannot be told, naming the evidence, and what to check on the invoice when ' +
+        'unsure. Do not guess dates.',
+    },
+  ],
+};
+
 // ---------------------------------------------------------------- research (internal sources only)
 
 export interface ResearchOutput {

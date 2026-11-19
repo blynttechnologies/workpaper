@@ -1,11 +1,14 @@
 import { db } from '../server/db';
 import { asPence, formatPence } from '../money';
-import { addDays, chartCodeOf, daysBetween, journalCheck, ledgerFor, pair, type JLine, type PaperContext } from './common';
+import { addDays, chartCodeOf, daysBetween, journalCheck, journalInLedger, ledgerFor, pair, type JLine, type PaperContext } from './common';
+import { REVENUE_CODES } from './revenue';
+import type { LedgerTransaction } from '../types/models';
 
 /**
  * Prepayments and accrued income (C-20): the prepaid part of each cost that runs past the
  * period end, worked out by days or months; costs in the ledger that look like they run past
- * it, for a decision; last year's prepayments released; accrued income from the Revenue paper.
+ * it, for a decision; last year's prepayments released; accrued income worked the same way from
+ * sales invoiced after the period end, with what the Revenue paper accrued shown beside it.
  * The journal reverses on the first day of next year.
  */
 
@@ -44,50 +47,85 @@ export function prepaidPart(l: PrepLine, periodEnd: string): bigint {
   return (net * BigInt(Math.min(after, total)) + BigInt(total) / 2n) / BigInt(total);
 }
 
-export function prepView(l: PrepLine, periodEnd: string) {
+/** The part of a sale invoiced after the period end that was earned on or before it: what is left once the part after it is taken off. */
+export function accruedPart(l: PrepLine, periodEnd: string): bigint {
+  if (l.method === 'all') return asPence(l.net_p);
+  // A period that starts after the period end earns nothing by it, also by months when the period end is mid-month
+  if (!l.start || !l.end || l.end < l.start || l.start > periodEnd) return 0n;
+  return asPence(l.net_p) - prepaidPart(l, periodEnd);
+}
+
+/** One line worked out. `prepaid` is the part carried forward: the prepaid part of a cost, or with `accrued` the accrued part of a sale. */
+export function prepView(l: PrepLine, periodEnd: string, accrued = false) {
   const counted = !l.found || l.decision === 'add';
   const worked = l.method === 'all' || (!!l.start && !!l.end);
-  const prepaid = counted ? prepaidPart(l, periodEnd) : 0n;
+  const prepaid = counted ? (accrued ? accruedPart : prepaidPart)(l, periodEnd) : 0n;
+  const months = l.method === 'months';
+  const total = !worked || l.method === 'all' ? 0 : months ? monthIndex(l.end!) - monthIndex(l.start!) + 1 : daysBetween(l.start!, l.end!) + 1;
+  const after = !worked || l.method === 'all' ? 0 : Math.max(0, months ? monthIndex(l.end!) - monthIndex(periodEnd) : daysBetween(l.start! > periodEnd ? addDays(l.start!, -1) : periodEnd, l.end!));
   const span =
     l.method === 'all'
-      ? 'All after the period end'
+      ? `All ${accrued ? 'before' : 'after'} the period end`
       : !worked
         ? 'Enter the period covered'
-        : l.method === 'months'
-          ? `${Math.max(0, monthIndex(l.end!) - monthIndex(periodEnd))} of ${monthIndex(l.end!) - monthIndex(l.start!) + 1} months after the period end`
-          : `${Math.max(0, daysBetween(l.start! > periodEnd ? addDays(l.start!, -1) : periodEnd, l.end!))} of ${daysBetween(l.start!, l.end!) + 1} days after the period end`;
+        : `${accrued ? Math.max(0, total - after) : after} of ${total} ${months ? 'months' : 'days'} ${accrued ? 'up to' : 'after'} the period end`;
   return { l, counted, worked, prepaid, span };
 }
 
 /** A found cost the AI read as ending on or before the period end: wholly in the year, so it is not offered as a prepayment. */
 export const withinYear = (l: PrepLine, periodEnd: string) => !!l.found && !l.decision && !!l.ai?.to && l.ai.to <= periodEnd;
+/** A found sale the AI read as starting after the period end: wholly next year's, so it is not offered as accrued income. */
+export const nextYear = (l: PrepLine, periodEnd: string) => !!l.found && !l.decision && !!l.ai?.from && l.ai.from > periodEnd;
+
+/** The search both tabs share: a new line for each ledger row not on the list yet, and where each opens in Xero. `net` is the row's amount as the line holds it. */
+function findLines(engagementId: string, prefix: string, looks: LedgerTransaction[], net: (t: LedgerTransaction) => string, fallback: string, minimum: bigint, existing: PrepLine[]) {
+  const small = looks.filter((t) => asPence(net(t)) < minimum);
+  // Where each row opens in Xero, also for lines found by an earlier search
+  const links = new Map(looks.map((t) => [`${prefix}_${t.id}`, { ...(t.external_url ? { url: t.external_url } : {}), ...(t.ref ? { ref: t.ref } : {}) }]));
+  // A new pull from Xero renumbers the ledger rows, so a line whose id has gone is matched by date, description and amount
+  const moved = existing.filter((l) => l.found && !links.has(l.id));
+  const found: PrepLine[] = [];
+  const dupes = new Set<string>(); // the same cost suggested again under its new id, before this matching
+  for (const t of looks) {
+    const id = `${prefix}_${t.id}`;
+    const desc = [t.contact, t.description].filter(Boolean).join(' · ');
+    const same = existing.find((l) => l.id === id);
+    const at = same?.decision ? -1 : moved.findIndex((l) => l.invoice_date === t.date && l.desc === desc && l.net_p === net(t));
+    if (at >= 0) {
+      // The earlier line carries the work done on it, so it stays and takes the link
+      links.set(moved.splice(at, 1)[0].id, links.get(id)!);
+      if (same) dupes.add(id);
+    } else if (!same && asPence(net(t)) >= minimum) {
+      found.push({ id, desc, code: chartCodeOf(engagementId, t.account_code) ?? fallback, invoice_date: t.date, start: t.date, net_p: net(t), method: 'days', found: true, ...links.get(id) });
+    }
+  }
+  return { found, links, dupes, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(net(t)), 0n) };
+}
 
 /** Costs in the last year before the period end that read like they run past it. */
 export function findPrepaidCosts(engagementId: string, periodEnd: string, minimum: bigint, existing: PrepLine[]) {
   const from = addDays(periodEnd, -365);
   const costs = ledgerFor(engagementId, ['4']).filter((t) => t.date > from && t.date <= periodEnd && asPence(t.amount_p) > 0n);
   const looks = costs.filter((t) => LOOKS_PREPAID.test(`${t.description} ${t.contact}`));
-  const small = looks.filter((t) => asPence(t.amount_p) < minimum);
-  // Where each cost opens in Xero, also for lines found by an earlier search
-  const links = new Map(looks.map((t) => [`prep_${t.id}`, { ...(t.external_url ? { url: t.external_url } : {}), ...(t.ref ? { ref: t.ref } : {}) }]));
-  // A new pull from Xero renumbers the ledger rows, so a line whose id has gone is matched by date, description and amount
-  const moved = existing.filter((l) => l.found && !links.has(l.id));
-  const found: PrepLine[] = [];
-  const dupes = new Set<string>(); // the same cost suggested again under its new id, before this matching
-  for (const t of looks) {
-    const id = `prep_${t.id}`;
-    const desc = [t.contact, t.description].filter(Boolean).join(' · ');
-    const same = existing.find((l) => l.id === id);
-    const at = same?.decision ? -1 : moved.findIndex((l) => l.invoice_date === t.date && l.desc === desc && l.net_p === t.amount_p);
-    if (at >= 0) {
-      // The earlier line carries the work done on it, so it stays and takes the link
-      links.set(moved.splice(at, 1)[0].id, links.get(id)!);
-      if (same) dupes.add(id);
-    } else if (!same && asPence(t.amount_p) >= minimum) {
-      found.push({ id, desc, code: chartCodeOf(engagementId, t.account_code) ?? '4990', invoice_date: t.date, start: t.date, net_p: t.amount_p, method: 'days', found: true, ...links.get(id) });
-    }
-  }
-  return { found, links, dupes, scanned: costs.length, small: small.length, smallTotal: small.reduce((a, t) => a + asPence(t.amount_p), 0n) };
+  return { ...findLines(engagementId, 'prep', looks, (t) => t.amount_p, '4990', minimum, existing), scanned: costs.length };
+}
+
+export const ACCRUED_WINDOW = 60; // days after the period end, the same as the Revenue cut-off looks
+
+/**
+ * Sales invoiced in the 60 days after the period end: each may be for work done before it. No wording
+ * marks such a sale, so every one at or over the amount is listed and the AI reads which look like this year's.
+ */
+export function findAccruedSales(engagementId: string, periodEnd: string, minimum: bigint, existing: PrepLine[]) {
+  // A sale the Revenue cut-off has decided is not offered again, or it could be accrued twice
+  const decided = new Set(revenueCutoff(engagementId).filter((i) => i.decision).map(revenueKey));
+  const net = (t: LedgerTransaction) => (-asPence(t.amount_p)).toString();
+  const sales = ledgerFor(engagementId, REVENUE_CODES).filter(
+    (t) => t.date > periodEnd && t.date <= addDays(periodEnd, ACCRUED_WINDOW) && asPence(t.amount_p) < 0n && !decided.has(saleKey(t.date, [t.contact, t.description].filter(Boolean).join(' · '), net(t)))
+  );
+  const r = findLines(engagementId, 'acc', sales, net, '1000', minimum, existing);
+  // The invoice date is after the work, so the period is left for the invoice to give
+  return { ...r, found: r.found.map(({ start: _start, ...l }) => l as PrepLine), scanned: sales.length };
 }
 
 /** Last year's paper: its prepayments, and whether its journal was reversed into this year. */
@@ -100,10 +138,23 @@ export function lastYear(ctx: Pick<PaperContext, 'priorId' | 'engagementId'>) {
   return { lines, total: lines.reduce((a, v) => a + v.prepaid, 0n), reversed, journalId };
 }
 
+const revenueCutoff = (engagementId: string) => (db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'I-10')?.data_json?.cutoff?.items ?? []) as any[];
+// The same sale on both papers is known by its date, customer and amount, not its ledger row: a new pull from Xero renumbers the rows.
+// shortcut: two sales alike in all three count as one, give the lines Xero's own invoice id if that shows up
+const saleKey = (date: string | undefined, desc: string, net_p: string) => `${date}|${desc}|${net_p}`;
+const revenueKey = (i: any) => saleKey(i.date, [i.contact, i.desc].filter(Boolean).join(' · '), i.amount_p);
+
 /** Accrued income decided on the Revenue paper. */
 export function accruedIncome(engagementId: string) {
-  const wp = db.workpapers.find((w) => w.engagement_id === engagementId && w.ref === 'I-10');
-  return ((wp?.data_json?.cutoff?.items ?? []) as any[]).filter((i) => i.decision === 'accrue');
+  return revenueCutoff(engagementId).filter((i) => i.decision === 'accrue');
+}
+
+/** This paper's own accrued income lines, less any sale the Revenue paper has since accrued, so nothing is counted twice. */
+export function accruedLines(engagementId: string, data: Record<string, any>): PrepLine[] {
+  const onRevenue = accruedIncome(engagementId);
+  const ids = new Set(onRevenue.map((i) => `acc_${i.id}`));
+  const keys = new Set(onRevenue.map(revenueKey));
+  return ((data.accrued_income ?? []) as PrepLine[]).filter((l) => !ids.has(l.id) && !(l.found && keys.has(saleKey(l.invoice_date, l.desc, l.net_p))));
 }
 
 export function prepaymentsJournal(ctx: Pick<PaperContext, 'priorId' | 'engagementId' | 'tb' | 'periodEnd'>, data: Record<string, any>): JLine[] {
@@ -112,20 +163,27 @@ export function prepaymentsJournal(ctx: Pick<PaperContext, 'priorId' | 'engageme
   // Last year's prepayments still sitting in 7300 (not reversed into this year) are charged now
   if (!ly.reversed && ctx.tb('7300').draft !== 0n) for (const v of ly.lines) lines.push(...pair(v.l.code, '7300', v.prepaid, `${v.l.desc}: last year's prepayment released`));
   for (const v of ((data.prepayments ?? []) as PrepLine[]).map((l) => prepView(l, ctx.periodEnd))) if (v.prepaid && v.l.code) lines.push(...pair('7300', v.l.code, v.prepaid, `${v.l.desc}: prepaid`));
+  // Accrued income added on this paper; what the Revenue paper accrued is in its own journal
+  for (const v of accruedLines(ctx.engagementId, data).map((l) => prepView(l, ctx.periodEnd, true))) if (v.prepaid && v.l.code) lines.push(...pair('7300', v.l.code, v.prepaid, `${v.l.desc}: accrued income`));
   return lines;
 }
 
 export function reviewPrepayments(ctx: PaperContext): string {
   const { data, totals, checks, anchors, periodEnd } = ctx;
-  const views = ((data.prepayments ?? []) as PrepLine[]).filter((l) => !withinYear(l, periodEnd)).map((l) => prepView(l, periodEnd));
+  const prepViews = ((data.prepayments ?? []) as PrepLine[]).filter((l) => !withinYear(l, periodEnd)).map((l) => prepView(l, periodEnd));
+  const accViews = accruedLines(ctx.engagementId, data).filter((l) => !nextYear(l, periodEnd)).map((l) => prepView(l, periodEnd, true));
+  // The checks below cover the lines of both tabs
+  const views = [...prepViews, ...accViews];
   const counted = views.filter((v) => v.counted);
-  const prepaid = counted.reduce((a, v) => a + v.prepaid, 0n);
-  const accrued = accruedIncome(ctx.engagementId).reduce((a, i) => a + asPence(i.amount_p), 0n);
+  const prepaid = prepViews.reduce((a, v) => a + v.prepaid, 0n);
+  const fromRevenue = accruedIncome(ctx.engagementId).reduce((a, i) => a + asPence(i.amount_p), 0n);
+  const accrued = fromRevenue + accViews.reduce((a, v) => a + v.prepaid, 0n);
   const ly = lastYear(ctx);
   const draft = ctx.tb('7300').draft;
   const lines = prepaymentsJournal(ctx, data);
   Object.assign(totals, { prepaid, accrued, total: prepaid + accrued, last_year: ly.total, tb_draft: draft });
-  views.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Prepayment' }));
+  prepViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Prepayment' }));
+  accViews.forEach((v) => anchors.push({ id: v.l.id, label: v.l.desc || 'Accrued income' }));
 
   checks.push({
     id: 'mapped',
@@ -144,7 +202,7 @@ export function reviewPrepayments(ctx: PaperContext): string {
   checks.push({
     id: 'worked',
     label: 'Prepaid parts worked out',
-    detail: unworked.length ? `Enter the period covered and the cost account for ${unworked.map((v) => v.l.desc).join(', ')}.` : 'Every line has its period, so the prepaid part is calculated.',
+    detail: unworked.length ? `Enter the period covered and the account for ${unworked.map((v) => v.l.desc).join(', ')}.` : 'Every line has its period, so its part is calculated.',
     passed: !unworked.length,
   });
   const releasedOk = ly.reversed || draft === 0n || draft === ly.total;
@@ -164,12 +222,20 @@ export function reviewPrepayments(ctx: PaperContext): string {
   checks.push({
     id: 'evidence',
     label: `Invoice on every line (${counted.filter((v) => v.prepaid > 0n).length - noInvoice.length}/${counted.filter((v) => v.prepaid > 0n).length})`,
-    detail: noInvoice.length ? `Attach the invoice for ${noInvoice.map((v) => v.l.desc).join(', ')}.` : 'Every prepayment has its invoice.',
+    detail: noInvoice.length ? `Attach the invoice for ${noInvoice.map((v) => v.l.desc).join(', ')}.` : 'Every line has its invoice.',
     passed: !noInvoice.length,
   });
-  checks.push(journalCheck(data.journal, lines, 'Journal sent with reversal'));
+  const sent = journalCheck(data.journal, lines, 'Journal sent with reversal');
+  // A journal in the ledger passes whatever changes after it. So say so when it already accrued a sale the Revenue paper has since accrued as well
+  const kept = accruedLines(ctx.engagementId, data);
+  const twice = ((data.accrued_income ?? []) as PrepLine[]).filter((l) => !kept.includes(l) && prepView(l, periodEnd, true).prepaid);
+  checks.push(
+    twice.length && journalInLedger(data.journal?.id)
+      ? { ...sent, passed: false, detail: `${data.journal.ref} is in the ledger and already accrues ${twice.map((l) => l.desc).join(', ')}, which the Revenue paper now accrues too. Take the accrual off on the Revenue cut-off, or reverse ${data.journal.ref} and pull again.` }
+      : sent
+  );
 
   return prepaid || accrued
-    ? `Prepayments of ${formatPence(prepaid)} are the parts of ${counted.filter((v) => v.prepaid > 0n).length} cost(s) that relate to the period after the year end, worked out from the periods on the invoices.${accrued ? ` Accrued income of ${formatPence(accrued)} comes from the Revenue paper.` : ''} The journal reverses on the first day of next year.`
+    ? `Prepayments of ${formatPence(prepaid)} are the parts of ${prepViews.filter((v) => v.prepaid > 0n).length} cost(s) that relate to the period after the year end, worked out from the periods on the invoices.${accrued ? ` Accrued income of ${formatPence(accrued)} ${fromRevenue === accrued ? 'comes from the Revenue paper' : 'is for work done before the year end and invoiced after it'}.` : ''} The journal reverses on the first day of next year.`
     : '';
 }
