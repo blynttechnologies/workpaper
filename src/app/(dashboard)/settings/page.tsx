@@ -20,6 +20,7 @@ import {
   FileCheck2,
 } from 'lucide-react';
 import { db } from '@/lib/server/db';
+import { SCHEDULE_DECISIONS, SCHEDULE_OUTPUT_LABELS, type ScheduleOutputType } from '@/lib/types/models';
 import { StaffManager } from '@/components/settings/StaffManager';
 import { getCurrentUserId } from '@/lib/session';
 
@@ -1083,7 +1084,8 @@ export default function PracticeSettingsPage() {
                         {r.pattern}
                       </span>
                       <span className="text-[#7E8DA6]">&rarr;</span>
-                      <span className="font-bold text-[#1D4E89]">{r.target_value}</span>
+                      {/* A schedule rule's target is a decision id: show it in the schedule's own words */}
+                      <span className="font-bold text-[#1D4E89]">{SCHEDULE_DECISIONS[r.type as ScheduleOutputType]?.[r.target_value] ?? r.target_value}</span>
                     </div>
                     <div className="text-[11px] text-[#4A5878] mt-1.5 flex items-center gap-3 flex-wrap">
                       <span className="capitalize">
@@ -1091,7 +1093,7 @@ export default function PracticeSettingsPage() {
                       </span>
                       <span>•</span>
                       <span className="capitalize">
-                        Type: <strong className="text-[#122654]">{r.type}</strong>
+                        Type: <strong className={`text-[#122654] ${r.type in SCHEDULE_OUTPUT_LABELS ? 'normal-case' : ''}`}>{SCHEDULE_OUTPUT_LABELS[r.type as ScheduleOutputType] ?? r.type}</strong>
                       </span>
                       <span>•</span>
                       <span>

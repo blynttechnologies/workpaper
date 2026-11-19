@@ -7,6 +7,7 @@ import { formatPence, formatPenceInput } from '@/lib/money';
 import { chartName, journalInLedger, journalSig, journalWhere, type JLine } from '@/lib/workpapers/common';
 import { paperContext, type PaperResult } from '@/lib/workpapers/engine';
 import { db } from '@/lib/server/db';
+import { SCHEDULE_DECISIONS, type ScheduleGate, type ScheduleOutputType } from '@/lib/types/models';
 
 /* Shared building blocks for the redesigned papers. */
 
@@ -46,6 +47,21 @@ const pillTone: Record<string, string> = {
 export const Pill = ({ tone, children }: { tone: keyof typeof pillTone; children: React.ReactNode }) => (
   <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${pillTone[tone]}`}>{children}</span>
 );
+
+// The gate's three bands, named as on the mapping page
+const GATE: Record<ScheduleGate['gate'], [keyof typeof pillTone, string]> = { ready: ['good', 'Ready'], check: ['warn', 'Check'], exception: ['bad', 'Exception'] };
+
+/** A schedule line's suggested decision after the learned rules and the confidence gate: what it is, where it came from, and whether it is ready or needs a check. The person still decides. */
+export function Suggested({ type, ai }: { type: ScheduleOutputType; ai?: Partial<ScheduleGate> }) {
+  if (!ai?.classification || !ai.gate) return null;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 text-[10px] text-[#4A5878]">
+      Suggested: <strong className="text-[#122654]">{SCHEDULE_DECISIONS[type][ai.classification] ?? ai.classification}</strong>
+      {ai.source === 'rule' ? '· learned rule' : `· AI ${ai.confidence}% sure`}
+      <Pill tone={GATE[ai.gate][0]}>{GATE[ai.gate][1]}</Pill>
+    </span>
+  );
+}
 
 /** The "N suggestions ready" banner: a rule-based summary with one button to accept them all. */
 export function SuggestBanner({

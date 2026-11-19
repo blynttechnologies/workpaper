@@ -572,8 +572,11 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
   const views = ((data.lines ?? []) as DebtorLine[]).map(debtorView);
 
   const setLine = (id: string, patch: Partial<DebtorLine>) => save({ lines: (live().lines ?? []).map((l: any) => (l.id === id ? { ...l, ...patch } : l)) });
+  // The AI's answer for a customer waits here and is saved with the decision: asking alone does not change the paper, or stale a sign-off
+  const [asked, setAsked] = useState<Record<string, NonNullable<DebtorLine['ai']>>>({});
+  const withAi = (id: string) => (asked[id] ? { ai: asked[id] } : {});
   const decide = (v: ReturnType<typeof debtorView>, decision: DebtorDecision | undefined) =>
-    setLine(v.line.id, decision === 'provide' ? { decision, provision_p: String(v.suggestion?.amount ?? v.d90) } : { decision, provision_p: undefined });
+    setLine(v.line.id, { ...(decision === 'provide' ? { decision, provision_p: String(v.suggestion?.amount ?? v.d90) } : { decision, provision_p: undefined }), ...withAi(v.line.id) });
   const pending = views.filter((v) => v.suggestion && !v.line.decision);
   const acceptAll = () =>
     save({
@@ -677,8 +680,9 @@ export function DebtorsSchedule({ data, result, locked, save, filesFor, attachTo
         stillDue={v.stillDue}
         start={start > v.stillDue ? v.stillDue : start}
         onCancel={() => setPicking(null)}
+        onAi={(ai) => setAsked((a) => ({ ...a, [v.line.id]: ai }))}
         onSave={(amount_p, why) => {
-          setLine(v.line.id, { decision: 'provide', provision_p: amount_p, provision_reason: why });
+          setLine(v.line.id, { decision: 'provide', provision_p: amount_p, provision_reason: why, ...withAi(v.line.id) });
           setPicking(null);
         }}
       />

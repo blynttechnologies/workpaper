@@ -21,7 +21,7 @@ const AGED = [
   ['d60_p', '31–60 overdue'],
   ['d90_p', 'Over 60 overdue'],
 ] as const;
-import { btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, th, Tiles, useOpen } from '../kit';
+import { btnAdd, btnPrimary, btnSecondary, card, CodePicker, ExpandButton, FilterChips, JournalPanel, money, Pill, SuggestBanner, Suggested, th, Tiles, useOpen } from '../kit';
 import { afterDateKnown, expenseCodes } from '@/lib/workpapers/common';
 import { bankMatches, creditorsJournal, sameSupplier, searchAfterDate, supplierView, suppliersFromLedger, type SearchItem, type Supplier, type SupplierDecision } from '@/lib/workpapers/creditors';
 
@@ -138,7 +138,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
       const res = await fetch(`/api/v1/engagements/${encodeURIComponent(result.engagementId)}/ai-after-date-costs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ days: windowDays, min_p: minimum.toString(), ids }) });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || 'The AI could not read these costs. Try again.');
-      const read = new Map<string, NonNullable<SearchItem['ai']>>((body.items ?? []).map((x: { id: string; from: string; to: string; summary: string }) => [x.id, { from: x.from, to: x.to, summary: x.summary }]));
+      const read = new Map<string, NonNullable<SearchItem['ai']>>((body.items ?? []).map(({ id, ...ai }: { id: string } & NonNullable<SearchItem['ai']>) => [id, ai]));
       save({ search: { ...(live().search ?? {}), items: (live().search?.items ?? []).map((i: SearchItem) => (read.has(i.id) ? { ...i, ai: read.get(i.id) } : i)) } });
     } catch (e) {
       setAiNote((e as Error).message);
@@ -777,6 +777,7 @@ export function CreditorsSchedule({ data, result, locked, save, filesFor, attach
                       ) : (
                         aiReading && <div className="mt-0.5 text-[10px] text-[#7E8DA6]">Reading…</div>
                       )}
+                      {!i.decision && <Suggested type="after_date_cost" ai={i.ai} />}
                     </td>
                     <td className="p-2 align-top">
                       <CodePicker label={`Account for ${i.contact || i.desc}`} value={i.code} codes={codes} disabled={locked || !!i.decision} onChange={(c) => setItem(i.id, { code: c })} />

@@ -4,6 +4,8 @@ import { Notice } from '@/components/ui/Notice';
 import React, { useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import { formatPence, formatPenceInput, toPence } from '@/lib/money';
+import type { DebtorLine } from '@/lib/workpapers/debtors';
+import { Suggested } from './kit';
 
 const SHARES = [100, 75, 50, 25];
 
@@ -18,6 +20,8 @@ const parse = (s: string): bigint | null => {
 /**
  * Choosing a specific provision for one customer: a share of what is still due after receipts since the
  * period end, a custom amount, or the AI's suggestion with its reason. Saves the amount and how it was set.
+ * The AI's answer, with what the learned rules and the gate made of it, is handed back to be kept with the
+ * decision; neither sets the amount, which is only ever what the person provides here.
  */
 export function ProvisionPicker({
   engagementId,
@@ -27,6 +31,7 @@ export function ProvisionPicker({
   stillDue,
   start,
   onSave,
+  onAi,
   onCancel,
 }: {
   engagementId: string;
@@ -36,11 +41,12 @@ export function ProvisionPicker({
   stillDue: bigint;
   start: bigint;
   onSave: (amount_p: string, reason: string) => void;
+  onAi: (ai: NonNullable<DebtorLine['ai']>) => void;
   onCancel: () => void;
 }) {
   const [amount, setAmount] = useState(formatPenceInput(start));
   const [how, setHow] = useState('');
-  const [ai, setAi] = useState<{ percent: number; amount_p: string; reason: string } | null>(null);
+  const [ai, setAi] = useState<NonNullable<DebtorLine['ai']> | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState('');
   const pence = parse(amount);
@@ -62,6 +68,7 @@ export function ProvisionPicker({
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'The AI could not suggest a provision. Try again.');
       setAi(out);
+      onAi(out);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -96,6 +103,7 @@ export function ProvisionPicker({
           <span>
             <span className="font-bold">AI suggests {ai.percent}%</span> ({formatPence(BigInt(ai.amount_p))}): {ai.reason}
           </span>
+          <Suggested type="provision" ai={ai} />
           <button
             type="button"
             onClick={() => {

@@ -1,7 +1,7 @@
 import { asPence, formatPence } from '../money';
 import { db } from '../server/db';
 import type { BankPayment } from '../server/xero';
-import type { DebtorOpenItem, DebtorPayment } from '../types/models';
+import type { DebtorOpenItem, DebtorPayment, ScheduleGate } from '../types/models';
 import { addDays, afterDateKnown, byContact, chartCodeOf, journalCheck, ledgerFor, openItems, pair, slug, usualExpenseCode, type JLine, type PaperContext } from './common';
 
 /**
@@ -64,7 +64,7 @@ export interface SearchItem {
   url?: string;
   decision?: SearchDecision;
   // The AI's reading of the cost: the period it covers when the description says ('' when it does not), and whether it looks like this year's
-  ai?: { from: string; to: string; summary: string };
+  ai?: { from: string; to: string; summary: string } & Partial<ScheduleGate>;
 }
 
 export function supplierView(s: Supplier) {

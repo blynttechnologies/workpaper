@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+// crypto is the global one (Node and browsers both have it): the schedules record decisions and learn rules in the browser, where Node's module has no randomUUID
 import { db } from './db';
 import { Actor } from './state-guard';
 import { AiActionLogItem, LearnedRule, RuleScope, RuleType, UserRole } from '../types/models';
@@ -12,7 +12,7 @@ import { AiActionLogItem, LearnedRule, RuleScope, RuleType, UserRole } from '../
  *   accuracy()            share of AI outputs accepted without change, per output type
  *
  * Mapping is the first caller; any later output type (extraction, journals, findings) uses the
- * same calls with its own `outputType` and `ruleType`.
+ * same calls with its own `outputType` and `ruleType`. The schedule readings do so in schedule-learning.ts.
  */
 
 export type OutputType = AiActionLogItem['output_type'];
@@ -31,6 +31,12 @@ export const DEFAULT_THRESHOLDS: Record<OutputType, GateThresholds> = {
   finding: { ready: 90, check: 70, auto_accept: false },
   note: { ready: 90, check: 70, auto_accept: false },
   commentary: { ready: 90, check: 70, auto_accept: false },
+  // The schedule readings (schedule-learning.ts). Their decisions feed a journal, so a person always decides:
+  // auto_accept is not acted on for these, and a rule or a Ready reading only puts the suggestion first
+  prepayment: { ready: 90, check: 70, auto_accept: false },
+  accrued_sales: { ready: 90, check: 70, auto_accept: false },
+  after_date_cost: { ready: 90, check: 70, auto_accept: false },
+  provision: { ready: 90, check: 70, auto_accept: false },
 };
 
 /** Practice settings override the defaults per output type. */

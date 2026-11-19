@@ -9,10 +9,11 @@ afterEach(() => {
 
 const setup = () => {
   const onSave = vi.fn();
-  render(<ProvisionPicker engagementId="eng_1" paperRef="C-10" lineId="deb_1" customer="Highway Stops Retail Ltd" stillDue={307014n} start={307014n} onSave={onSave} onCancel={() => {}} />);
+  const onAi = vi.fn();
+  render(<ProvisionPicker engagementId="eng_1" paperRef="C-10" lineId="deb_1" customer="Highway Stops Retail Ltd" stillDue={307014n} start={307014n} onSave={onSave} onAi={onAi} onCancel={() => {}} />);
   const amount = () => screen.getByLabelText(/Provision amount/) as HTMLInputElement;
   const save = () => screen.getByRole('button', { name: /^Provide/ });
-  return { onSave, amount, save };
+  return { onSave, onAi, amount, save };
 };
 
 describe('choosing a bad debt provision', () => {
@@ -35,11 +36,18 @@ describe('choosing a bad debt provision', () => {
   });
 
   it("asks the AI, shows its reason, and uses its amount when told to", async () => {
-    const { onSave, amount, save } = setup();
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ percent: 40, amount_p: '122805', reason: 'Paid part of older invoices late; nothing since the period end.' }), { status: 200 }));
+    const { onSave, onAi, amount, save } = setup();
+    const answer = { percent: 40, amount_p: '122805', reason: 'Paid part of older invoices late; nothing since the period end.', classification: 'provide', confidence: 82, gate: 'check', source: 'ai', supplier: 'Highway Stops Retail Ltd' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     fireEvent.click(screen.getByRole('button', { name: /Ask AI/ }));
     expect(await screen.findByText(/AI suggests 40%/)).toBeTruthy();
+    // The answer is handed back to be kept on the line, and the gate's reading of it is shown; neither fills in the amount
+    expect(onAi).toHaveBeenCalledWith(answer);
+    expect(screen.getByText('Check')).toBeTruthy();
+    expect(screen.getByText(/AI 82% sure/)).toBeTruthy();
+    expect(amount().value).toBe('3070.14');
+    expect(onSave).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/engagements/eng_1/ai-provision', expect.objectContaining({ body: JSON.stringify({ ref: 'C-10', lineId: 'deb_1' }) }));
     fireEvent.click(screen.getByRole('button', { name: 'Use this' }));
     expect(amount().value).toBe('1228.05');

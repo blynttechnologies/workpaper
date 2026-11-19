@@ -6,7 +6,9 @@ import { matchBlyntAccount } from '../../mapping/auto-mapper';
 import { evaluatePaper } from '../../workpapers/engine';
 import { templateFor } from '../../workpapers/templates';
 import { STANDARDS } from '../../standards';
-import { gateFor } from '../gate';
+import { gateFor, thresholdsFor } from '../gate';
+import { logError } from '../log-error';
+import { gateSchedule, scheduleRule } from '../schedule-learning';
 import { run, aiAvailable } from './gateway';
 import { AiError, type RunCtx, type ToolBox } from './types';
 import {
@@ -22,7 +24,7 @@ import {
   researchTask,
   type PaperInput,
 } from './tasks/accounting';
-import type { UserRole } from '../../types/models';
+import type { ScheduleOutputType, UserRole } from '../../types/models';
 import { debtorView, type DebtorLine } from '../../workpapers/debtors';
 import { searchAfterDate } from '../../workpapers/creditors';
 import { chartCodeOf, chartName, ledgerFor } from '../../workpapers/common';
@@ -256,7 +258,8 @@ export async function riskReview(actor: Actor, engagementId: string, channel?: R
 
 /**
  * The AI's suggested provision for one customer on a debtors paper, as a share of what is still due after
- * receipts since the period end. Nothing is saved: the person picks the amount.
+ * receipts since the period end, with whether to provide at all put through the learned rules and the gate.
+ * A rule only ever says provide or not: the amount is the AI's suggestion and the person picks it. The paper is not changed.
  */
 export async function suggestProvision(actor: Actor, engagementId: string, ref: string, lineId: string, channel?: RunCtx['channel']) {
   const eng = engagementOf(engagementId);
@@ -283,12 +286,19 @@ export async function suggestProvision(actor: Actor, engagementId: string, ref: 
     ctxOf(actor, engagementId, channel)
   );
   const percent = Math.min(100, Math.max(0, Math.round(Number(r.output.percent) || 0)));
-  return { percent, amount_p: ((v.stillDue * BigInt(percent)) / 100n).toString(), reason: r.output.reason, provider: r.provider, model: r.model };
+  // Two models set to read independently: when one would provide and the other would not, it is never Ready
+  const disputed = !!r.second && Number(r.second.output.percent) > 0 !== percent > 0;
+  const confidence = disputed ? Math.min(r.output.confidence, thresholdsFor(actor.firmId, 'provision').ready - 1) : r.output.confidence;
+  const gate = () => gateSchedule(actor.firmId, eng.client_id, 'provision', line.desc, { classification: percent > 0 ? 'provide' : 'no_provision', confidence, summary: r.output.reason });
+  return { percent, amount_p: ((v.stillDue * BigInt(percent)) / 100n).toString(), reason: r.output.reason, provider: r.provider, model: r.model, ...(await counted(!!scheduleRule(actor.firmId, eng.client_id, 'provision', line.desc), gate)) };
 }
 
 // ------------------------------------------------------------ Creditors: costs posted after the period end
 
 const AFTER_DATE_BATCH = 60;
+
+/** Runs the gate. A learned rule that is used is counted on the rule, which is a save; without one nothing is written. A save that fails loses the count, not the reading. */
+const counted = async <T>(ruled: boolean, gate: () => T): Promise<T> => (ruled ? freshWrite(gate).catch((err) => (logError('schedule-rule-count', err), gate())) : gate());
 const isoDate = (s: unknown) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '');
 
 /**
@@ -302,7 +312,7 @@ export async function reviewAfterDateCosts(actor: Actor, engagementId: string, o
   const days = Math.min(366, Math.max(1, Math.round(Number(opts.days) || 60)));
   const found = searchAfterDate(engagementId, eng.period_end, days, asPence(opts.min_p || '0'));
   const costs = (opts.ids?.length ? found.filter((i) => opts.ids!.includes(i.id)) : found).slice(0, AFTER_DATE_BATCH);
-  return readCosts(reviewAfterDateCostsTask, actor, engagementId, costs, channel);
+  return readCosts('after_date_cost', reviewAfterDateCostsTask, actor, engagementId, costs, channel);
 }
 
 /**
@@ -316,7 +326,7 @@ export async function reviewPrepaidCosts(actor: Actor, engagementId: string, opt
     .filter((t) => opts.ids.includes(`prep_${t.id}`))
     .slice(0, AFTER_DATE_BATCH)
     .map((t) => ({ id: `prep_${t.id}`, date: t.date, contact: t.contact, desc: t.description, amount_p: t.amount_p, code: chartCodeOf(engagementId, t.account_code) ?? '4990' }));
-  return readCosts(reviewPrepaidCostsTask, actor, engagementId, costs, channel);
+  return readCosts('prepayment', reviewPrepaidCostsTask, actor, engagementId, costs, channel);
 }
 
 /**
@@ -332,11 +342,15 @@ export async function reviewAccruedSales(actor: Actor, engagementId: string, opt
     .filter((t) => t.date > eng.period_end && opts.ids.includes(`acc_${t.id}`))
     .slice(0, AFTER_DATE_BATCH)
     .map((t) => ({ id: `acc_${t.id}`, date: t.date, contact: t.contact, desc: t.description, amount_p: (-asPence(t.amount_p)).toString(), code: chartCodeOf(engagementId, t.account_code) ?? '1000' }));
-  return readCosts(reviewAccruedSalesTask, actor, engagementId, sales, channel, REVENUE_CODES, -1n);
+  return readCosts('accrued_sales', reviewAccruedSalesTask, actor, engagementId, sales, channel, REVENUE_CODES, -1n);
 }
 
-/** `sign` turns the history's ledger amounts the same way as the rows read: -1 for sales, which the ledger holds as credits. */
-async function readCosts(task: typeof reviewAfterDateCostsTask, actor: Actor, engagementId: string, costs: { id: string; date: string; contact: string; desc: string; amount_p: string; code: string }[], channel?: RunCtx['channel'], historyCodes = ['2', '3', '4'], sign = 1n) {
+/**
+ * The reading the three schedules share. Each answer is then put through the learned rules and the gate as its
+ * schedule's own output type, so the line comes back with a suggested decision, how sure it is and where it came from.
+ * `sign` turns the history's ledger amounts the same way as the rows read: -1 for sales, which the ledger holds as credits.
+ */
+async function readCosts(type: ScheduleOutputType, task: typeof reviewAfterDateCostsTask, actor: Actor, engagementId: string, costs: { id: string; date: string; contact: string; desc: string; amount_p: string; code: string }[], channel?: RunCtx['channel'], historyCodes = ['2', '3', '4'], sign = 1n) {
   const eng = engagementOf(engagementId);
   if (!costs.length) return { items: [] };
   const suppliers = new Set(costs.map((i) => i.contact).filter(Boolean));
@@ -356,19 +370,21 @@ async function readCosts(task: typeof reviewAfterDateCostsTask, actor: Actor, en
     },
     ctxOf(actor, engagementId, channel)
   );
-  const asked = new Set(costs.map((i) => i.id));
-  return {
-    items: (r.output.items ?? [])
-      .filter((x) => asked.has(x.id))
-      .map((x) => {
+  const answers = new Map((r.output.items ?? []).map((x) => [x.id, x]));
+  // Two models set to read independently: a line the second classified differently is never Ready, as on Mapping
+  const second = r.second && new Map((r.second.output.items ?? []).map((x) => [x.id, x.classification]));
+  const below = thresholdsFor(actor.firmId, type).ready - 1;
+  const gate = () =>
+    costs
+      .filter((c) => answers.has(c.id))
+      .map((c) => {
+        const x = answers.get(c.id)!;
         const [from, to] = [isoDate(x.covers_from), isoDate(x.covers_to)];
         // Half a range, or one that runs backwards, is not a range
         const ok = from && to && from <= to;
-        return { id: x.id, from: ok ? from : '', to: ok ? to : '', summary: String(x.summary ?? '').trim().slice(0, 300) };
-      }),
-    provider: r.provider,
-    model: r.model,
-  };
+        return { id: c.id, from: ok ? from : '', to: ok ? to : '', summary: String(x.summary ?? '').trim().slice(0, 300), ...gateSchedule(actor.firmId, eng.client_id, type, c.contact, second && second.get(c.id) !== x.classification ? { ...x, confidence: Math.min(x.confidence, below) } : x), model: r.model };
+      });
+  return { items: await counted(costs.some((c) => scheduleRule(actor.firmId, eng.client_id, type, c.contact)), gate), provider: r.provider, model: r.model };
 }
 
 // ------------------------------------------------------------ Research intelligence (internal sources)

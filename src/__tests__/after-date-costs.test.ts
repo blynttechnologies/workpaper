@@ -56,9 +56,11 @@ describe("the AI's reading of costs posted after the period end", () => {
       model: 'm',
     });
     const out = await reviewAfterDateCosts(actor, engId, { days: 60, min_p: '10000' });
+    // An answer with no classification or confidence still gives the reading, with nothing for the gate to band
+    const none = { classification: null, confidence: 0, gate: 'exception', source: 'none', supplier: 'Booker', model: 'm' };
     expect(out.items).toEqual([
-      { id: 'srch_tx_a_0', from: day(-6), to: day(0), summary: 'Week 32 ends on the period end, so this looks like this year.' },
-      { id: 'srch_tx_b_1', from: '', to: '', summary: 'Cannot be told; check the delivery date on the bill.' },
+      { id: 'srch_tx_a_0', from: day(-6), to: day(0), summary: 'Week 32 ends on the period end, so this looks like this year.', ...none },
+      { id: 'srch_tx_b_1', from: '', to: '', summary: 'Cannot be told; check the delivery date on the bill.', ...none },
     ]);
     const input = run.mock.calls[0][1];
     expect(input.costs).toHaveLength(2);
@@ -68,10 +70,10 @@ describe("the AI's reading of costs posted after the period end", () => {
   it('reads the costs the prepayments search found, from the cost accounts only', async () => {
     db.account_mappings.push({ id: 'm_sub', engagement_id: engId, source_code: 'SUB', source_name: 'Subscriptions', source_type: 'Overheads', balance_p: '0', blynt_code: '4600', status: 'confirmed', confidence: 100, method: 'manual', confirmed_by: null, confirmed_at: null } as any);
     db.transactions.push({ id: 'tx_p_2', engagement_id: engId, account_code: 'SUB', account_name: 'Subscriptions', date: day(-30), contact: 'Acme', description: 'Annual licence', amount_p: '90000', vat_p: '0', gross_p: '90000', source: 'Xero' });
-    run.mockResolvedValue({ output: { items: [{ id: 'prep_tx_p_2', covers_from: day(-30), covers_to: day(334), summary: 'Annual licence, so most of it runs past the year end.' }] }, provider: 'anthropic', model: 'm' });
+    run.mockResolvedValue({ output: { items: [{ id: 'prep_tx_p_2', covers_from: day(-30), covers_to: day(334), summary: 'Annual licence, so most of it runs past the year end.', classification: 'add', confidence: 93 }] }, provider: 'anthropic', model: 'm' });
     // tx_old is a purchase, not an overhead, so it is not read however it is asked for
     const out = await reviewPrepaidCosts(actor, engId, { ids: ['prep_tx_p_2', 'prep_tx_old'] });
-    expect(out.items).toEqual([{ id: 'prep_tx_p_2', from: day(-30), to: day(334), summary: 'Annual licence, so most of it runs past the year end.' }]);
+    expect(out.items).toEqual([{ id: 'prep_tx_p_2', from: day(-30), to: day(334), summary: 'Annual licence, so most of it runs past the year end.', classification: 'add', confidence: 93, gate: 'ready', source: 'ai', supplier: 'Acme', model: 'm' }]);
     expect(run.mock.calls[0][0].id).toBe('review_prepaid_costs');
     expect(run.mock.calls[0][1].costs).toEqual([{ id: 'prep_tx_p_2', posted: day(-30), supplier: 'Acme', description: 'Annual licence', amount_p: '90000', account: expect.stringMatching(/^4600 /) }]);
   });
@@ -81,10 +83,10 @@ describe("the AI's reading of costs posted after the period end", () => {
     const sale = (id: string, date: string, description: string) => db.transactions.push({ id, engagement_id: engId, account_code: 'SAL', account_name: 'Sales', date, contact: 'Brightside', description, amount_p: '-120000', vat_p: '0', gross_p: '-120000', source: 'Xero' } as any);
     sale('tx_s_1', day(10), 'March retainer');
     sale('tx_s_0', day(-20), 'February retainer');
-    run.mockResolvedValue({ output: { items: [{ id: 'acc_tx_s_1', covers_from: day(-30), covers_to: day(0), summary: 'March retainer, so the work was done before the year end.' }] }, provider: 'anthropic', model: 'm' });
+    run.mockResolvedValue({ output: { items: [{ id: 'acc_tx_s_1', covers_from: day(-30), covers_to: day(0), summary: 'March retainer, so the work was done before the year end.', classification: 'add', confidence: 75 }] }, provider: 'anthropic', model: 'm' });
     // tx_s_0 was invoiced in the year and tx_a_0 is a cost, so neither is read however it is asked for
     const out = await reviewAccruedSales(actor, engId, { ids: ['acc_tx_s_1', 'acc_tx_s_0', 'acc_tx_a_0'] });
-    expect(out.items).toEqual([{ id: 'acc_tx_s_1', from: day(-30), to: day(0), summary: 'March retainer, so the work was done before the year end.' }]);
+    expect(out.items).toEqual([{ id: 'acc_tx_s_1', from: day(-30), to: day(0), summary: 'March retainer, so the work was done before the year end.', classification: 'add', confidence: 75, gate: 'check', source: 'ai', supplier: 'Brightside', model: 'm' }]);
     expect(run.mock.calls[0][0].id).toBe('review_accrued_sales');
     expect(run.mock.calls[0][1].costs).toEqual([{ id: 'acc_tx_s_1', posted: day(10), supplier: 'Brightside', description: 'March retainer', amount_p: '120000', account: expect.stringMatching(/^1000 /) }]);
     // What the customer was invoiced before, the same way round
