@@ -96,6 +96,18 @@ let parents: { of: unknown; n: number; map: Map<string, string> } | null = null;
 export const inLead = (code: string | null | undefined, lead: string) => !!code && (code === lead || routeCode(code).startsWith(lead));
 
 // Summary and planning papers read every code; they are not where an account is worked
+/**
+ * What the ledger held a year earlier in the client's accounts confirmed as mapped to these chart codes, debit positive:
+ * the comparative on the latest trial balance. Null when the ledger gave none.
+ */
+export function ledgerPrior(engagementId: string, codes: string[]): bigint | null {
+  const snapshot = db.tb_snapshots.filter((s) => s.engagement_id === engagementId).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (!snapshot) return null;
+  const mapped = new Set(db.account_mappings.filter((m) => m.engagement_id === engagementId && m.status === 'confirmed' && codes.some((c) => inLead(m.blynt_code, c))).map((m) => m.source_code));
+  const held = db.tb_lines.filter((l) => l.snapshot_id === snapshot.id && mapped.has(l.source_code) && l.comparative_p != null);
+  return held.length ? held.reduce((a, l) => a + asPence(l.comparative_p!), 0n) : null;
+}
+
 export const NOT_A_SCHEDULE = new Set(['A-10', 'Z-10', 'Z-20', 'Z-30', 'Z-40', 'R-10', 'R-20']);
 
 /** The schedule papers an account is worked on. */

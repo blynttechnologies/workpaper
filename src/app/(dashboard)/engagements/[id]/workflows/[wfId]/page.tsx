@@ -9,7 +9,7 @@ import { db } from '@/lib/server/db';
 import { getActor } from '@/lib/session';
 import { addPaperToWorkflow, allWorkflowsOf, archiveWorkflow, canCustomise, deleteWorkflow, restoreWorkflow, workflowProgress } from '@/lib/workflows';
 import { packFor, TEMPLATES, templateOf } from '@/lib/workpapers/templates';
-import { evaluatePaper, levelsFor, paperStatus } from '@/lib/workpapers/engine';
+import { evaluatePaper, levelsFor, paperBalances, paperStatus } from '@/lib/workpapers/engine';
 import { CustomPaperDialog } from '@/components/workpaper/CustomPaperDialog';
 import { STATUS_DEFINITIONS, UserRole, Workpaper } from '@/lib/types/models';
 import { formatPence } from '@/lib/money';
@@ -277,6 +277,7 @@ export default function WorkflowDetailPage() {
                     const title = templateOf(w)?.title ?? w.ref;
                     const difference = evaluatePaper(w)?.totals.difference;
                     const steps = SIGN_LEVELS.slice(0, levelsFor(w));
+                    const balances = paperBalances(w);
                     return (
                       <li key={w.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-4 py-3 hover:bg-[#F5F8FD]">
                         <input
@@ -301,6 +302,18 @@ export default function WorkflowDetailPage() {
                             </span>
                           </span>
                         </Link>
+                        {/* What the trial balance holds for this paper, this year and last, to judge what needs reconciling. Kept as an empty
+                            block on a paper that works no account, so the columns line up */}
+                        <dl className="hidden md:flex shrink-0 gap-3 text-right" aria-label={balances ? `${w.ref} trial balance` : undefined}>
+                          {balances &&
+                            ([['This year', balances.current, 'In the trial balance after journals'], ['Last year', balances.prior, 'Last year’s file, or what the ledger held a year earlier']] as const).map(([label, value, hint]) => (
+                              <div key={label} className="w-28" title={hint}>
+                                <dt className="text-[9px] text-[#7E8DA6]">{label}</dt>
+                                <dd className="font-mono text-xs text-[#122654]">{value === null ? '–' : formatPence(value)}</dd>
+                              </div>
+                            ))}
+                          {!balances && <div className="w-[236px]" />}
+                        </dl>
                         {/* Prepared, reviewed, approved: filled once signed, with who and when on hover */}
                         <ol className="flex items-start shrink-0" aria-label={`${w.ref} sign-off`}>
                           {steps.map((l, i) => {

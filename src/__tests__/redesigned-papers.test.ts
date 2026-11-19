@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 vi.mock('@/lib/server/store', () => ({ syncIn: async () => {}, syncOut: async () => {}, currentVersion: () => 1, hasDatabase: () => false }));
 
 import { db } from '../lib/server/db';
-import { evaluatePaper } from '../lib/workpapers/engine';
+import { evaluatePaper, paperBalances } from '../lib/workpapers/engine';
 import { journalCheck, journalSig, openItems, pair } from '../lib/workpapers/common';
 import { creditorsJournal, supplierView } from '../lib/workpapers/creditors';
 import { otherItemView } from '../lib/workpapers/other-debtors';
@@ -225,5 +225,23 @@ describe("last year's prepayments", () => {
     line('snap_new', '901', '1512211');
     line('snap_old', '800', '1');
     expect(lastYear({ engagementId: eng, priorId: null })).toMatchObject({ total: 0n, ledger: 19688819n });
+  });
+});
+
+describe('trial balance beside each paper', () => {
+  it("gives this year's balance after journals and last year's from the ledger, and nothing for a paper that works no account", () => {
+    db.seed(true);
+    const eng = db.engagements.find((e) => e.id === 'eng_harlow_fy26')!;
+    eng.prior_engagement_id = null;
+    const paper = (ref: string) => db.workpapers.find((w) => w.engagement_id === eng.id && w.ref === ref) ?? db.addWorkpaper(eng.id, ref)!;
+    db.account_mappings = db.account_mappings.filter((m) => m.engagement_id !== eng.id);
+    db.account_mappings.push({ id: 'm_800', engagement_id: eng.id, source_code: '800', source_name: 'Prepayments', source_type: 'Current Asset', balance_p: '17398820', blynt_code: '7300', status: 'confirmed' } as any);
+    // Mapped, but the ledger gave no balance a year earlier
+    expect(paperBalances(paper('C-20'))).toEqual({ current: 17398820n, prior: null });
+    db.tb_snapshots.push({ id: 'snap_tb', engagement_id: eng.id, created_at: '2999-01-01T00:00:00Z' } as any);
+    db.tb_lines.push({ id: 'l_800', snapshot_id: 'snap_tb', source_code: '800', source_name: '', source_type: '', debit_p: '0', credit_p: '0', comparative_p: '19688819' } as any);
+    expect(paperBalances(paper('C-20'))).toEqual({ current: 17398820n, prior: 19688819n });
+    // A checklist works no account
+    expect(paperBalances(paper('Z-10'))).toBeNull();
   });
 });
