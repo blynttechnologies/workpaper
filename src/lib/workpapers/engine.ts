@@ -6,7 +6,7 @@ import { analyticalReview, analyticalRows } from './analytical';
 import { debtorView, type DebtorLine } from './debtors';
 import { accruedLiabilities } from './creditors';
 import { PAPER_REVIEWS } from './reviews';
-import { inLead, journalInLedger, journalWhere, type PaperContext } from './common';
+import { inLead, journalInLedger, journalWhere, ledgerPrior, NOT_A_SCHEDULE, type PaperContext } from './common';
 
 /**
  * Calculations for every working paper: lead figures from the Blynt chart,
@@ -74,6 +74,21 @@ export function leadFigures(engagementId: string, t: TemplateDef): LeadFigure[] 
     const py = prior ? tbFor(prior, l.code) : null;
     return { code: l.code, label: l.label, ...cur, prior: py?.mapped ? py.final : null };
   });
+}
+
+/**
+ * The trial balance a paper works to, for the list of papers: this year's balance after journals and last year's, both shown
+ * positive for credit areas. Last year's is the prior year's file where there is one, else what the ledger held a year earlier.
+ * Null for a paper that works no account; a figure is null when nothing gives it.
+ */
+export function paperBalances(wp: Workpaper): { current: bigint | null; prior: bigint | null } | null {
+  const t = templateOf(wp);
+  if (!t || !t.leads.length || NOT_A_SCHEDULE.has(wp.ref)) return null;
+  const leads = leadFigures(wp.engagement_id, t);
+  const shown = (v: bigint) => (t.creditArea ? -v : v);
+  const filed = leads.filter((l) => l.prior !== null);
+  const prior = filed.length ? filed.reduce((a, l) => a + l.prior!, 0n) : ledgerPrior(wp.engagement_id, t.leads.map((l) => l.code));
+  return { current: leads.some((l) => l.mapped) ? leadTotal(t, leads) : null, prior: prior === null ? null : shown(prior) };
 }
 
 /** The trial balance figure the schedule must agree to, shown positive for credit areas. */
