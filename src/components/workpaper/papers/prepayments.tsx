@@ -196,6 +196,8 @@ export function PrepaymentsSchedule({ data, result, locked, save, filesFor, atta
               key={t}
               type="button"
               role="tab"
+              // The name without the count, which a comment left on this tab is kept under
+              data-tab-name={PREP_TABS[t]}
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={`px-3 py-2 text-xs border-b-2 -mb-px whitespace-nowrap ${tab === t ? 'font-bold border-[#FF7A66] text-[#122654]' : 'font-semibold border-transparent text-[#4A5878] hover:text-[#122654]'}`}

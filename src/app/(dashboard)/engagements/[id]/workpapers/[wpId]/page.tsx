@@ -74,7 +74,7 @@ import {
 } from '@/components/workpaper/schedules';
 import { AnalyticalSchedule } from '@/components/workpaper/review-schedules';
 import { CheckChips } from '@/components/workpaper/kit';
-import { Avatar, CommentPins, EditBox, isPin, KEEP_LABEL, onOpenTabs, TYPE_TONE, type CommentType, type PaperTabs, type PinAnchor } from '@/components/workpaper/comment-pins';
+import { Avatar, CommentPins, EditBox, isPin, KEEP_LABEL, onOpenTabs, tabName, TYPE_TONE, type CommentType, type PaperTabs, type PinAnchor } from '@/components/workpaper/comment-pins';
 import { ukDate } from '@/lib/dates';
 import { AiPaperActions } from '@/components/workpaper/AiPaperActions';
 
@@ -284,15 +284,26 @@ export default function WorkpaperPage() {
   const latestSignoff = (role: string) => signoffs.filter((s) => s.role === role && !s.stale_at).pop();
   const staleSignoffs = signoffs.filter((s) => s.stale_at);
   const anchorLabel = (row?: string) => (row ? result.anchors.find((a) => a.id === row)?.label ?? 'Removed row' : 'Whole paper');
-  // On a paper with tabs the side panel lists what belongs to the tab on screen. What is about the whole paper shows on every tab
-  const onTab = (view?: string) => onOpenTabs(view ? [view] : undefined, ownTabs);
-  const shownComments = comments.filter((c) => {
+  // REV-02: reviewed and approved schedules are read-only; the change view compares with the last review
+  const reviewedBy = signoffs.filter((s) => !s.stale_at && s.role !== 'preparer').pop();
+  const readOnly = Boolean(reviewedBy) || isLocked;
+  // On a paper with tabs the side panel lists what belongs to the tab on screen. What is about the whole paper shows on every tab.
+  // A read-only paper's tabs cannot be switched, so there nothing is kept to a tab, or what is on the others could not be read
+  const tabsNow: PaperTabs = readOnly ? { open: [], all: [] } : ownTabs;
+  const onTab = (view?: string) => onOpenTabs(view ? [view] : undefined, tabsNow);
+  // A pin carries the tabs it was left on; a comment on a row belongs to that row's tab
+  const tabsOf = (c: (typeof comments)[number]) => {
     const a = c.anchor_json as { view?: string[]; row?: string } | undefined;
-    // A pin carries the tabs it was left on; a comment on a row belongs to that row's tab
-    return a?.view ? onOpenTabs(a.view, ownTabs) : onTab(result.anchors.find((x) => x.id === a?.row)?.view);
-  });
+    const rowTab = result.anchors.find((x) => x.id === a?.row)?.view;
+    return a?.view ?? (rowTab ? [rowTab] : []);
+  };
+  const shownComments = comments.filter((c) => onOpenTabs(tabsOf(c), tabsNow));
   const openCount = (cs: typeof comments) => cs.filter((c) => c.status === 'open').length;
-  const commentsElsewhere = openCount(comments) - openCount(shownComments);
+  // What is open on the other tabs is counted with the tabs' names, so it can be found: "2 more open on Accrued income."
+  const elsewhere = (what: string, tabs: string[]) => (tabs.length ? `${tabs.length} more ${what} on ${[...new Set(tabs.map(tabName))].join(', ')}.` : '');
+  const commentsElsewhere = elsewhere('open', comments.filter((c) => c.status === 'open' && !shownComments.includes(c)).map((c) => tabsOf(c).join(' · ')));
+  // A row picked on another tab is not on offer on this one, so the comment goes on the whole paper, as the box then shows
+  const noteRow = result.anchors.some((a) => a.id === noteAnchor && onTab(a.view)) ? noteAnchor : 'paper';
 
   // ---- Writes ----
   const saveData = (patch: Record<string, any>) => {
@@ -508,12 +519,12 @@ export default function WorkpaperPage() {
     if (!noteBody.trim()) return;
     services.addComment(engagement.firm_id, actor, workpaper.id, {
       type: noteType,
-      anchor_json: noteAnchor === 'paper' ? { kind: 'paper' } : { kind: 'row', table: 'schedule', row: noteAnchor },
+      anchor_json: noteRow === 'paper' ? { kind: 'paper' } : { kind: 'row', table: 'schedule', row: noteRow },
       body: noteBody.trim(),
     });
     const c = db.comments[db.comments.length - 1];
     if (c) {
-      c.anchor_summary = anchorLabel(noteAnchor === 'paper' ? undefined : noteAnchor);
+      c.anchor_summary = anchorLabel(noteRow === 'paper' ? undefined : noteRow);
       c.keep = noteKeep;
     }
     setNoteBody('');
@@ -675,9 +686,6 @@ export default function WorkpaperPage() {
     refresh();
   };
 
-  // REV-02: reviewed and approved schedules are read-only; the change view compares with the last review
-  const reviewedBy = signoffs.filter((s) => !s.stale_at && s.role !== 'preparer').pop();
-  const readOnly = Boolean(reviewedBy) || isLocked;
   const lastReviewVersion = db.schedule_versions.filter((v) => v.workpaper_id === workpaper.id && v.role && v.role !== 'preparer').pop();
   const changesSinceReview = data.changed_after_review && lastReviewVersion ? diffData(lastReviewVersion.snapshot_data_json, data) : [];
   const versions = db.schedule_versions.filter((v) => v.workpaper_id === workpaper.id);
@@ -784,7 +792,7 @@ export default function WorkpaperPage() {
   const missingRefs = TEMPLATES.filter((tp) => !papers.some((p) => p.ref === tp.ref));
   const botDraft = !data.conclusion?.bot_dismissed && !conclusionText.trim() ? result.draftConclusion : '';
   const reviewItems = result.checks.filter((c) => !c.passed && onTab(c.view));
-  const reviewElsewhere = result.checks.filter((c) => !c.passed && !c.explanation && !onTab(c.view)).length;
+  const reviewElsewhere = elsewhere('to review', result.checks.filter((c) => !c.passed && !c.explanation && !onTab(c.view)).map((c) => c.view ?? ''));
   const railTabs = checksOnly
                   ? [
                       { id: 'ai_review' as const, label: `AI review (${reviewItems.filter((c) => !c.explanation).length})`, icon: Sparkles },
@@ -2209,10 +2217,10 @@ export default function WorkpaperPage() {
 
             {activeTab === 'ai_review' && checksOnly && (
               <div className="flex flex-col gap-2 text-xs text-[#122654]">
-                {reviewElsewhere > 0 && <p className="text-[11px] text-[#4A5878]">{reviewElsewhere} more to review on the paper's other tabs.</p>}
+                {reviewElsewhere && <p className="text-[11px] text-[#4A5878]">{reviewElsewhere}</p>}
                 {reviewItems.length === 0 ? (
                   <div className="p-3 rounded-[10px] bg-[#E6F4EF] text-[#0B6B52] font-bold flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" /> {reviewElsewhere > 0 ? 'Nothing to review on this tab.' : 'Nothing to review: every check passes.'}
+                    <CheckCircle2 className="w-4 h-4" /> {reviewElsewhere ? 'Nothing to review on this tab.' : 'Nothing to review: every check passes.'}
                   </div>
                 ) : (
                   reviewItems.map((c) => (
@@ -2448,7 +2456,7 @@ export default function WorkpaperPage() {
                     No comments {comments.length ? 'on this tab' : 'yet'}. Click <strong>Comment on the paper</strong>, then click any figure or row to leave one there.
                   </p>
                 )}
-                {commentsElsewhere > 0 && <p className="text-[11px] text-[#4A5878]">{commentsElsewhere} more open on the paper's other tabs.</p>}
+                {commentsElsewhere && <p className="text-[11px] text-[#4A5878]">{commentsElsewhere}</p>}
                 {[...shownComments]
                   .sort((a, b) => (a.status === b.status ? b.created_at.localeCompare(a.created_at) : a.status === 'open' ? -1 : 1))
                   .map((c) => {
@@ -2594,7 +2602,7 @@ export default function WorkpaperPage() {
                           </button>
                         ))}
                       </div>
-                      <select aria-label="Comment on" value={noteAnchor} onChange={(e) => setNoteAnchor(e.target.value)} className="min-h-[32px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
+                      <select aria-label="Comment on" value={noteRow} onChange={(e) => setNoteAnchor(e.target.value)} className="min-h-[32px] px-2 border border-[#D3DCEE] rounded-[8px] bg-white">
                         <option value="paper">Whole paper</option>
                         {result.anchors.filter((a) => onTab(a.view)).map((a) => (
                           <option key={a.id} value={a.id}>

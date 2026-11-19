@@ -27,8 +27,8 @@ export type CommentType = Comment['type'];
 
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 export const rowKey = (tr: HTMLTableRowElement) => norm(Array.from(tr.cells).slice(0, 2).map((c) => c.textContent ?? '').join(' '));
-// A tab's name without its count, which changes as lines are added: "Prepayments (40)" is "Prepayments"
-const tabName = (s: string) => norm(s).replace(/\s*\(\d+\)$/, '');
+/** A tab's name without a count after it: "Prepayments (40)" is "Prepayments". For pins saved with the count, and for showing a name. */
+export const tabName = (s: string) => norm(s).replace(/\s*\(\d+\)$/, '');
 
 /** The paper's own tabs (a director, a schedule): the ones open now, and all of them. */
 export interface PaperTabs {
@@ -37,11 +37,14 @@ export interface PaperTabs {
 }
 export function paperTabs(paper: HTMLElement): PaperTabs {
   const tabs = Array.from(paper.querySelectorAll('[role="tab"]'));
-  const names = (ts: Element[]) => ts.map((t) => tabName(t.textContent ?? '')).filter(Boolean);
+  // A tab whose label carries a count that changes as lines are added gives its name in data-tab-name. Others are known by their label
+  // as it is: a loan named "HSBC loan (2021)" is not the one named "HSBC loan (2023)"
+  const names = (ts: Element[]) => ts.map((t) => t.getAttribute('data-tab-name') ?? norm(t.textContent ?? '')).filter(Boolean);
   return { open: names(tabs.filter((t) => t.getAttribute('aria-selected') === 'true')), all: names(tabs) };
 }
 /** Whether something left on some tabs of the paper belongs on the tabs open now. A tab that has gone from the paper hides nothing, so its comments are not lost. */
-export const onOpenTabs = (view: string[] | undefined, tabs: PaperTabs) => !view?.length || view.map(tabName).every((v) => tabs.open.includes(v) || !tabs.all.includes(v));
+export const onOpenTabs = (view: string[] | undefined, tabs: PaperTabs) =>
+  !view?.length || view.map((v) => (tabs.all.includes(v) ? v : tabName(v))).every((v) => tabs.open.includes(v) || !tabs.all.includes(v));
 
 export const isPin = (a: unknown): a is PinAnchor => !!a && (a as PinAnchor).kind === 'pin' && typeof (a as PinAnchor).x === 'number';
 
