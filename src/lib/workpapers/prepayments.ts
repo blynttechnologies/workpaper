@@ -256,6 +256,17 @@ export function reviewPrepayments(ctx: PaperContext): string {
       ? { ...sent, passed: false, detail: `${data.journal.ref} is in the ledger and already accrues ${twice.map((l) => l.desc).join(', ')}, which the Revenue paper now accrues too. Take the accrual off on the Revenue cut-off, or reverse ${data.journal.ref} and pull again.` }
       : sent
   );
+  // 7300 holds prepayments and accrued income together, so the TB after journals is tied to the two
+  const tbFinal = ctx.tb('7300').final;
+  checks.push({
+    id: 'tb',
+    label: 'Schedule agrees to TB',
+    detail:
+      tbFinal === prepaid + accrued
+        ? `${formatPence(tbFinal)} in the schedule and in the TB after journals.`
+        : `Schedule ${formatPence(prepaid + accrued)} · TB ${formatPence(tbFinal)} after journals; difference ${formatPence(tbFinal - prepaid - accrued)}${lines.length && !data.journal?.id ? ' until the journal is sent' : ''}.`,
+    passed: tbFinal === prepaid + accrued,
+  });
 
   return prepaid || accrued
     ? `Prepayments of ${formatPence(prepaid)} are the parts of ${prepViews.filter((v) => v.prepaid > 0n).length} cost(s) that relate to the period after the year end, worked out from the periods on the invoices.${accrued ? ` Accrued income of ${formatPence(accrued)} ${fromRevenue === accrued ? 'comes from the Revenue paper' : 'is for work done before the year end and invoiced after it'}.` : ''} The journal reverses on the first day of next year.`
