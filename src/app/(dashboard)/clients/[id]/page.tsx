@@ -8,7 +8,6 @@ import { db } from '@/lib/server/db';
 import { QuickBooksPanel, XeroPanel } from '@/components/integrations/XeroPanel';
 import { WorkflowCards } from '@/components/workflow/WorkflowCards';
 import { ClientProfileForm } from '@/components/clients/ClientProfileForm';
-import { ClientWorkpapers } from '@/components/clients/ClientWorkpapers';
 import { Client } from '@/lib/types/models';
 import { useLocale } from '@/context/LocaleContext';
 
@@ -87,7 +86,6 @@ export default function ClientRecordPage() {
             <XeroPanel clientId={client.id} engagementId={latestEngagement?.id} reconnectNeeded={Boolean(client.reconnect_needed)} />
             <QuickBooksPanel clientId={client.id} engagementId={latestEngagement?.id} reconnectNeeded={Boolean(client.reconnect_needed)} />
           </div>
-          <ClientWorkpapers clientId={client.id} />
 
           <ClientProfileForm key={client.id} client={client as Client} />
         </div>
